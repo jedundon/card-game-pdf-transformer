@@ -6,3 +6,7 @@ Needs to have the ability to save the settings of the workflow for re-use later.
 
 Step 3 should be called Configure Layout
 
+Need gutter cropping
+Need ability to see a small thumbnail of loaded pages
+Need drag and drop for import
+
