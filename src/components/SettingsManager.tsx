@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SaveIcon, UploadIcon, SettingsIcon } from 'lucide-react';
+import { DEFAULT_SETTINGS, WorkflowSettings } from '../defaults';
 
 interface SettingsManagerProps {
   pdfMode: any;
@@ -8,15 +9,6 @@ interface SettingsManagerProps {
   outputSettings: any;
   currentPdfFileName?: string;
   onLoadSettings: (settings: any) => void;
-}
-
-interface WorkflowSettings {
-  pdfMode: any;
-  pageSettings: any;
-  extractionSettings: any;
-  outputSettings: any;
-  savedAt: string;
-  version: string;
 }
 
 export const SettingsManager: React.FC<SettingsManagerProps> = ({
@@ -97,48 +89,9 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
       fileInputRef.current.value = '';
     }
   };
-
   // Reset to default values
   const handleResetToDefaults = () => {
-    const defaultSettings = {
-      pdfMode: {
-        type: 'duplex',
-        orientation: 'vertical',
-        flipEdge: 'short'
-      },
-      pageSettings: [],
-      extractionSettings: {
-        crop: {
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0
-        },
-        grid: {
-          rows: 3,
-          columns: 3
-        }
-      },
-      outputSettings: {
-        pageSize: {
-          width: 3.5,
-          height: 3.5
-        },
-        offset: {
-          horizontal: 0,
-          vertical: 0
-        },
-        crop: {
-          top: 0,
-          right: 0,
-          bottom: 0,
-          left: 0
-        },
-        rotation: 0
-      }
-    };
-    
-    onLoadSettings(defaultSettings);
+    onLoadSettings(DEFAULT_SETTINGS);
   };
 
   return (
