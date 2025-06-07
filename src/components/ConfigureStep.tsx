@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon } from 'lucide-react';
 interface ConfigureStepProps {
   pdfData: any;
+  pdfMode: any;
   extractionSettings: any;
   outputSettings: any;
   pageSettings: any;
@@ -11,6 +12,7 @@ interface ConfigureStepProps {
 }
 export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   pdfData,
+  pdfMode,
   extractionSettings,
   outputSettings,
   pageSettings,
@@ -87,15 +89,48 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         return null;
       }
       
-      const cardWidth = croppedWidth / extractionSettings.grid.columns;
-      const cardHeight = croppedHeight / extractionSettings.grid.rows;
+      // Handle gutter width for gutter-fold modes
+      let availableWidth = croppedWidth;
+      let availableHeight = croppedHeight;
+      const gutterWidth = extractionSettings.gutterWidth || 0;
+      
+      // Apply gutter width reduction based on PDF mode
+      if (pdfMode.type === 'gutter-fold' && gutterWidth > 0) {
+        if (pdfMode.orientation === 'vertical') {
+          availableWidth = croppedWidth - gutterWidth;
+        } else if (pdfMode.orientation === 'horizontal') {
+          availableHeight = croppedHeight - gutterWidth;
+        }
+      }
+      
+      if (availableWidth <= 0 || availableHeight <= 0) {
+        return null;
+      }
+      
+      const cardWidth = availableWidth / extractionSettings.grid.columns;
+      const cardHeight = availableHeight / extractionSettings.grid.rows;
       
       // Calculate card position
       const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
       const col = cardOnPage % extractionSettings.grid.columns;
       
-      const x = extractionSettings.crop.left + (col * cardWidth);
-      const y = extractionSettings.crop.top + (row * cardHeight);
+      let x = extractionSettings.crop.left + (col * cardWidth);
+      let y = extractionSettings.crop.top + (row * cardHeight);
+      
+      // Adjust position for gutter in gutter-fold modes
+      if (pdfMode.type === 'gutter-fold' && gutterWidth > 0) {
+        if (pdfMode.orientation === 'vertical') {
+          // For vertical gutter-fold, adjust x position for right section cards
+          if (col >= extractionSettings.grid.columns / 2) {
+            x += gutterWidth;
+          }
+        } else if (pdfMode.orientation === 'horizontal') {
+          // For horizontal gutter-fold, adjust y position for bottom section cards
+          if (row >= extractionSettings.grid.rows / 2) {
+            y += gutterWidth;
+          }
+        }
+      }
       
       // Extract the card area
       const cardCanvas = document.createElement('canvas');
@@ -119,7 +154,19 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       console.error('Error extracting card image:', error);
       return null;
     }
-  }, [pdfData, extractionSettings, activePages, pageSettings]);
+  }, [
+    pdfData, 
+    pdfMode,
+    activePages, 
+    pageSettings,
+    extractionSettings.gutterWidth,
+    extractionSettings.crop.left,
+    extractionSettings.crop.right,
+    extractionSettings.crop.top,
+    extractionSettings.crop.bottom,
+    extractionSettings.grid.rows,
+    extractionSettings.grid.columns
+  ]);
 
   // Update card preview when current card changes
   useEffect(() => {
@@ -130,7 +177,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       };
       updatePreview();
     }
-  }, [currentCard, extractCardImage, totalCards]);
+  }, [
+    currentCard, 
+    extractCardImage, 
+    totalCards
+  ]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
     if (dimension === 'preset' && typeof value === 'object') {

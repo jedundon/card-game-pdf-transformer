@@ -67,7 +67,7 @@ export function App() {
     component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
   }, {
     title: 'Configure Layout',
-    component: <ConfigureStep pdfData={pdfData} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
+    component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
   }, {
     title: 'Export',
     component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} onPrevious={() => setCurrentStep(2)} />
