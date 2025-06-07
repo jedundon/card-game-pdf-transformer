@@ -54,7 +54,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     });
   };
   const handleOrientationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const orientation = e.target.value as 'portrait' | 'landscape';
+    const orientation = e.target.value as 'vertical' | 'horizontal';
     onModeSelect({
       ...pdfMode,
       orientation
@@ -124,9 +124,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Orientation
                 </label>
-                <select value={pdfMode.orientation} onChange={handleOrientationChange} className="w-full border border-gray-300 rounded-md px-3 py-2">
-                  <option value="portrait">Portrait</option>
-                  <option value="landscape">Landscape</option>
+                <select value={pdfMode.orientation} onChange={handleOrientationChange} className="w-full border border-gray-300 rounded-md px-3 py-2">              <option value="vertical">Vertical</option>
+              <option value="horizontal">Horizontal</option>
                 </select>
               </div>}
           </div>

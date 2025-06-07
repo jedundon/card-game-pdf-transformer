@@ -10,8 +10,7 @@ export function App() {
   const [pdfData, setPdfData] = useState(null);
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
   const [pdfMode, setPdfMode] = useState({
-    type: 'duplex',
-    orientation: 'portrait',
+    type: 'duplex',      orientation: 'vertical',
     flipEdge: 'short' // For duplex: 'short' or 'long'
   });
   const [pageSettings, setPageSettings] = useState([]);

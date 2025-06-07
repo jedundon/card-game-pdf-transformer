@@ -117,7 +117,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       // Front and back cards have matching IDs (e.g., Front 1 and Back 1 are the same logical card)
       // Card IDs should continue across pages
       
-      if (pdfMode.orientation === 'portrait') {
+      if (pdfMode.orientation === 'vertical') {
         // Portrait gutter-fold: left side is front, right side is back
         // Cards should be mirrored across the vertical gutter line
         const row = Math.floor(cardOnPage / extractionSettings.grid.columns);

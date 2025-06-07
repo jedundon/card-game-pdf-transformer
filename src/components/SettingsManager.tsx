@@ -103,7 +103,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     const defaultSettings = {
       pdfMode: {
         type: 'duplex',
-        orientation: 'portrait',
+        orientation: 'vertical',
         flipEdge: 'short'
       },
       pageSettings: [],
