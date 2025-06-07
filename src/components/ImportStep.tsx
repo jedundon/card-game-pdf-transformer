@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ChevronRightIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import { getDefaultGrid } from '../defaults';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -129,6 +130,23 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                 </select>
               </div>}
           </div>
+          
+          {/* Grid Information */}
+          <div className="p-4 bg-blue-50 rounded-md">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">
+              Default Card Grid for Selected Mode
+            </h4>
+            <div className="text-sm text-blue-700">
+              {(() => {
+                const grid = getDefaultGrid(pdfMode);
+                return `${grid.rows} rows × ${grid.columns} columns (${grid.rows * grid.columns} cards per page)`;
+              })()}
+            </div>
+            <p className="text-xs text-blue-600 mt-1">
+              You can adjust these settings in the next step if needed.
+            </p>
+          </div>
+          
           {pageSettings.length > 0 && <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-3">
                 Page Settings

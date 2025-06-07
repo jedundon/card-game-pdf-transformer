@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SaveIcon, UploadIcon, SettingsIcon } from 'lucide-react';
-import { DEFAULT_SETTINGS, WorkflowSettings } from '../defaults';
+import { WorkflowSettings, getDefaultSettingsForMode } from '../defaults';
 
 interface SettingsManagerProps {
   pdfMode: any;
@@ -88,10 +88,10 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
-  // Reset to default values
+  };  // Reset to default values with mode-specific grid
   const handleResetToDefaults = () => {
-    onLoadSettings(DEFAULT_SETTINGS);
+    const defaultsForCurrentMode = getDefaultSettingsForMode(pdfMode);
+    onLoadSettings(defaultsForCurrentMode);
   };
 
   return (

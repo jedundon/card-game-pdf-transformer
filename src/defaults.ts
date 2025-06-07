@@ -1,6 +1,22 @@
 // Default configuration values for the application
 // This is the single source of truth for all default settings
 
+// Grid defaults based on PDF mode
+export const getDefaultGrid = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+  if (pdfMode.type === 'duplex') {
+    // Both long and short edge duplex use same grid
+    return { rows: 2, columns: 3 };
+  } else if (pdfMode.type === 'gutter-fold') {
+    if (pdfMode.orientation === 'vertical') {
+      return { rows: 4, columns: 2 };
+    } else if (pdfMode.orientation === 'horizontal') {
+      return { rows: 2, columns: 4 };
+    }
+  }
+  // Fallback default
+  return { rows: 2, columns: 3 };
+};
+
 export const DEFAULT_SETTINGS = {
   pdfMode: {
     type: 'duplex' as const,
@@ -38,6 +54,18 @@ export const DEFAULT_SETTINGS = {
     rotation: 0
   }
 } as const;
+
+// Helper function to get default settings with mode-specific grid
+export const getDefaultSettingsForMode = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+  return {
+    ...DEFAULT_SETTINGS,
+    pdfMode,
+    extractionSettings: {
+      ...DEFAULT_SETTINGS.extractionSettings,
+      grid: getDefaultGrid(pdfMode)
+    }
+  };
+};
 
 // Type definition for the settings structure
 export type WorkflowSettings = {

@@ -5,15 +5,37 @@ import { ConfigureStep } from './components/ConfigureStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
 import { SettingsManager } from './components/SettingsManager';
-import { DEFAULT_SETTINGS } from './defaults';
+import { DEFAULT_SETTINGS, getDefaultGrid } from './defaults';
+
 export function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [pdfData, setPdfData] = useState(null);
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
   const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
   const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
-  const [extractionSettings, setExtractionSettings] = useState(DEFAULT_SETTINGS.extractionSettings);
+  
+  // Initialize extraction settings with mode-specific grid
+  const [extractionSettings, setExtractionSettings] = useState(() => {
+    const defaultGrid = getDefaultGrid(DEFAULT_SETTINGS.pdfMode);
+    return {
+      ...DEFAULT_SETTINGS.extractionSettings,
+      grid: defaultGrid
+    };
+  });
+  
   const [outputSettings, setOutputSettings] = useState(DEFAULT_SETTINGS.outputSettings);
+
+  // Handle PDF mode changes and update grid defaults
+  const handleModeSelect = (mode: any) => {
+    setPdfMode(mode);
+    
+    // Update extraction settings with appropriate grid for the new mode
+    const newGrid = getDefaultGrid(mode);
+    setExtractionSettings({
+      ...extractionSettings,
+      grid: newGrid
+    });
+  };
 
   // Handle loading settings from file
   const handleLoadSettings = (settings: any) => {
@@ -36,9 +58,10 @@ export function App() {
     setPdfData(data);
     setCurrentPdfFileName(fileName);
   };
+
   const steps = [{
     title: 'Import PDF',
-    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={mode => setPdfMode(mode)} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} />
+    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} />
   }, {
     title: 'Extract Cards',
     component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
@@ -49,6 +72,7 @@ export function App() {
     title: 'Export',
     component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} onPrevious={() => setCurrentStep(2)} />
   }];
+
   return <div className="flex flex-col w-full min-h-screen bg-gray-50">
       <header className="p-4 bg-white shadow-sm">
         <h1 className="text-2xl font-bold text-gray-800">
