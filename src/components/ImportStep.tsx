@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { ChevronRightIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.js';
+
+// Configure PDF.js worker for Vite
+pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
 interface ImportStepProps {
   onFileSelect: (data: any, fileName: string) => void;
   onModeSelect: (mode: any) => void;

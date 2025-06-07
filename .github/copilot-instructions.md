@@ -6,3 +6,5 @@
 Whenever running the dev server, always run the `dev` script.
 
 When running the dev server, never offer to open the Simple Browser inside VS Code. I will always use my own browser.
+
+I am developing on Windows so take that into account when issuing terminal commands. 
