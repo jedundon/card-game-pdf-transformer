@@ -361,28 +361,83 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             </div>
             <div className="p-4 bg-gray-100">
               <div className="relative mx-auto bg-white shadow" style={{
-              width: `${outputSettings.pageSize.width * 96}px`,
-              height: `${outputSettings.pageSize.height * 96}px`,
-              maxWidth: '100%',
-              maxHeight: '500px'
+              ...(() => {
+                const maxWidth = 400; // Maximum width for the preview
+                const maxHeight = 500; // Maximum height for the preview
+                
+                let width = outputSettings.pageSize.width * 96;
+                let height = outputSettings.pageSize.height * 96;
+                
+                // Scale down if too large, maintaining aspect ratio
+                if (width > maxWidth || height > maxHeight) {
+                  const widthScale = maxWidth / width;
+                  const heightScale = maxHeight / height;
+                  const scale = Math.min(widthScale, heightScale);
+                  
+                  width = width * scale;
+                  height = height * scale;
+                }
+                
+                return { width: `${width}px`, height: `${height}px` };
+              })()
             }}>
                 {/* Card positioned on the page */}
                 <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
-                width: `${200 - outputSettings.crop.left - outputSettings.crop.right}px`,
-                height: `${280 - outputSettings.crop.top - outputSettings.crop.bottom}px`,
-                top: '50%',
-                left: '50%',
-                marginLeft: `calc(-${(200 - outputSettings.crop.left - outputSettings.crop.right) / 2}px + ${outputSettings.offset.horizontal * 96}px)`,
-                marginTop: `calc(-${(280 - outputSettings.crop.top - outputSettings.crop.bottom) / 2}px + ${outputSettings.offset.vertical * 96}px)`,
-                transform: `rotate(${outputSettings.rotation}deg)`
+                ...(() => {
+                  // Calculate the same scale factor used for the page preview
+                  const maxWidth = 400;
+                  const maxHeight = 500;
+                  let pageWidth = outputSettings.pageSize.width * 96;
+                  let pageHeight = outputSettings.pageSize.height * 96;
+                  
+                  let scale = 1;
+                  if (pageWidth > maxWidth || pageHeight > maxHeight) {
+                    const widthScale = maxWidth / pageWidth;
+                    const heightScale = maxHeight / pageHeight;
+                    scale = Math.min(widthScale, heightScale);
+                  }
+                  
+                  // Apply scale to card dimensions and positioning
+                  const cardWidth = (200 - outputSettings.crop.left - outputSettings.crop.right) * scale;
+                  const cardHeight = (280 - outputSettings.crop.top - outputSettings.crop.bottom) * scale;
+                  const offsetX = outputSettings.offset.horizontal * 96 * scale;
+                  const offsetY = outputSettings.offset.vertical * 96 * scale;
+                  
+                  return {
+                    width: `${cardWidth}px`,
+                    height: `${cardHeight}px`,
+                    top: '50%',
+                    left: '50%',
+                    marginLeft: `calc(-${cardWidth / 2}px + ${offsetX}px)`,
+                    marginTop: `calc(-${cardHeight / 2}px + ${offsetY}px)`,
+                    transform: `rotate(${outputSettings.rotation}deg)`
+                  };
+                })()
               }}>
                   {cardPreviewUrl ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
-                        backgroundImage: `url(${cardPreviewUrl})`,
-                        backgroundPosition: `${-outputSettings.crop.left}px ${-outputSettings.crop.top}px`,
-                        backgroundSize: '200px 280px'
+                        ...(() => {
+                          // Calculate the same scale factor for background sizing
+                          const maxWidth = 400;
+                          const maxHeight = 500;
+                          let pageWidth = outputSettings.pageSize.width * 96;
+                          let pageHeight = outputSettings.pageSize.height * 96;
+                          
+                          let scale = 1;
+                          if (pageWidth > maxWidth || pageHeight > maxHeight) {
+                            const widthScale = maxWidth / pageWidth;
+                            const heightScale = maxHeight / pageHeight;
+                            scale = Math.min(widthScale, heightScale);
+                          }
+                          
+                          return {
+                            backgroundImage: `url(${cardPreviewUrl})`,
+                            backgroundPosition: `${-outputSettings.crop.left * scale}px ${-outputSettings.crop.top * scale}px`,
+                            backgroundSize: `${200 * scale}px ${280 * scale}px`
+                          };
+                        })()
                       }}
                     />
                   ) : (
