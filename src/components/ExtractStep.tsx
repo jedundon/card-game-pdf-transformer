@@ -11,6 +11,7 @@ interface ExtractStepProps {
 }
 export const ExtractStep: React.FC<ExtractStepProps> = ({
   pdfData,
+  pdfMode,
   pageSettings,
   extractionSettings,
   onSettingsChange,
@@ -31,12 +32,112 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     pageSettings.filter((page: any) => !page?.skip), 
     [pageSettings]
   );
-  
-  const totalPages = activePages.length;
-  const totalCards = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const totalPages = activePages.length;
+  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  // Calculate total unique cards based on PDF mode and card type
+  const totalCards = useMemo(() => {
+    if (pdfMode.type === 'duplex') {
+      // In duplex mode, front and back pages alternate
+      const frontPages = activePages.filter((page: any) => page.type === 'front').length;
+      const totalUniqueCards = frontPages * cardsPerPage; // Each front card has a corresponding back card
+      return totalUniqueCards;
+    } else if (pdfMode.type === 'gutter-fold') {
+      // In gutter-fold mode, each page contains both front and back cards
+      // Total unique cards = total pages * cards per page (each card is unique)
+      return totalPages * cardsPerPage;
+    } else {
+      // Fallback: treat each image as a unique card
+      return totalPages * cardsPerPage;
+    }
+  }, [pdfMode.type, activePages, cardsPerPage]);
+
+  // Calculate total cards of the current type (for navigation display)
+  const totalCardsOfCurrentType = useMemo(() => {
+    if (pdfMode.type === 'duplex') {
+      // In duplex mode, both front and back have the same count
+      const frontPages = activePages.filter((page: any) => page.type === 'front').length;
+      return frontPages * cardsPerPage;
+    } else {
+      // For other modes, use the total cards calculation
+      return totalCards;
+    }
+  }, [pdfMode.type, activePages, cardsPerPage, totalCards]);
+
+  // Calculate card front/back identification based on PDF mode
+  const getCardInfo = useCallback((cardIndex: number) => {
+    if (!activePages.length) return { type: 'Unknown', id: 0 };
+    
+    const pageIndex = Math.floor(cardIndex / cardsPerPage);
+    const cardOnPage = cardIndex % cardsPerPage;
+    
+    if (pageIndex >= activePages.length) return { type: 'Unknown', id: 0 };
+    
+    const pageType = activePages[pageIndex]?.type || 'front';
+    
+    if (pdfMode.type === 'duplex') {
+      // In duplex mode, front and back pages alternate
+      // Calculate global card ID based on which front page this card logically belongs to
+      
+      if (pageType === 'front') {
+        // Front cards: global sequential numbering
+        // Find which front page this is (0-indexed)
+        const frontPageIndex = Math.floor(pageIndex / 2);
+        const globalCardId = frontPageIndex * cardsPerPage + cardOnPage + 1;
+        return { type: 'Front', id: globalCardId };
+      } else {
+        // Back cards: need to map physical position to logical card ID
+        // Find which front page this back page corresponds to
+        const correspondingFrontPageIndex = Math.floor((pageIndex - 1) / 2);
+        
+        if (pdfMode.flipEdge === 'short') {
+          // Short edge flip: horizontally mirrored
+          // Top-left becomes top-right, etc.
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const flippedCol = extractionSettings.grid.columns - 1 - col;
+          const logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        } else {
+          // Long edge flip: vertically mirrored
+          // Top-left becomes bottom-left, etc.
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const flippedRow = extractionSettings.grid.rows - 1 - row;
+          const logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        }
+      }
+    } else if (pdfMode.type === 'gutter-fold') {
+      // In gutter-fold mode, each page contains both front and back cards
+      // Use global card indexing across all pages
+      const globalCardId = cardIndex + 1; // Global ID across all cards in document
+      
+      if (pdfMode.orientation === 'portrait') {
+        // Portrait gutter-fold: left side is front, right side is back
+        const col = cardOnPage % extractionSettings.grid.columns;
+        const isLeftSide = col < extractionSettings.grid.columns / 2;
+        return isLeftSide ? { type: 'Front', id: globalCardId } : { type: 'Back', id: globalCardId };
+      } else {
+        // Landscape gutter-fold: top is front, bottom is back
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+        const isTopHalf = row < extractionSettings.grid.rows / 2;
+        return isTopHalf ? { type: 'Front', id: globalCardId } : { type: 'Back', id: globalCardId };
+      }
+    }
+    
+    // Fallback - use global card indexing
+    return { type: pageType.charAt(0).toUpperCase() + pageType.slice(1), id: cardIndex + 1 };
+  }, [activePages, extractionSettings.grid, pdfMode, cardsPerPage]);
+
+  // Calculate the global card index from current page and card
+  const globalCardIndex = currentPage * cardsPerPage + currentCard;
+
+  // Get current card info (type and ID) for display
+  const { type: cardType, id: cardId } = getCardInfo(globalCardIndex);
 
   // Remove excessive logging
-
   // Extract individual card from canvas at 300 DPI
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     if (!pdfData || !activePages.length) {
@@ -44,9 +145,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
 
     try {
+      // Calculate which page and card position this cardIndex represents
+      const pageIndex = Math.floor(cardIndex / cardsPerPage);
+      const cardOnPage = cardIndex % cardsPerPage;
+
       // Get the actual page number from active pages
       const actualPageNumber = pageSettings.findIndex((page: any, index: number) => 
-        !page?.skip && pageSettings.slice(0, index + 1).filter((p: any) => !p?.skip).length === currentPage + 1
+        !page?.skip && pageSettings.slice(0, index + 1).filter((p: any) => !p?.skip).length === pageIndex + 1
       ) + 1;
 
       const page = await pdfData.getPage(actualPageNumber);
@@ -96,10 +201,9 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         console.error('Card extraction failed: invalid card dimensions at high resolution');
         return null;
       }
-      
-      // Calculate card position at high resolution
-      const row = Math.floor(cardIndex / extractionSettings.grid.columns);
-      const col = cardIndex % extractionSettings.grid.columns;
+        // Calculate card position at high resolution using cardOnPage (not cardIndex)
+      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+      const col = cardOnPage % extractionSettings.grid.columns;
       
       const x = extractionSettings.crop.left + (col * cardWidth);
       const y = extractionSettings.crop.top + (row * cardHeight);
@@ -135,7 +239,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       console.error('Error in high-DPI card extraction:', error);
       return null;
     }
-  }, [pdfData, extractionSettings.crop, extractionSettings.grid, currentPage, activePages, pageSettings]);
+  }, [pdfData, extractionSettings.crop, extractionSettings.grid, activePages, pageSettings, cardsPerPage]);
 
   // Render PDF page to canvas
   useEffect(() => {
@@ -234,12 +338,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     };
   }, [pdfData, currentPage, activePages, pageSettings]);
 
-  // Update card preview when current card or extraction settings change
+  // Update card preview when current card or extraction settings change  // Update card preview when current card or extraction settings change
   useEffect(() => {
     if (renderedPageData && !isRendering && canvasRef.current) {
       // Delay the card extraction to ensure canvas is fully rendered
       const timer = setTimeout(async () => {
-        const cardUrl = await extractCardImage(currentCard);
+        const cardUrl = await extractCardImage(globalCardIndex);
         setCardPreviewUrl(cardUrl);
       }, 500);
       
@@ -248,7 +352,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
     }
-  }, [currentCard, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractCardImage]);
+  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractCardImage, globalCardIndex]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -523,28 +627,25 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 )}
               </div>
             </div>
-            <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center">
-              <div className="flex items-center space-x-2">
+            <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center">              <div className="flex items-center space-x-2">
                 <button onClick={handlePreviousCard} disabled={currentCard === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronLeftIcon size={16} />
-                </button>
-                <span className="text-sm text-gray-700">
-                  Card {currentCard + 1} of {totalCards}
+                </button>                <span className="text-sm text-gray-700">
+                  Card {cardId} of {totalCardsOfCurrentType}
                 </span>
-                <button onClick={handleNextCard} disabled={currentCard === totalCards - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                <button onClick={handleNextCard} disabled={currentCard === cardsPerPage - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronRightIcon size={16} />
                 </button>
               </div>
             </div>
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
+          <div className="p-4 border border-gray-200 rounded-lg">            <div className="flex justify-between items-center mb-2">
               <h4 className="text-sm font-medium text-gray-700">
-                Current Card Preview
+                {cardType} {cardId} Preview
               </h4>
               <button 
                 onClick={async () => {
-                  const cardUrl = await extractCardImage(currentCard);
+                  const cardUrl = await extractCardImage(globalCardIndex);
                   setCardPreviewUrl(cardUrl);
                 }}
                 className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded"
@@ -552,11 +653,10 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 Refresh
               </button>
             </div>
-            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center">
-              {cardPreviewUrl ? (
+            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center">              {cardPreviewUrl ? (
                 <img 
                   src={cardPreviewUrl} 
-                  alt={`Card ${currentCard + 1}`}
+                  alt={`${cardType} ${cardId}`}
                   className="max-w-full max-h-full object-contain"
                 />
               ) : (
