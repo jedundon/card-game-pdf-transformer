@@ -17,6 +17,25 @@ export const getDefaultGrid = (pdfMode: { type: string; orientation: string; fli
   return { rows: 2, columns: 3 };
 };
 
+// Rotation defaults based on PDF mode
+export const getDefaultRotation = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+  // Front cards always default to 0 degrees
+  const front = 0;
+  
+  // Back cards default based on mode:
+  // - 0 degrees for: Duplex short edge, Gutter-fold vertical
+  // - 180 degrees for: Duplex long edge, Gutter-fold horizontal
+  let back = 0;
+  
+  if (pdfMode.type === 'duplex') {
+    back = pdfMode.flipEdge === 'long' ? 180 : 0;
+  } else if (pdfMode.type === 'gutter-fold') {
+    back = pdfMode.orientation === 'horizontal' ? 180 : 0;
+  }
+  
+  return { front, back };
+};
+
 export const DEFAULT_SETTINGS = {
   pdfMode: {
     type: 'duplex' as const,
@@ -49,15 +68,14 @@ export const DEFAULT_SETTINGS = {
       right: 0,
       bottom: 0,
       left: 0
-    },
-    rotation: {
+    },    rotation: {
       front: 0,
       back: 0
     }
   }
-} as const;
+};
 
-// Helper function to get default settings with mode-specific grid
+// Helper function to get default settings with mode-specific grid and rotation
 export const getDefaultSettingsForMode = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
   return {
     ...DEFAULT_SETTINGS,
@@ -65,16 +83,58 @@ export const getDefaultSettingsForMode = (pdfMode: { type: string; orientation: 
     extractionSettings: {
       ...DEFAULT_SETTINGS.extractionSettings,
       grid: getDefaultGrid(pdfMode)
+    },
+    outputSettings: {
+      ...DEFAULT_SETTINGS.outputSettings,
+      rotation: getDefaultRotation(pdfMode)
     }
   };
 };
 
 // Type definition for the settings structure
 export type WorkflowSettings = {
-  pdfMode: typeof DEFAULT_SETTINGS.pdfMode;
+  pdfMode: {
+    type: string;
+    orientation: string;
+    flipEdge: string;
+  };
   pageSettings: any[];
-  extractionSettings: typeof DEFAULT_SETTINGS.extractionSettings;
-  outputSettings: typeof DEFAULT_SETTINGS.outputSettings;
+  extractionSettings: {
+    crop: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    };
+    grid: {
+      rows: number;
+      columns: number;
+    };
+    gutterWidth: number;
+  };
+  outputSettings: {
+    pageSize: {
+      width: number;
+      height: number;
+    };
+    offset: {
+      horizontal: number;
+      vertical: number;
+    };
+    crop: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    };
+    rotation: {
+      front: number;
+      back: number;
+    };
+    cardScale?: {
+      targetHeight: number;
+    };
+  };
   savedAt?: string;
   version?: string;
 };

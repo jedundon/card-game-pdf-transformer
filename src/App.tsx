@@ -5,7 +5,7 @@ import { ConfigureStep } from './components/ConfigureStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
 import { SettingsManager } from './components/SettingsManager';
-import { DEFAULT_SETTINGS, getDefaultGrid } from './defaults';
+import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 
 export function App() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -23,9 +23,16 @@ export function App() {
     };
   });
   
-  const [outputSettings, setOutputSettings] = useState(DEFAULT_SETTINGS.outputSettings);
+  // Initialize output settings with mode-specific rotation
+  const [outputSettings, setOutputSettings] = useState(() => {
+    const defaultRotation = getDefaultRotation(DEFAULT_SETTINGS.pdfMode);
+    return {
+      ...DEFAULT_SETTINGS.outputSettings,
+      rotation: defaultRotation
+    };
+  });
 
-  // Handle PDF mode changes and update grid defaults
+  // Handle PDF mode changes and update grid and rotation defaults
   const handleModeSelect = (mode: any) => {
     setPdfMode(mode);
     
@@ -34,6 +41,13 @@ export function App() {
     setExtractionSettings({
       ...extractionSettings,
       grid: newGrid
+    });
+    
+    // Update output settings with appropriate rotation for the new mode
+    const newRotation = getDefaultRotation(mode);
+    setOutputSettings({
+      ...outputSettings,
+      rotation: newRotation
     });
   };
 
