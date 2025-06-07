@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon } from 'lucide-react';
+import { 
+  getActivePages, 
+  calculateTotalCards, 
+  getCardInfo, 
+  extractCardImage as extractCardImageUtil,
+  getAvailableCardIds
+} from '../utils/cardUtils';
 interface ConfigureStepProps {
   pdfData: any;
   pdfMode: any;
@@ -26,158 +33,28 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
-    pageSettings.filter((page: any) => !page?.skip), 
+    getActivePages(pageSettings), 
     [pageSettings]
   );
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-  const totalPages = activePages.length;
 
   // Calculate total unique cards based on PDF mode and card type
-  const totalCards = useMemo(() => {
-    if (pdfMode.type === 'duplex') {
-      // In duplex mode, front and back pages alternate
-      const frontPages = activePages.filter((page: any) => page.type === 'front').length;
-      const totalUniqueCards = frontPages * cardsPerPage; // Each front card has a corresponding back card
-      return totalUniqueCards;
-    } else if (pdfMode.type === 'gutter-fold') {
-      // In gutter-fold mode, each page contains both front and back cards
-      // Total unique cards = total pages * cards per page (each card is unique)
-      return totalPages * cardsPerPage;
-    } else {
-      // Fallback: treat each image as a unique card
-      return totalPages * cardsPerPage;
-    }
-  }, [pdfMode.type, activePages, cardsPerPage, totalPages]);
+  const totalCards = useMemo(() => 
+    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
+    [pdfMode, activePages, cardsPerPage]
+  );
 
-  // Calculate card front/back identification based on PDF mode (matching ExtractStep logic)
-  const getCardInfo = useCallback((cardIndex: number) => {
-    if (!activePages.length) return { type: 'Unknown', id: 0 };
-    
-    const pageIndex = Math.floor(cardIndex / cardsPerPage);
-    const cardOnPage = cardIndex % cardsPerPage;
-    
-    if (pageIndex >= activePages.length) return { type: 'Unknown', id: 0 };
-    
-    const pageType = activePages[pageIndex]?.type || 'front';
-    
-    if (pdfMode.type === 'duplex') {
-      // In duplex mode, front and back pages alternate
-      // Calculate global card ID based on which front page this card logically belongs to
-      
-      if (pageType === 'front') {
-        // Front cards: global sequential numbering
-        // Find which front page this is (0-indexed)
-        const frontPageIndex = Math.floor(pageIndex / 2);
-        const globalCardId = frontPageIndex * cardsPerPage + cardOnPage + 1;
-        return { type: 'Front', id: globalCardId };
-      } else {
-        // Back cards: need to map physical position to logical card ID
-        // Find which front page this back page corresponds to
-        const correspondingFrontPageIndex = Math.floor((pageIndex - 1) / 2);
-        
-        if (pdfMode.flipEdge === 'short') {
-          // Short edge flip: horizontally mirrored
-          // Top-left becomes top-right, etc.
-          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-          const col = cardOnPage % extractionSettings.grid.columns;
-          const flippedCol = extractionSettings.grid.columns - 1 - col;
-          const logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
-          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
-          return { type: 'Back', id: globalCardId };
-        } else {
-          // Long edge flip: vertically mirrored
-          // Top-left becomes bottom-left, etc.
-          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-          const col = cardOnPage % extractionSettings.grid.columns;
-          const flippedRow = extractionSettings.grid.rows - 1 - row;
-          const logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
-          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
-          return { type: 'Back', id: globalCardId };
-        }
-      }
-    } else if (pdfMode.type === 'gutter-fold') {
-      // In gutter-fold mode, each page contains both front and back cards
-      // Front and back cards have matching IDs (e.g., Front 1 and Back 1 are the same logical card)
-      // Card IDs should continue across pages
-      
-      if (pdfMode.orientation === 'vertical') {
-        // Portrait gutter-fold: left side is front, right side is back
-        // Cards should be mirrored across the vertical gutter line
-        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-        const col = cardOnPage % extractionSettings.grid.columns;
-        const halfColumns = extractionSettings.grid.columns / 2;
-        const isLeftSide = col < halfColumns;
-        
-        // Calculate cards per half-page (only count front or back cards)
-        const cardsPerHalfPage = extractionSettings.grid.rows * halfColumns;
-        const pageOffset = pageIndex * cardsPerHalfPage;
-        
-        if (isLeftSide) {
-          // Front card: calculate ID based on position in left half + page offset
-          const cardIdInSection = row * halfColumns + col + 1;
-          const globalCardId = pageOffset + cardIdInSection;
-          return { type: 'Front', id: globalCardId };
-        } else {
-          // Back card: mirror position across gutter line
-          // Rightmost card (col = columns-1) matches leftmost (col = 0)
-          const rightCol = col - halfColumns; // Position within right half (0-based)
-          const mirroredCol = halfColumns - 1 - rightCol; // Mirror across the gutter
-          const cardIdInSection = row * halfColumns + mirroredCol + 1;
-          const globalCardId = pageOffset + cardIdInSection;
-          return { type: 'Back', id: globalCardId };
-        }
-      } else {
-        // Landscape gutter-fold: top is front, bottom is back
-        // Cards should be mirrored across the horizontal gutter line
-        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-        const col = cardOnPage % extractionSettings.grid.columns;
-        const halfRows = extractionSettings.grid.rows / 2;
-        const isTopHalf = row < halfRows;
-        
-        // Calculate cards per half-page (only count front or back cards)
-        const cardsPerHalfPage = halfRows * extractionSettings.grid.columns;
-        const pageOffset = pageIndex * cardsPerHalfPage;
-        
-        if (isTopHalf) {
-          // Front card: calculate ID based on position in top half + page offset
-          const cardIdInSection = row * extractionSettings.grid.columns + col + 1;
-          const globalCardId = pageOffset + cardIdInSection;
-          return { type: 'Front', id: globalCardId };
-        } else {
-          // Back card: mirror position across gutter line
-          // Bottom row matches top row in mirrored fashion
-          const bottomRow = row - halfRows; // Position within bottom half (0-based)
-          const mirroredRow = halfRows - 1 - bottomRow; // Mirror across the gutter
-          const cardIdInSection = mirroredRow * extractionSettings.grid.columns + col + 1;
-          const globalCardId = pageOffset + cardIdInSection;
-          return { type: 'Back', id: globalCardId };
-        }
-      }
-    }
-    
-    // Fallback - use global card indexing
-    return { type: pageType.charAt(0).toUpperCase() + pageType.slice(1), id: cardIndex + 1 };
-  }, [activePages, extractionSettings.grid, pdfMode, cardsPerPage]);
-
+  // Calculate card front/back identification based on PDF mode (using utility function)
+  const getCardInfoCallback = useCallback((cardIndex: number) => 
+    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage), 
+    [activePages, extractionSettings, pdfMode, cardsPerPage]
+  );
   // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode
-  const availableCardIds = useMemo(() => {
-    const cardIds: number[] = [];
-    const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
-      ? activePages.length * cardsPerPage 
-      : totalCards;
-    
-    for (let i = 0; i < maxIndex; i++) {
-      const cardInfo = getCardInfo(i);
-      if (cardInfo.type.toLowerCase() === viewMode) {
-        if (!cardIds.includes(cardInfo.id)) {
-          cardIds.push(cardInfo.id);
-        }
-      }
-    }
-    
-    return cardIds.sort((a, b) => a - b); // Sort card IDs numerically
-  }, [totalCards, viewMode, getCardInfo, pdfMode.type, activePages.length, cardsPerPage]);
+  const availableCardIds = useMemo(() => 
+    getAvailableCardIds(viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings), 
+    [viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]
+  );
 
   const totalFilteredCards = availableCardIds.length;
 
@@ -201,149 +78,19 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       : totalCards;
     
     for (let i = 0; i < maxIndex; i++) {
-      const cardInfo = getCardInfo(i);
+      const cardInfo = getCardInfoCallback(i);
       if (cardInfo.id === currentCardId && cardInfo.type.toLowerCase() === viewMode) {
         return i;
       }
     }
     
     return null;
-  }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfo]);
+  }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
 
-  // Extract card image for preview
+  // Extract card image for preview using utility function
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
-    if (!pdfData || !activePages.length) {
-      return null;
-    }
-
-    try {
-      // Calculate which page and position the card is on
-      const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-      const pageIndex = Math.floor(cardIndex / cardsPerPage);
-      const cardOnPage = cardIndex % cardsPerPage;
-      
-      if (pageIndex >= activePages.length) {
-        return null;
-      }
-
-      // Get the actual page number from active pages
-      const actualPageNumber = pageSettings.findIndex((page: any, index: number) => 
-        !page?.skip && pageSettings.slice(0, index + 1).filter((p: any) => !p?.skip).length === pageIndex + 1
-      ) + 1;
-
-      const page = await pdfData.getPage(actualPageNumber);
-      
-      // Calculate scale for 300 DPI
-      const targetDPI = 300;
-      const baseDPI = 72;
-      const highResScale = targetDPI / baseDPI;
-      
-      const viewport = page.getViewport({ scale: highResScale });
-      
-      // Create a high-resolution canvas
-      const highResCanvas = document.createElement('canvas');
-      highResCanvas.width = viewport.width;
-      highResCanvas.height = viewport.height;
-      const highResContext = highResCanvas.getContext('2d');
-      
-      if (!highResContext) {
-        return null;
-      }
-      
-      // Render the page at high resolution
-      const renderContext = {
-        canvasContext: highResContext,
-        viewport: viewport
-      };
-      
-      await page.render(renderContext).promise;
-      
-      // Calculate card dimensions after cropping
-      const croppedWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
-      const croppedHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
-      
-      if (croppedWidth <= 0 || croppedHeight <= 0) {
-        return null;
-      }
-      
-      // Handle gutter width for gutter-fold modes
-      let availableWidth = croppedWidth;
-      let availableHeight = croppedHeight;
-      const gutterWidth = extractionSettings.gutterWidth || 0;
-      
-      // Apply gutter width reduction based on PDF mode
-      if (pdfMode.type === 'gutter-fold' && gutterWidth > 0) {
-        if (pdfMode.orientation === 'vertical') {
-          availableWidth = croppedWidth - gutterWidth;
-        } else if (pdfMode.orientation === 'horizontal') {
-          availableHeight = croppedHeight - gutterWidth;
-        }
-      }
-      
-      if (availableWidth <= 0 || availableHeight <= 0) {
-        return null;
-      }
-      
-      const cardWidth = availableWidth / extractionSettings.grid.columns;
-      const cardHeight = availableHeight / extractionSettings.grid.rows;
-      
-      // Calculate card position
-      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-      const col = cardOnPage % extractionSettings.grid.columns;
-      
-      let x = extractionSettings.crop.left + (col * cardWidth);
-      let y = extractionSettings.crop.top + (row * cardHeight);
-      
-      // Adjust position for gutter in gutter-fold modes
-      if (pdfMode.type === 'gutter-fold' && gutterWidth > 0) {
-        if (pdfMode.orientation === 'vertical') {
-          // For vertical gutter-fold, adjust x position for right section cards
-          if (col >= extractionSettings.grid.columns / 2) {
-            x += gutterWidth;
-          }
-        } else if (pdfMode.orientation === 'horizontal') {
-          // For horizontal gutter-fold, adjust y position for bottom section cards
-          if (row >= extractionSettings.grid.rows / 2) {
-            y += gutterWidth;
-          }
-        }
-      }
-      
-      // Extract the card area
-      const cardCanvas = document.createElement('canvas');
-      cardCanvas.width = Math.max(1, Math.floor(cardWidth));
-      cardCanvas.height = Math.max(1, Math.floor(cardHeight));
-      const cardContext = cardCanvas.getContext('2d');
-      
-      if (!cardContext) {
-        return null;
-      }
-      
-      cardContext.drawImage(
-        highResCanvas,
-        Math.floor(x), Math.floor(y), Math.floor(cardWidth), Math.floor(cardHeight),
-        0, 0, cardCanvas.width, cardCanvas.height
-      );
-      
-      return cardCanvas.toDataURL('image/png');
-      
-    } catch (error) {
-      console.error('Error extracting card image:', error);
-      return null;
-    }
-  }, [
-    pdfData, 
-    pdfMode,
-    activePages, 
-    pageSettings,
-    extractionSettings.gutterWidth,
-    extractionSettings.crop.left,
-    extractionSettings.crop.right,
-    extractionSettings.crop.top,
-    extractionSettings.crop.bottom,
-    extractionSettings.grid.rows,
-    extractionSettings.grid.columns
-  ]);
+    return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+  }, [pdfData, pdfMode, activePages, pageSettings, extractionSettings]);
 
   // Update card preview when current card changes
   useEffect(() => {
@@ -856,7 +603,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     ? activePages.length * cardsPerPage 
                     : totalCards;
                   for (let i = 0; i < maxIndex; i++) {
-                    const cardInfo = getCardInfo(i);
+                    const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
                     if (cardInfo.type.toLowerCase() === 'front') {
                       frontCount++;
                     }
@@ -872,7 +619,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     ? activePages.length * cardsPerPage 
                     : totalCards;
                   for (let i = 0; i < maxIndex; i++) {
-                    const cardInfo = getCardInfo(i);
+                    const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
                     if (cardInfo.type.toLowerCase() === 'back') {
                       backCount++;
                     }
