@@ -9,10 +9,10 @@ interface ExportStepProps {
   onPrevious: () => void;
 }
 export const ExportStep: React.FC<ExportStepProps> = ({
-  pdfData,
+  // pdfData,
   pdfMode,
-  pageSettings,
-  extractionSettings,
+  // pageSettings,
+  // extractionSettings,
   outputSettings,
   onPrevious
 }) => {
@@ -119,7 +119,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center mb-3">
-                    <div size={24} className="text-red-500 mr-2" />
+                    <CheckCircleIcon size={24} className="text-red-500 mr-2" />
                     <h4 className="text-lg font-medium">Card Fronts</h4>
                   </div>
                   <p className="text-sm text-gray-600 mb-4">
@@ -133,7 +133,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
                 </div>
                 <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center mb-3">
-                    <div size={24} className="text-blue-500 mr-2" />
+                    <CheckCircleIcon size={24} className="text-blue-500 mr-2" />
                     <h4 className="text-lg font-medium">Card Backs</h4>
                   </div>
                   <p className="text-sm text-gray-600 mb-4">

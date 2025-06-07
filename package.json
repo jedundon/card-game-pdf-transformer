@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "dev": "npx vite",
-    "build": "npx vite build",
+    "build": "tsc -b && npx vite build",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "preview": "npx vite preview",
     "start": "npm run dev"
