@@ -401,10 +401,13 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     };
     onSettingsChange(newSettings);
   };
-  const handleRotationChange = (value: number) => {
+  const handleRotationChange = (cardType: 'front' | 'back', value: number) => {
     const newSettings = {
       ...outputSettings,
-      rotation: value
+      rotation: {
+        ...(outputSettings.rotation || { front: 0, back: 0 }),
+        [cardType]: value
+      }
     };
     onSettingsChange(newSettings);
   };
@@ -603,12 +606,44 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             <p className="text-sm text-gray-600 mb-3">
               Rotate the final card output for different orientations
             </p>
-            <div className="flex items-center space-x-4">
-              <RotateCcwIcon size={16} className="text-gray-500" />
-              <div className="flex-1 flex space-x-2">
-                {[0, 90, 180, 270].map(degree => <button key={degree} onClick={() => handleRotationChange(degree)} className={`flex-1 py-2 border ${outputSettings.rotation === degree ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'} rounded-md text-sm font-medium`}>
-                    {degree}°
-                  </button>)}
+            
+            {/* Front Card Rotation */}
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Front Cards
+              </h4>
+              <div className="flex items-center space-x-4">
+                <RotateCcwIcon size={16} className="text-gray-500" />
+                <div className="flex-1 flex space-x-2">
+                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${(() => {
+                    const frontRotation = typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null 
+                      ? outputSettings.rotation.front || 0 
+                      : outputSettings.rotation || 0;
+                    return frontRotation === degree ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
+                  })()} rounded-md text-sm font-medium`}>
+                      {degree}°
+                    </button>)}
+                </div>
+              </div>
+            </div>
+            
+            {/* Back Card Rotation */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Back Cards
+              </h4>
+              <div className="flex items-center space-x-4">
+                <RotateCcwIcon size={16} className="text-gray-500" />
+                <div className="flex-1 flex space-x-2">
+                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${(() => {
+                    const backRotation = typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null 
+                      ? outputSettings.rotation.back || 0 
+                      : outputSettings.rotation || 0;
+                    return backRotation === degree ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
+                  })()} rounded-md text-sm font-medium`}>
+                      {degree}°
+                    </button>)}
+                </div>
               </div>
             </div>
           </div>
@@ -736,7 +771,12 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     left: '50%',
                     marginLeft: `calc(-${cardWidth / 2}px + ${offsetX}px)`,
                     marginTop: `calc(-${cardHeight / 2}px + ${offsetY}px)`,
-                    transform: `rotate(${outputSettings.rotation}deg)`
+                    transform: `rotate(${(() => {
+                      if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+                        return outputSettings.rotation[viewMode] || 0;
+                      }
+                      return outputSettings.rotation || 0;
+                    })()}deg)`
                   };
                 })()
               }}>
@@ -858,7 +898,17 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </p>
               <p>
                 <span className="font-medium">Rotation:</span>{' '}
-                {outputSettings.rotation}°
+                Front {(() => {
+                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+                    return outputSettings.rotation.front || 0;
+                  }
+                  return outputSettings.rotation || 0;
+                })()}°, Back {(() => {
+                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+                    return outputSettings.rotation.back || 0;
+                  }
+                  return outputSettings.rotation || 0;
+                })()}°
               </p>
               <p>
                 <span className="font-medium">Card size:</span>{' '}

@@ -77,7 +77,17 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.rotation}°
+                Front {(() => {
+                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+                    return outputSettings.rotation.front || 0;
+                  }
+                  return outputSettings.rotation || 0;
+                })()}°, Back {(() => {
+                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+                    return outputSettings.rotation.back || 0;
+                  }
+                  return outputSettings.rotation || 0;
+                })()}°
               </span>
             </div>
             <div className="flex justify-between text-sm">
