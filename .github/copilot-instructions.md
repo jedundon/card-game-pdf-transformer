@@ -3,7 +3,7 @@
 # GitHub Copilot Instructions
 
 ## How to use GitHub Copilot in this repository
-Whenever running the dev server, always run the `dev` script.
+Whenever running the dev server, always run the `dev` script. For example, this command: `cd "c:\Users\James\workspace\pnp card utility v3"; npm run dev`
 
 When running the dev server, never offer to open the Simple Browser inside VS Code. I will always use my own browser.
 

@@ -50,18 +50,22 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       return totalPages * cardsPerPage;
     }
   }, [pdfMode.type, activePages, cardsPerPage]);
-
   // Calculate total cards of the current type (for navigation display)
   const totalCardsOfCurrentType = useMemo(() => {
     if (pdfMode.type === 'duplex') {
       // In duplex mode, both front and back have the same count
       const frontPages = activePages.filter((page: any) => page.type === 'front').length;
       return frontPages * cardsPerPage;
+    } else if (pdfMode.type === 'gutter-fold') {
+      // In gutter-fold mode, each page has front/back pairs
+      // Count unique cards (each page contributes half the cards since they're mirrored)
+      const cardsPerHalfPage = Math.floor(cardsPerPage / 2);
+      return totalPages * cardsPerHalfPage;
     } else {
       // For other modes, use the total cards calculation
       return totalCards;
     }
-  }, [pdfMode.type, activePages, cardsPerPage, totalCards]);
+  }, [pdfMode.type, activePages, cardsPerPage, totalCards, totalPages]);
 
   // Calculate card front/back identification based on PDF mode
   const getCardInfo = useCallback((cardIndex: number) => {
@@ -108,22 +112,63 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
           return { type: 'Back', id: globalCardId };
         }
-      }
-    } else if (pdfMode.type === 'gutter-fold') {
+      }    } else if (pdfMode.type === 'gutter-fold') {
       // In gutter-fold mode, each page contains both front and back cards
-      // Use global card indexing across all pages
-      const globalCardId = cardIndex + 1; // Global ID across all cards in document
+      // Front and back cards have matching IDs (e.g., Front 1 and Back 1 are the same logical card)
+      // Card IDs should continue across pages
       
       if (pdfMode.orientation === 'portrait') {
         // Portrait gutter-fold: left side is front, right side is back
+        // Cards should be mirrored across the vertical gutter line
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
         const col = cardOnPage % extractionSettings.grid.columns;
-        const isLeftSide = col < extractionSettings.grid.columns / 2;
-        return isLeftSide ? { type: 'Front', id: globalCardId } : { type: 'Back', id: globalCardId };
+        const halfColumns = extractionSettings.grid.columns / 2;
+        const isLeftSide = col < halfColumns;
+        
+        // Calculate cards per half-page (only count front or back cards)
+        const cardsPerHalfPage = extractionSettings.grid.rows * halfColumns;
+        const pageOffset = pageIndex * cardsPerHalfPage;
+        
+        if (isLeftSide) {
+          // Front card: calculate ID based on position in left half + page offset
+          const cardIdInSection = row * halfColumns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Front', id: globalCardId };
+        } else {
+          // Back card: mirror position across gutter line
+          // Rightmost card (col = columns-1) matches leftmost (col = 0)
+          const rightCol = col - halfColumns; // Position within right half (0-based)
+          const mirroredCol = halfColumns - 1 - rightCol; // Mirror across the gutter
+          const cardIdInSection = row * halfColumns + mirroredCol + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Back', id: globalCardId };
+        }
       } else {
         // Landscape gutter-fold: top is front, bottom is back
+        // Cards should be mirrored across the horizontal gutter line
         const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-        const isTopHalf = row < extractionSettings.grid.rows / 2;
-        return isTopHalf ? { type: 'Front', id: globalCardId } : { type: 'Back', id: globalCardId };
+        const col = cardOnPage % extractionSettings.grid.columns;
+        const halfRows = extractionSettings.grid.rows / 2;
+        const isTopHalf = row < halfRows;
+        
+        // Calculate cards per half-page (only count front or back cards)
+        const cardsPerHalfPage = halfRows * extractionSettings.grid.columns;
+        const pageOffset = pageIndex * cardsPerHalfPage;
+        
+        if (isTopHalf) {
+          // Front card: calculate ID based on position in top half + page offset
+          const cardIdInSection = row * extractionSettings.grid.columns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Front', id: globalCardId };
+        } else {
+          // Back card: mirror position across gutter line
+          // Bottom row matches top row in mirrored fashion
+          const bottomRow = row - halfRows; // Position within bottom half (0-based)
+          const mirroredRow = halfRows - 1 - bottomRow; // Mirror across the gutter
+          const cardIdInSection = mirroredRow * extractionSettings.grid.columns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Back', id: globalCardId };
+        }
       }
     }
     
