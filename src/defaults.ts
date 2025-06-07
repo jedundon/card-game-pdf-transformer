@@ -23,8 +23,7 @@ export const DEFAULT_SETTINGS = {
     orientation: 'vertical' as const,
     flipEdge: 'short' as const
   },
-  pageSettings: [],
-  extractionSettings: {
+  pageSettings: [],  extractionSettings: {
     crop: {
       top: 0,
       right: 0,
@@ -34,7 +33,8 @@ export const DEFAULT_SETTINGS = {
     grid: {
       rows: 2,
       columns: 3
-    }
+    },
+    gutterWidth: 0
   },
   outputSettings: {
     pageSize: {

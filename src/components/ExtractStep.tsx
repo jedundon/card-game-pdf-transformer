@@ -226,8 +226,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       };
       
       await page.render(renderContext).promise;
-      
-      // Calculate card dimensions after cropping at high resolution
+        // Calculate card dimensions after cropping at high resolution
       // Crop settings are in 300 DPI pixels, so they can be used directly
       const croppedWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
       const croppedHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
@@ -238,24 +237,79 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         return null;
       }
       
-      const cardWidth = croppedWidth / extractionSettings.grid.columns;
-      const cardHeight = croppedHeight / extractionSettings.grid.rows;
+      let cardWidth, cardHeight;
+      let adjustedX, adjustedY;
+      
+      // Handle gutter-fold mode with gutter width
+      if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
+        const gutterWidth = extractionSettings.gutterWidth || 0;
+        
+        if (pdfMode.orientation === 'vertical') {
+          // Vertical gutter-fold: gutter runs vertically down the middle
+          const availableWidthForCards = croppedWidth - gutterWidth;
+          const halfWidth = availableWidthForCards / 2;
+          cardWidth = halfWidth / (extractionSettings.grid.columns / 2);
+          cardHeight = croppedHeight / extractionSettings.grid.rows;
+          
+          // Calculate card position accounting for gutter
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const halfColumns = extractionSettings.grid.columns / 2;
+          const isLeftSide = col < halfColumns;
+          
+          if (isLeftSide) {
+            // Left side (front cards) - no gutter offset needed
+            adjustedX = extractionSettings.crop.left + (col * cardWidth);
+          } else {
+            // Right side (back cards) - add gutter width and adjust column position
+            const rightCol = col - halfColumns;
+            adjustedX = extractionSettings.crop.left + halfWidth + gutterWidth + (rightCol * cardWidth);
+          }
+          adjustedY = extractionSettings.crop.top + (row * cardHeight);
+        } else {
+          // Horizontal gutter-fold: gutter runs horizontally across the middle
+          const availableHeightForCards = croppedHeight - gutterWidth;
+          const halfHeight = availableHeightForCards / 2;
+          cardWidth = croppedWidth / extractionSettings.grid.columns;
+          cardHeight = halfHeight / (extractionSettings.grid.rows / 2);
+          
+          // Calculate card position accounting for gutter
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const halfRows = extractionSettings.grid.rows / 2;
+          const isTopHalf = row < halfRows;
+          
+          adjustedX = extractionSettings.crop.left + (col * cardWidth);
+          if (isTopHalf) {
+            // Top half (front cards) - no gutter offset needed
+            adjustedY = extractionSettings.crop.top + (row * cardHeight);
+          } else {
+            // Bottom half (back cards) - add gutter height and adjust row position
+            const bottomRow = row - halfRows;
+            adjustedY = extractionSettings.crop.top + halfHeight + gutterWidth + (bottomRow * cardHeight);
+          }
+        }
+      } else {
+        // Standard mode or gutter-fold without gutter width
+        cardWidth = croppedWidth / extractionSettings.grid.columns;
+        cardHeight = croppedHeight / extractionSettings.grid.rows;
+        
+        // Calculate card position at high resolution using cardOnPage (not cardIndex)
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+        const col = cardOnPage % extractionSettings.grid.columns;
+        
+        adjustedX = extractionSettings.crop.left + (col * cardWidth);
+        adjustedY = extractionSettings.crop.top + (row * cardHeight);
+      }
       
       // Validate card dimensions
       if (cardWidth <= 0 || cardHeight <= 0) {
         console.error('Card extraction failed: invalid card dimensions at high resolution');
         return null;
-      }
-        // Calculate card position at high resolution using cardOnPage (not cardIndex)
-      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-      const col = cardOnPage % extractionSettings.grid.columns;
-      
-      const x = extractionSettings.crop.left + (col * cardWidth);
-      const y = extractionSettings.crop.top + (row * cardHeight);
-      
+      }      
       // Ensure extraction coordinates are within canvas bounds
-      const sourceX = Math.max(0, Math.min(Math.floor(x), viewport.width - 1));
-      const sourceY = Math.max(0, Math.min(Math.floor(y), viewport.height - 1));
+      const sourceX = Math.max(0, Math.min(Math.floor(adjustedX), viewport.width - 1));
+      const sourceY = Math.max(0, Math.min(Math.floor(adjustedY), viewport.height - 1));
       const sourceWidth = Math.max(1, Math.min(Math.floor(cardWidth), viewport.width - sourceX));
       const sourceHeight = Math.max(1, Math.min(Math.floor(cardHeight), viewport.height - sourceY));
       
@@ -279,12 +333,11 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       
       const dataUrl = cardCanvas.toDataURL('image/png');
       return dataUrl;
-      
-    } catch (error) {
+        } catch (error) {
       console.error('Error in high-DPI card extraction:', error);
       return null;
     }
-  }, [pdfData, extractionSettings.crop, extractionSettings.grid, activePages, pageSettings, cardsPerPage]);
+  }, [pdfData, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, pdfMode, activePages, pageSettings, cardsPerPage]);
 
   // Render PDF page to canvas
   useEffect(() => {
@@ -397,7 +450,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
     }
-  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractCardImage, globalCardIndex]);
+  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -408,14 +461,21 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
     };
     onSettingsChange(newSettings);
-  };
-  const handleGridChange = (dimension: string, value: number) => {
+  };  const handleGridChange = (dimension: string, value: number) => {
     const newSettings = {
       ...extractionSettings,
       grid: {
         ...extractionSettings.grid,
         [dimension]: value
       }
+    };
+    onSettingsChange(newSettings);
+  };
+
+  const handleGutterWidthChange = (value: number) => {
+    const newSettings = {
+      ...extractionSettings,
+      gutterWidth: value
     };
     onSettingsChange(newSettings);
   };
@@ -472,8 +532,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 <input type="number" value={extractionSettings.crop.left} onChange={e => handleCropChange('left', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
             </div>
-          </div>
-          <div>
+          </div>          <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
               Card Grid
             </h3>
@@ -492,7 +551,33 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+
+          {/* Gutter Width Control - only show for gutter-fold mode */}
+          {pdfMode.type === 'gutter-fold' && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-800 mb-3">
+                Gutter Settings
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Specify the width of the gutter area between front and back cards (in 300 DPI pixels)
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Gutter Width (px at 300 DPI)
+                </label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  value={extractionSettings.gutterWidth || 0} 
+                  onChange={e => handleGutterWidthChange(parseInt(e.target.value))} 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                This area will be cropped out from the center of the page between front and back cards
+              </p>
+            </div>
+          )}          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
             <div className="flex items-center">
               <LayoutGridIcon size={16} className="text-gray-600 mr-2" />
               <span className="text-sm text-gray-600">
@@ -506,6 +591,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 Total crop applied:{' '}
                 {extractionSettings.crop.top + extractionSettings.crop.right + extractionSettings.crop.bottom + extractionSettings.crop.left}
                 px (300 DPI)
+                {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
+                  <>
+                    {' + '}
+                    {extractionSettings.gutterWidth}px gutter
+                  </>
+                )}
               </span>
             </div>
           </div>
@@ -629,43 +720,199 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                           background: 'rgba(0, 0, 0, 0.6)',
                           pointerEvents: 'none'
                         }}
-                      />
+                      />                      
+                      {/* Gutter overlay for gutter-fold mode */}
+                      {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
+                        <div
+                          className="absolute"
+                          style={(() => {
+                            const gutterWidth = extractionSettings.gutterWidth || 0;
+                            const scaleFactor = renderedPageData.previewScale / (300/72);
+                            const gutterSizePx = gutterWidth * scaleFactor;
+                              if (pdfMode.orientation === 'vertical') {
+                              // Vertical gutter down the middle
+                              const croppedWidth = canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
+                              const availableWidthForCards = croppedWidth - gutterSizePx;
+                              const leftSectionWidth = availableWidthForCards / 2;
+                              
+                              return {
+                                top: `${extractionSettings.crop.top * scaleFactor}px`,
+                                left: `${extractionSettings.crop.left * scaleFactor + leftSectionWidth}px`,
+                                width: `${gutterSizePx}px`,
+                                height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                                pointerEvents: 'none'
+                              };
+                            } else {
+                              // Horizontal gutter across the middle
+                              const croppedHeight = canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
+                              const availableHeightForCards = croppedHeight - gutterSizePx;
+                              const topSectionHeight = availableHeightForCards / 2;
+                              
+                              return {
+                                top: `${extractionSettings.crop.top * scaleFactor + topSectionHeight}px`,
+                                left: `${extractionSettings.crop.left * scaleFactor}px`,
+                                width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                                height: `${gutterSizePx}px`,
+                                background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                                pointerEvents: 'none'
+                              };
+                            }
+                          })()}
+                        />
+                      )}
                       
                       {/* Grid overlay for card selection */}
                       <div 
-                        style={{
-                          position: 'absolute',
-                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / (300/72)}px`,
-                          left: `${extractionSettings.crop.left * renderedPageData.previewScale / (300/72)}px`,
-                          width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * renderedPageData.previewScale / (300/72))}px`,
-                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / (300/72))}px`,
-                          display: 'grid',
-                          gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
-                          gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
-                          gap: '1px',
-                          pointerEvents: 'auto'
-                        }}
-                      >
-                        {Array.from({
-                          length: extractionSettings.grid.rows * extractionSettings.grid.columns
-                        }).map((_, idx) => (
-                          <div 
-                            key={idx} 
-                            className={`cursor-pointer transition-all duration-200 ${
-                              idx === currentCard 
-                                ? 'border-2 border-blue-500' 
-                                : 'border border-blue-300 hover:border-blue-400'
-                            }`}
-                            style={{
-                              // Selected card: completely transparent to match card preview brightness
-                              // Unselected cards: dimmed to show they're not selected
-                              background: idx === currentCard 
-                                ? 'transparent' // Completely clear - no tint, no overlay
-                                : 'rgba(0, 0, 0, 0.25)' // Dim unselected cards
-                            }}
-                            onClick={() => setCurrentCard(idx)}
-                          />
-                        ))}
+                        style={(() => {
+                          const scaleFactor = renderedPageData.previewScale / (300/72);
+                          
+                          if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
+                            // For gutter-fold mode with gutter width, we need a more complex layout
+                            const gutterWidth = extractionSettings.gutterWidth || 0;
+                            const gutterSizePx = gutterWidth * scaleFactor;                            if (pdfMode.orientation === 'vertical') {
+                              const croppedWidth = canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
+                              
+                              // Create a custom grid that spans around the gutter
+                              return {
+                                position: 'absolute',
+                                top: `${extractionSettings.crop.top * scaleFactor}px`,
+                                left: `${extractionSettings.crop.left * scaleFactor}px`,
+                                width: `${croppedWidth}px`,
+                                height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                display: 'grid',
+                                gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
+                                gridTemplateColumns: `repeat(${extractionSettings.grid.columns / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.columns / 2}, 1fr)`,
+                                gap: '1px',
+                                pointerEvents: 'auto'
+                              };
+                            } else {
+                              const croppedHeight = canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
+                              
+                              return {
+                                position: 'absolute',
+                                top: `${extractionSettings.crop.top * scaleFactor}px`,
+                                left: `${extractionSettings.crop.left * scaleFactor}px`,
+                                width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                                height: `${croppedHeight}px`,
+                                display: 'grid',
+                                gridTemplateRows: `repeat(${extractionSettings.grid.rows / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.rows / 2}, 1fr)`,
+                                gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
+                                gap: '1px',
+                                pointerEvents: 'auto'
+                              };
+                            }
+                          } else {
+                            // Standard grid layout
+                            return {
+                              position: 'absolute',
+                              top: `${extractionSettings.crop.top * scaleFactor}px`,
+                              left: `${extractionSettings.crop.left * scaleFactor}px`,
+                              width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                              height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                              display: 'grid',
+                              gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
+                              gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
+                              gap: '1px',
+                              pointerEvents: 'auto'
+                            };
+                          }
+                        })()}
+                      >                        {(() => {
+                          if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
+                            // For gutter-fold with gutter width, we need to map cells correctly
+                            const totalCells = extractionSettings.grid.rows * extractionSettings.grid.columns;
+                            
+                            return Array.from({ length: totalCells + (pdfMode.orientation === 'vertical' ? extractionSettings.grid.rows : extractionSettings.grid.columns) }).map((_, idx) => {
+                              // Skip gutter cells (they shouldn't be clickable)
+                              if (pdfMode.orientation === 'vertical') {
+                                const gridRow = Math.floor(idx / (extractionSettings.grid.columns + 1));
+                                const gridCol = idx % (extractionSettings.grid.columns + 1);
+                                const gutterCol = extractionSettings.grid.columns / 2;
+                                
+                                if (gridCol === gutterCol) {
+                                  // This is a gutter cell - make it invisible/non-interactive
+                                  return <div key={idx} style={{ pointerEvents: 'none' }} />;
+                                }
+                                
+                                // Calculate the actual card index (excluding gutter cells)
+                                const actualCol = gridCol > gutterCol ? gridCol - 1 : gridCol;
+                                const cardIdx = gridRow * extractionSettings.grid.columns + actualCol;
+                                
+                                if (cardIdx >= totalCells) return null;
+                                
+                                return (
+                                  <div 
+                                    key={idx} 
+                                    className={`cursor-pointer transition-all duration-200 ${
+                                      cardIdx === currentCard 
+                                        ? 'border-2 border-blue-500' 
+                                        : 'border border-blue-300 hover:border-blue-400'
+                                    }`}
+                                    style={{
+                                      background: cardIdx === currentCard 
+                                        ? 'transparent' 
+                                        : 'rgba(0, 0, 0, 0.25)'
+                                    }}
+                                    onClick={() => setCurrentCard(cardIdx)}
+                                  />
+                                );
+                              } else {
+                                // Horizontal gutter logic
+                                const totalCols = extractionSettings.grid.columns;
+                                const gridRow = Math.floor(idx / totalCols);
+                                const gridCol = idx % totalCols;
+                                const gutterRow = extractionSettings.grid.rows / 2;
+                                
+                                if (gridRow === gutterRow) {
+                                  return <div key={idx} style={{ pointerEvents: 'none' }} />;
+                                }
+                                
+                                const actualRow = gridRow > gutterRow ? gridRow - 1 : gridRow;
+                                const cardIdx = actualRow * totalCols + gridCol;
+                                
+                                if (cardIdx >= totalCells) return null;
+                                
+                                return (
+                                  <div 
+                                    key={idx} 
+                                    className={`cursor-pointer transition-all duration-200 ${
+                                      cardIdx === currentCard 
+                                        ? 'border-2 border-blue-500' 
+                                        : 'border border-blue-300 hover:border-blue-400'
+                                    }`}
+                                    style={{
+                                      background: cardIdx === currentCard 
+                                        ? 'transparent' 
+                                        : 'rgba(0, 0, 0, 0.25)'
+                                    }}
+                                    onClick={() => setCurrentCard(cardIdx)}
+                                  />
+                                );
+                              }
+                            }).filter(Boolean);
+                          } else {
+                            // Standard grid
+                            return Array.from({
+                              length: extractionSettings.grid.rows * extractionSettings.grid.columns
+                            }).map((_, idx) => (
+                              <div 
+                                key={idx} 
+                                className={`cursor-pointer transition-all duration-200 ${
+                                  idx === currentCard 
+                                    ? 'border-2 border-blue-500' 
+                                    : 'border border-blue-300 hover:border-blue-400'
+                                }`}
+                                style={{
+                                  background: idx === currentCard 
+                                    ? 'transparent' 
+                                    : 'rgba(0, 0, 0, 0.25)'
+                                }}
+                                onClick={() => setCurrentCard(idx)}
+                              />
+                            ));
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>
