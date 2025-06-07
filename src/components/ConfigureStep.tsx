@@ -20,8 +20,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   onPrevious,
   onNext
 }) => {
-  const [currentCard, setCurrentCard] = useState(0);
+  const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -29,10 +30,186 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     [pageSettings]
   );
   
+  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  const totalPages = activePages.length;
+
+  // Calculate total unique cards based on PDF mode and card type
   const totalCards = useMemo(() => {
-    const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-    return activePages.length * cardsPerPage;
-  }, [extractionSettings.grid, activePages]);
+    if (pdfMode.type === 'duplex') {
+      // In duplex mode, front and back pages alternate
+      const frontPages = activePages.filter((page: any) => page.type === 'front').length;
+      const totalUniqueCards = frontPages * cardsPerPage; // Each front card has a corresponding back card
+      return totalUniqueCards;
+    } else if (pdfMode.type === 'gutter-fold') {
+      // In gutter-fold mode, each page contains both front and back cards
+      // Total unique cards = total pages * cards per page (each card is unique)
+      return totalPages * cardsPerPage;
+    } else {
+      // Fallback: treat each image as a unique card
+      return totalPages * cardsPerPage;
+    }
+  }, [pdfMode.type, activePages, cardsPerPage, totalPages]);
+
+  // Calculate card front/back identification based on PDF mode (matching ExtractStep logic)
+  const getCardInfo = useCallback((cardIndex: number) => {
+    if (!activePages.length) return { type: 'Unknown', id: 0 };
+    
+    const pageIndex = Math.floor(cardIndex / cardsPerPage);
+    const cardOnPage = cardIndex % cardsPerPage;
+    
+    if (pageIndex >= activePages.length) return { type: 'Unknown', id: 0 };
+    
+    const pageType = activePages[pageIndex]?.type || 'front';
+    
+    if (pdfMode.type === 'duplex') {
+      // In duplex mode, front and back pages alternate
+      // Calculate global card ID based on which front page this card logically belongs to
+      
+      if (pageType === 'front') {
+        // Front cards: global sequential numbering
+        // Find which front page this is (0-indexed)
+        const frontPageIndex = Math.floor(pageIndex / 2);
+        const globalCardId = frontPageIndex * cardsPerPage + cardOnPage + 1;
+        return { type: 'Front', id: globalCardId };
+      } else {
+        // Back cards: need to map physical position to logical card ID
+        // Find which front page this back page corresponds to
+        const correspondingFrontPageIndex = Math.floor((pageIndex - 1) / 2);
+        
+        if (pdfMode.flipEdge === 'short') {
+          // Short edge flip: horizontally mirrored
+          // Top-left becomes top-right, etc.
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const flippedCol = extractionSettings.grid.columns - 1 - col;
+          const logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        } else {
+          // Long edge flip: vertically mirrored
+          // Top-left becomes bottom-left, etc.
+          const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+          const col = cardOnPage % extractionSettings.grid.columns;
+          const flippedRow = extractionSettings.grid.rows - 1 - row;
+          const logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+          const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        }
+      }
+    } else if (pdfMode.type === 'gutter-fold') {
+      // In gutter-fold mode, each page contains both front and back cards
+      // Front and back cards have matching IDs (e.g., Front 1 and Back 1 are the same logical card)
+      // Card IDs should continue across pages
+      
+      if (pdfMode.orientation === 'vertical') {
+        // Portrait gutter-fold: left side is front, right side is back
+        // Cards should be mirrored across the vertical gutter line
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+        const col = cardOnPage % extractionSettings.grid.columns;
+        const halfColumns = extractionSettings.grid.columns / 2;
+        const isLeftSide = col < halfColumns;
+        
+        // Calculate cards per half-page (only count front or back cards)
+        const cardsPerHalfPage = extractionSettings.grid.rows * halfColumns;
+        const pageOffset = pageIndex * cardsPerHalfPage;
+        
+        if (isLeftSide) {
+          // Front card: calculate ID based on position in left half + page offset
+          const cardIdInSection = row * halfColumns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Front', id: globalCardId };
+        } else {
+          // Back card: mirror position across gutter line
+          // Rightmost card (col = columns-1) matches leftmost (col = 0)
+          const rightCol = col - halfColumns; // Position within right half (0-based)
+          const mirroredCol = halfColumns - 1 - rightCol; // Mirror across the gutter
+          const cardIdInSection = row * halfColumns + mirroredCol + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Back', id: globalCardId };
+        }
+      } else {
+        // Landscape gutter-fold: top is front, bottom is back
+        // Cards should be mirrored across the horizontal gutter line
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+        const col = cardOnPage % extractionSettings.grid.columns;
+        const halfRows = extractionSettings.grid.rows / 2;
+        const isTopHalf = row < halfRows;
+        
+        // Calculate cards per half-page (only count front or back cards)
+        const cardsPerHalfPage = halfRows * extractionSettings.grid.columns;
+        const pageOffset = pageIndex * cardsPerHalfPage;
+        
+        if (isTopHalf) {
+          // Front card: calculate ID based on position in top half + page offset
+          const cardIdInSection = row * extractionSettings.grid.columns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Front', id: globalCardId };
+        } else {
+          // Back card: mirror position across gutter line
+          // Bottom row matches top row in mirrored fashion
+          const bottomRow = row - halfRows; // Position within bottom half (0-based)
+          const mirroredRow = halfRows - 1 - bottomRow; // Mirror across the gutter
+          const cardIdInSection = mirroredRow * extractionSettings.grid.columns + col + 1;
+          const globalCardId = pageOffset + cardIdInSection;
+          return { type: 'Back', id: globalCardId };
+        }
+      }
+    }
+    
+    // Fallback - use global card indexing
+    return { type: pageType.charAt(0).toUpperCase() + pageType.slice(1), id: cardIndex + 1 };
+  }, [activePages, extractionSettings.grid, pdfMode, cardsPerPage]);
+
+  // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode
+  const availableCardIds = useMemo(() => {
+    const cardIds: number[] = [];
+    const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+      ? activePages.length * cardsPerPage 
+      : totalCards;
+    
+    for (let i = 0; i < maxIndex; i++) {
+      const cardInfo = getCardInfo(i);
+      if (cardInfo.type.toLowerCase() === viewMode) {
+        if (!cardIds.includes(cardInfo.id)) {
+          cardIds.push(cardInfo.id);
+        }
+      }
+    }
+    
+    return cardIds.sort((a, b) => a - b); // Sort card IDs numerically
+  }, [totalCards, viewMode, getCardInfo, pdfMode.type, activePages.length, cardsPerPage]);
+
+  const totalFilteredCards = availableCardIds.length;
+
+  // Get the position of current card ID in the available cards list
+  const currentCardPosition = useMemo(() => {
+    return availableCardIds.indexOf(currentCardId) + 1; // 1-based position
+  }, [availableCardIds, currentCardId]);
+
+  // Check if current card ID exists in available cards
+  const currentCardExists = useMemo(() => {
+    return availableCardIds.includes(currentCardId);
+  }, [availableCardIds, currentCardId]);
+
+  // Find the card index for the current card ID in the filtered view
+  const currentCardIndex = useMemo(() => {
+    if (!currentCardExists) return null;
+    
+    // Find the first card index that matches the current card ID and view mode
+    const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+      ? activePages.length * cardsPerPage 
+      : totalCards;
+    
+    for (let i = 0; i < maxIndex; i++) {
+      const cardInfo = getCardInfo(i);
+      if (cardInfo.id === currentCardId && cardInfo.type.toLowerCase() === viewMode) {
+        return i;
+      }
+    }
+    
+    return null;
+  }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfo]);
+
   // Extract card image for preview
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     if (!pdfData || !activePages.length) {
@@ -170,17 +347,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   // Update card preview when current card changes
   useEffect(() => {
-    if (totalCards > 0) {
+    if (totalFilteredCards > 0 && currentCardExists && currentCardIndex !== null) {
       const updatePreview = async () => {
-        const cardUrl = await extractCardImage(currentCard);
+        const cardUrl = await extractCardImage(currentCardIndex);
         setCardPreviewUrl(cardUrl);
       };
       updatePreview();
     }
   }, [
-    currentCard, 
+    currentCardId,
+    viewMode,
     extractCardImage, 
-    totalCards
+    totalFilteredCards,
+    currentCardExists,
+    currentCardIndex
   ]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
@@ -239,31 +419,34 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     onSettingsChange(newSettings);
   };
   const handlePreviousCard = () => {
-    setCurrentCard(prev => Math.max(0, prev - 1));
-  };
-  const handleNextCard = () => {
-    setCurrentCard(prev => Math.min(totalCards - 1, prev + 1));
-  };
-
-  // Ensure currentCard is within bounds when totalCards changes
-  useEffect(() => {
-    if (currentCard >= totalCards && totalCards > 0) {
-      setCurrentCard(totalCards - 1);
+    const currentIndex = availableCardIds.indexOf(currentCardId);
+    if (currentIndex > 0) {
+      setCurrentCardId(availableCardIds[currentIndex - 1]);
     }
-  }, [currentCard, totalCards]);
-
-  // Get card type (front/back) based on page settings
-  const getCardType = (cardIndex: number): string => {
-    if (!activePages.length) return 'Unknown';
-    
-    const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-    const pageIndex = Math.floor(cardIndex / cardsPerPage);
-    
-    if (pageIndex >= activePages.length) return 'Unknown';
-    
-    const pageType = activePages[pageIndex]?.type || 'front';
-    return pageType.charAt(0).toUpperCase() + pageType.slice(1);
   };
+  
+  const handleNextCard = () => {
+    const currentIndex = availableCardIds.indexOf(currentCardId);
+    if (currentIndex < availableCardIds.length - 1) {
+      setCurrentCardId(availableCardIds[currentIndex + 1]);
+    }
+  };
+
+  // Handle view mode toggle - maintain current card ID when switching between front/back
+  const handleViewModeToggle = (mode: 'front' | 'back') => {
+    setViewMode(mode);
+    // Don't reset card ID - let it stay on the same logical card if it exists
+    // If the current card ID doesn't exist in the new mode, it will be handled by the effect below
+  };
+
+  // Ensure currentCardId is valid for the current view mode
+  useEffect(() => {
+    if (totalFilteredCards > 0 && !currentCardExists) {
+      // Current card ID doesn't exist in current mode, fallback to first available card
+      setCurrentCardId(availableCardIds[0]);
+    }
+  }, [currentCardExists, totalFilteredCards, availableCardIds]);
+
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
       
@@ -432,20 +615,49 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         </div>
         <div className="space-y-4">
           <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <button onClick={handlePreviousCard} disabled={currentCard === 0 || totalCards === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
-                  <ChevronLeftIcon size={16} />
-                </button>
-                <span className="text-sm text-gray-700">
-                  {totalCards > 0 ? `Card ${currentCard + 1} of ${totalCards}` : 'No cards'}
-                </span>
-                <button onClick={handleNextCard} disabled={currentCard === totalCards - 1 || totalCards === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
-                  <ChevronRightIcon size={16} />
-                </button>
+            <div className="bg-gray-50 p-3 border-b border-gray-200">
+              {/* View Mode Toggle */}
+              <div className="flex items-center justify-center mb-3">
+                <div className="flex bg-gray-200 rounded-lg p-1">
+                  <button
+                    onClick={() => handleViewModeToggle('front')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'front'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Fronts
+                  </button>
+                  <button
+                    onClick={() => handleViewModeToggle('back')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'back'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Backs
+                  </button>
+                </div>
               </div>
-              <div className="text-sm text-gray-500">
-                {totalCards > 0 ? getCardType(currentCard) : 'No cards'}
+              
+              {/* Card Navigation */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center space-x-2">
+                  <button onClick={handlePreviousCard} disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                    <ChevronLeftIcon size={16} />
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    {totalFilteredCards > 0 && currentCardExists ? `${viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} ${currentCardPosition} of ${totalFilteredCards}` : `No ${viewMode} cards`}
+                  </span>
+                  <button onClick={handleNextCard} disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === availableCardIds.length - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                    <ChevronRightIcon size={16} />
+                  </button>
+                </div>
+                <div className="text-sm text-gray-500">
+                  {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
+                </div>
               </div>
             </div>
             <div className="p-4 bg-gray-100">
@@ -571,7 +783,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Card {currentCard + 1}
+                      Card ID {currentCardId}
                     </div>
                   )}
                 </div>
@@ -595,6 +807,38 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <p>
                 <span className="font-medium">Total cards:</span>{' '}
                 {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
+              </p>
+              <p>
+                <span className="font-medium">Front cards:</span>{' '}
+                {(() => {
+                  let frontCount = 0;
+                  const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+                    ? activePages.length * cardsPerPage 
+                    : totalCards;
+                  for (let i = 0; i < maxIndex; i++) {
+                    const cardInfo = getCardInfo(i);
+                    if (cardInfo.type.toLowerCase() === 'front') {
+                      frontCount++;
+                    }
+                  }
+                  return frontCount;
+                })()}
+              </p>
+              <p>
+                <span className="font-medium">Back cards:</span>{' '}
+                {(() => {
+                  let backCount = 0;
+                  const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+                    ? activePages.length * cardsPerPage 
+                    : totalCards;
+                  for (let i = 0; i < maxIndex; i++) {
+                    const cardInfo = getCardInfo(i);
+                    if (cardInfo.type.toLowerCase() === 'back') {
+                      backCount++;
+                    }
+                  }
+                  return backCount;
+                })()}
               </p>
               <p>
                 <span className="font-medium">Page size:</span>{' '}
