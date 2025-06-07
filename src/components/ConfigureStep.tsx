@@ -177,6 +177,16 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     };
     onSettingsChange(newSettings);
   };
+  const handleCardScaleChange = (targetHeight: number) => {
+    const newSettings = {
+      ...outputSettings,
+      cardScale: {
+        ...(outputSettings.cardScale || {}),
+        targetHeight: targetHeight
+      }
+    };
+    onSettingsChange(newSettings);
+  };
   const handlePreviousCard = () => {
     setCurrentCard(prev => Math.max(0, prev - 1));
   };
@@ -295,7 +305,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               Card Crop Settings
             </h3>
             <p className="text-sm text-gray-600 mb-3">
-              Remove pixels from each edge of the extracted card (applied during final output)
+              Remove pixels from each edge of the extracted card (applied before scaling)
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -324,6 +334,34 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </div>
             </div>
           </div>
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Card Size
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Set the target height for cards after cropping (before rotation)
+            </p>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Target Height (inches)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  min="0.5" 
+                  max="10" 
+                  value={outputSettings.cardScale?.targetHeight || 2.5} 
+                  onChange={e => handleCardScaleChange(parseFloat(e.target.value))} 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Width will be calculated automatically to maintain aspect ratio
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
               Card Rotation
@@ -397,9 +435,34 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     scale = Math.min(widthScale, heightScale);
                   }
                   
-                  // Apply scale to card dimensions and positioning
-                  const cardWidth = (200 - outputSettings.crop.left - outputSettings.crop.right) * scale;
-                  const cardHeight = (280 - outputSettings.crop.top - outputSettings.crop.bottom) * scale;
+                  // Calculate actual card dimensions with correct transformation order:
+                  // 1. Extract card at original size
+                  // 2. Apply crop (remove pixels from edges)
+                  // 3. Apply scale (resize to target height) 
+                  // 4. Apply rotation (handled by CSS transform)
+                  
+                  const targetHeight = outputSettings.cardScale?.targetHeight || 2.5; // inches
+                  const baseDPI = 300; // Assuming 300 DPI for output
+                  
+                  // Get original extracted card dimensions (before any transformations)
+                  const originalCardWidth = 200; // This should ideally come from actual extraction
+                  const originalCardHeight = 280; // This should ideally come from actual extraction
+                  
+                  // Step 1: Apply cropping to original dimensions
+                  const croppedCardWidth = originalCardWidth - (outputSettings.crop.left + outputSettings.crop.right);
+                  const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
+                  
+                  // Step 2: Calculate scale factor based on target height of cropped card
+                  const targetHeightPx = targetHeight * baseDPI;
+                  const cardScaleFactor = targetHeightPx / croppedCardHeight;
+                  
+                  // Step 3: Apply scaling to cropped dimensions
+                  const finalCardWidth = croppedCardWidth * cardScaleFactor;
+                  const finalCardHeight = croppedCardHeight * cardScaleFactor;
+                  
+                  // Convert to preview scale for display
+                  const cardWidth = finalCardWidth * scale / baseDPI * 96; // Convert to screen pixels
+                  const cardHeight = finalCardHeight * scale / baseDPI * 96;
                   const offsetX = outputSettings.offset.horizontal * 96 * scale;
                   const offsetY = outputSettings.offset.vertical * 96 * scale;
                   
@@ -432,10 +495,25 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                             scale = Math.min(widthScale, heightScale);
                           }
                           
+                          // Calculate card scaling for background with correct transformation order
+                          const targetHeight = outputSettings.cardScale?.targetHeight || 2.5; // inches
+                          const baseDPI = 300;
+                          
+                          // Original extracted card dimensions
+                          const originalCardWidth = 200;
+                          const originalCardHeight = 280;
+                          
+                          // Apply cropping first
+                          const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
+                          
+                          // Then apply scaling
+                          const targetHeightPx = targetHeight * baseDPI;
+                          const cardScaleFactor = targetHeightPx / croppedCardHeight;
+                          
                           return {
                             backgroundImage: `url(${cardPreviewUrl})`,
-                            backgroundPosition: `${-outputSettings.crop.left * scale}px ${-outputSettings.crop.top * scale}px`,
-                            backgroundSize: `${200 * scale}px ${280 * scale}px`
+                            backgroundPosition: `${-outputSettings.crop.left * cardScaleFactor * scale / baseDPI * 96}px ${-outputSettings.crop.top * cardScaleFactor * scale / baseDPI * 96}px`,
+                            backgroundSize: `${originalCardWidth * cardScaleFactor * scale / baseDPI * 96}px ${originalCardHeight * cardScaleFactor * scale / baseDPI * 96}px`
                           };
                         })()
                       }}
@@ -486,6 +564,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <p>
                 <span className="font-medium">Rotation:</span>{' '}
                 {outputSettings.rotation}°
+              </p>
+              <p>
+                <span className="font-medium">Card size:</span>{' '}
+                {(() => {
+                  const targetHeight = outputSettings.cardScale?.targetHeight || 2.5;
+                  // Calculate width based on cropped dimensions, not original
+                  const originalWidth = 200;
+                  const originalHeight = 280;
+                  const croppedWidth = originalWidth - (outputSettings.crop.left + outputSettings.crop.right);
+                  const croppedHeight = originalHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
+                  const aspectRatio = croppedWidth / croppedHeight;
+                  const targetWidth = targetHeight * aspectRatio;
+                  return `${targetWidth.toFixed(2)}" × ${targetHeight}" (after crop)`;
+                })()}
               </p>
             </div>
           </div>
