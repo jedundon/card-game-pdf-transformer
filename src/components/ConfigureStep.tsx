@@ -5,8 +5,12 @@ import {
   calculateTotalCards, 
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
-  getAvailableCardIds
+  getAvailableCardIds,
+  getRotationForCardType,
+  countCardsByType,
+  calculatePreviewScale
 } from '../utils/cardUtils';
+import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 interface ConfigureStepProps {
   pdfData: any;
   pdfMode: any;
@@ -162,7 +166,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     const newSettings = {
       ...outputSettings,
       cardScale: {
-        ...(outputSettings.cardScale || {}),
         targetHeight: targetHeight
       }
     };
@@ -362,12 +365,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <div className="flex items-center space-x-4">
                 <RotateCcwIcon size={16} className="text-gray-500" />
                 <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${(() => {
-                    const frontRotation = typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null 
-                      ? outputSettings.rotation.front || 0 
-                      : outputSettings.rotation || 0;
-                    return frontRotation === degree ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
-                  })()} rounded-md text-sm font-medium`}>
+                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${
+                    getRotationForCardType(outputSettings, 'front') === degree 
+                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } rounded-md text-sm font-medium`}>
                       {degree}°
                     </button>)}
                 </div>
@@ -382,12 +384,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <div className="flex items-center space-x-4">
                 <RotateCcwIcon size={16} className="text-gray-500" />
                 <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${(() => {
-                    const backRotation = typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null 
-                      ? outputSettings.rotation.back || 0 
-                      : outputSettings.rotation || 0;
-                    return backRotation === degree ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50';
-                  })()} rounded-md text-sm font-medium`}>
+                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${
+                    getRotationForCardType(outputSettings, 'back') === degree 
+                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } rounded-md text-sm font-medium`}>
                       {degree}°
                     </button>)}
                 </div>
@@ -445,40 +446,26 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             <div className="p-4 bg-gray-100">
               <div className="relative mx-auto bg-white shadow" style={{
               ...(() => {
-                const maxWidth = 400; // Maximum width for the preview
-                const maxHeight = 500; // Maximum height for the preview
+                const { previewWidth, previewHeight } = calculatePreviewScale(
+                  outputSettings.pageSize.width,
+                  outputSettings.pageSize.height,
+                  PREVIEW_CONSTRAINTS.MAX_WIDTH,
+                  PREVIEW_CONSTRAINTS.MAX_HEIGHT
+                );
                 
-                let width = outputSettings.pageSize.width * 96;
-                let height = outputSettings.pageSize.height * 96;
-                
-                // Scale down if too large, maintaining aspect ratio
-                if (width > maxWidth || height > maxHeight) {
-                  const widthScale = maxWidth / width;
-                  const heightScale = maxHeight / height;
-                  const scale = Math.min(widthScale, heightScale);
-                  
-                  width = width * scale;
-                  height = height * scale;
-                }
-                
-                return { width: `${width}px`, height: `${height}px` };
+                return { width: `${previewWidth}px`, height: `${previewHeight}px` };
               })()
             }}>
                 {/* Card positioned on the page */}
                 <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
                 ...(() => {
                   // Calculate the same scale factor used for the page preview
-                  const maxWidth = 400;
-                  const maxHeight = 500;
-                  let pageWidth = outputSettings.pageSize.width * 96;
-                  let pageHeight = outputSettings.pageSize.height * 96;
-                  
-                  let scale = 1;
-                  if (pageWidth > maxWidth || pageHeight > maxHeight) {
-                    const widthScale = maxWidth / pageWidth;
-                    const heightScale = maxHeight / pageHeight;
-                    scale = Math.min(widthScale, heightScale);
-                  }
+                  const { scale } = calculatePreviewScale(
+                    outputSettings.pageSize.width,
+                    outputSettings.pageSize.height,
+                    PREVIEW_CONSTRAINTS.MAX_WIDTH,
+                    PREVIEW_CONSTRAINTS.MAX_HEIGHT
+                  );
                   
                   // Calculate actual card dimensions with correct transformation order:
                   // 1. Extract card at original size
@@ -487,18 +474,17 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   // 4. Apply rotation (handled by CSS transform)
                   
                   const targetHeight = outputSettings.cardScale?.targetHeight || 2.5; // inches
-                  const baseDPI = 300; // Assuming 300 DPI for output
                   
                   // Get original extracted card dimensions (before any transformations)
-                  const originalCardWidth = 200; // This should ideally come from actual extraction
-                  const originalCardHeight = 280; // This should ideally come from actual extraction
+                  const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width; 
+                  const originalCardHeight = DEFAULT_CARD_DIMENSIONS.height;
                   
                   // Step 1: Apply cropping to original dimensions
                   const croppedCardWidth = originalCardWidth - (outputSettings.crop.left + outputSettings.crop.right);
                   const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
                   
                   // Step 2: Calculate scale factor based on target height of cropped card
-                  const targetHeightPx = targetHeight * baseDPI;
+                  const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
                   const cardScaleFactor = targetHeightPx / croppedCardHeight;
                   
                   // Step 3: Apply scaling to cropped dimensions
@@ -506,10 +492,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   const finalCardHeight = croppedCardHeight * cardScaleFactor;
                   
                   // Convert to preview scale for display
-                  const cardWidth = finalCardWidth * scale / baseDPI * 96; // Convert to screen pixels
-                  const cardHeight = finalCardHeight * scale / baseDPI * 96;
-                  const offsetX = outputSettings.offset.horizontal * 96 * scale;
-                  const offsetY = outputSettings.offset.vertical * 96 * scale;
+                  const cardWidth = finalCardWidth * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI; // Convert to screen pixels
+                  const cardHeight = finalCardHeight * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                  const offsetX = outputSettings.offset.horizontal * DPI_CONSTANTS.SCREEN_DPI * scale;
+                  const offsetY = outputSettings.offset.vertical * DPI_CONSTANTS.SCREEN_DPI * scale;
                   
                   return {
                     width: `${cardWidth}px`,
@@ -518,12 +504,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     left: '50%',
                     marginLeft: `calc(-${cardWidth / 2}px + ${offsetX}px)`,
                     marginTop: `calc(-${cardHeight / 2}px + ${offsetY}px)`,
-                    transform: `rotate(${(() => {
-                      if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
-                        return outputSettings.rotation[viewMode] || 0;
-                      }
-                      return outputSettings.rotation || 0;
-                    })()}deg)`
+                    transform: `rotate(${getRotationForCardType(outputSettings, viewMode)}deg)`
                   };
                 })()
               }}>
@@ -533,37 +514,31 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                       style={{
                         ...(() => {
                           // Calculate the same scale factor for background sizing
-                          const maxWidth = 400;
-                          const maxHeight = 500;
-                          let pageWidth = outputSettings.pageSize.width * 96;
-                          let pageHeight = outputSettings.pageSize.height * 96;
-                          
-                          let scale = 1;
-                          if (pageWidth > maxWidth || pageHeight > maxHeight) {
-                            const widthScale = maxWidth / pageWidth;
-                            const heightScale = maxHeight / pageHeight;
-                            scale = Math.min(widthScale, heightScale);
-                          }
+                          const { scale } = calculatePreviewScale(
+                            outputSettings.pageSize.width,
+                            outputSettings.pageSize.height,
+                            PREVIEW_CONSTRAINTS.MAX_WIDTH,
+                            PREVIEW_CONSTRAINTS.MAX_HEIGHT
+                          );
                           
                           // Calculate card scaling for background with correct transformation order
                           const targetHeight = outputSettings.cardScale?.targetHeight || 2.5; // inches
-                          const baseDPI = 300;
                           
                           // Original extracted card dimensions
-                          const originalCardWidth = 200;
-                          const originalCardHeight = 280;
+                          const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width;
+                          const originalCardHeight = DEFAULT_CARD_DIMENSIONS.height;
                           
                           // Apply cropping first
                           const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
                           
                           // Then apply scaling
-                          const targetHeightPx = targetHeight * baseDPI;
+                          const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
                           const cardScaleFactor = targetHeightPx / croppedCardHeight;
                           
                           return {
                             backgroundImage: `url(${cardPreviewUrl})`,
-                            backgroundPosition: `${-outputSettings.crop.left * cardScaleFactor * scale / baseDPI * 96}px ${-outputSettings.crop.top * cardScaleFactor * scale / baseDPI * 96}px`,
-                            backgroundSize: `${originalCardWidth * cardScaleFactor * scale / baseDPI * 96}px ${originalCardHeight * cardScaleFactor * scale / baseDPI * 96}px`
+                            backgroundPosition: `${-outputSettings.crop.left * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px ${-outputSettings.crop.top * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px`,
+                            backgroundSize: `${originalCardWidth * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px ${originalCardHeight * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px`
                           };
                         })()
                       }}
@@ -597,35 +572,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </p>
               <p>
                 <span className="font-medium">Front cards:</span>{' '}
-                {(() => {
-                  let frontCount = 0;
-                  const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
-                    ? activePages.length * cardsPerPage 
-                    : totalCards;
-                  for (let i = 0; i < maxIndex; i++) {
-                    const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
-                    if (cardInfo.type.toLowerCase() === 'front') {
-                      frontCount++;
-                    }
-                  }
-                  return frontCount;
-                })()}
+                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
               </p>
               <p>
                 <span className="font-medium">Back cards:</span>{' '}
-                {(() => {
-                  let backCount = 0;
-                  const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
-                    ? activePages.length * cardsPerPage 
-                    : totalCards;
-                  for (let i = 0; i < maxIndex; i++) {
-                    const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
-                    if (cardInfo.type.toLowerCase() === 'back') {
-                      backCount++;
-                    }
-                  }
-                  return backCount;
-                })()}
+                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
               </p>
               <p>
                 <span className="font-medium">Page size:</span>{' '}
@@ -645,25 +596,15 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </p>
               <p>
                 <span className="font-medium">Rotation:</span>{' '}
-                Front {(() => {
-                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
-                    return outputSettings.rotation.front || 0;
-                  }
-                  return outputSettings.rotation || 0;
-                })()}°, Back {(() => {
-                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
-                    return outputSettings.rotation.back || 0;
-                  }
-                  return outputSettings.rotation || 0;
-                })()}°
+                Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
               </p>
               <p>
                 <span className="font-medium">Card size:</span>{' '}
                 {(() => {
                   const targetHeight = outputSettings.cardScale?.targetHeight || 2.5;
                   // Calculate width based on cropped dimensions, not original
-                  const originalWidth = 200;
-                  const originalHeight = 280;
+                  const originalWidth = DEFAULT_CARD_DIMENSIONS.width;
+                  const originalHeight = DEFAULT_CARD_DIMENSIONS.height;
                   const croppedWidth = originalWidth - (outputSettings.crop.left + outputSettings.crop.right);
                   const croppedHeight = originalHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
                   const aspectRatio = croppedWidth / croppedHeight;

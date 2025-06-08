@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
+import { getRotationForCardType, getActivePages, calculateTotalCards } from '../utils/cardUtils';
 interface ExportStepProps {
   pdfData: any;
   pdfMode: any;
@@ -11,8 +12,8 @@ interface ExportStepProps {
 export const ExportStep: React.FC<ExportStepProps> = ({
   // pdfData,
   pdfMode,
-  // pageSettings,
-  // extractionSettings,
+  pageSettings,
+  extractionSettings,
   outputSettings,
   onPrevious
 }) => {
@@ -24,6 +25,18 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     fronts: null,
     backs: null
   });
+
+  // Calculate total cards
+  const activePages = useMemo(() => 
+    getActivePages(pageSettings), 
+    [pageSettings]
+  );
+  
+  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  const totalCards = useMemo(() => 
+    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
+    [pdfMode, activePages, cardsPerPage]
+  );
   const handleExport = () => {
     setExportStatus('processing');
     // Simulate processing time
@@ -53,8 +66,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total Cards:</span>
-              <span className="font-medium text-gray-800">10</span>{' '}
-              {/* This would be calculated from actual data */}
+              <span className="font-medium text-gray-800">{totalCards}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Output Page Size:</span>
@@ -77,17 +89,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
-                Front {(() => {
-                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
-                    return outputSettings.rotation.front || 0;
-                  }
-                  return outputSettings.rotation || 0;
-                })()}°, Back {(() => {
-                  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
-                    return outputSettings.rotation.back || 0;
-                  }
-                  return outputSettings.rotation || 0;
-                })()}°
+                Front {getRotationForCardType(outputSettings.rotation, 'front')}°, Back {getRotationForCardType(outputSettings.rotation, 'back')}°
               </span>
             </div>
             <div className="flex justify-between text-sm">

@@ -54,8 +54,7 @@ export const DEFAULT_SETTINGS = {
       columns: 3
     },
     gutterWidth: 0
-  },
-  outputSettings: {
+  },  outputSettings: {
     pageSize: {
       width: 3.5,
       height: 3.5
@@ -71,6 +70,9 @@ export const DEFAULT_SETTINGS = {
     },    rotation: {
       front: 0,
       back: 0
+    },
+    cardScale: {
+      targetHeight: 2.5
     }
   }
 };
@@ -126,12 +128,11 @@ export type WorkflowSettings = {
       right: number;
       bottom: number;
       left: number;
-    };
-    rotation: {
+    };    rotation: {
       front: number;
       back: number;
     };
-    cardScale?: {
+    cardScale: {
       targetHeight: number;
     };
   };

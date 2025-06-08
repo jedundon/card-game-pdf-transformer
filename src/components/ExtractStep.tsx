@@ -3,10 +3,10 @@ import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon } from 'luc
 import { 
   getActivePages, 
   calculateTotalCards, 
-  calculateTotalCardsOfCurrentType, 
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
-  getActualPageNumber
+  getActualPageNumber,
+  getDpiScaleFactor
 } from '../utils/cardUtils';
 interface ExtractStepProps {
   pdfData: any;
@@ -47,12 +47,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     calculateTotalCards(pdfMode, activePages, cardsPerPage), 
     [pdfMode, activePages, cardsPerPage]
   );
-  
-  // Calculate total cards of the current type (for navigation display)
-  const totalCardsOfCurrentType = useMemo(() => 
-    calculateTotalCardsOfCurrentType(pdfMode, activePages, cardsPerPage, totalCards), 
-    [pdfMode, activePages, cardsPerPage, totalCards]
-  );  // Calculate card front/back identification based on PDF mode
+    // Calculate card front/back identification based on PDF mode
   // Calculate the global card index from current page and card
   const globalCardIndex = currentPage * cardsPerPage + currentCard;
   
@@ -400,7 +395,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                           top: 0,
                           left: 0,
                           width: `${canvasRef.current.width}px`,
-                          height: `${extractionSettings.crop.top * renderedPageData.previewScale / (300/72)}px`,
+                          height: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
                           background: 'rgba(0, 0, 0, 0.6)',
                           pointerEvents: 'none'
                         }}
@@ -412,31 +407,29 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                           bottom: 0,
                           left: 0,
                           width: `${canvasRef.current.width}px`,
-                          height: `${extractionSettings.crop.bottom * renderedPageData.previewScale / (300/72)}px`,
+                          height: `${extractionSettings.crop.bottom * renderedPageData.previewScale / getDpiScaleFactor()}px`,
                           background: 'rgba(0, 0, 0, 0.6)',
                           pointerEvents: 'none'
                         }}
                       />
                       {/* Left margin */}
                       <div
-                        className="absolute"
-                        style={{
-                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / (300/72)}px`,
+                        className="absolute"                        style={{
+                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
                           left: 0,
-                          width: `${extractionSettings.crop.left * renderedPageData.previewScale / (300/72)}px`,
-                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / (300/72))}px`,
+                          width: `${extractionSettings.crop.left * renderedPageData.previewScale / getDpiScaleFactor()}px`,
+                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / getDpiScaleFactor())}px`,
                           background: 'rgba(0, 0, 0, 0.6)',
                           pointerEvents: 'none'
                         }}
                       />
                       {/* Right margin */}
                       <div
-                        className="absolute"
-                        style={{
-                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / (300/72)}px`,
+                        className="absolute"                        style={{
+                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
                           right: 0,
-                          width: `${extractionSettings.crop.right * renderedPageData.previewScale / (300/72)}px`,
-                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / (300/72))}px`,
+                          width: `${extractionSettings.crop.right * renderedPageData.previewScale / getDpiScaleFactor()}px`,
+                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / getDpiScaleFactor())}px`,
                           background: 'rgba(0, 0, 0, 0.6)',
                           pointerEvents: 'none'
                         }}
@@ -447,7 +440,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                           className="absolute"
                           style={(() => {
                             const gutterWidth = extractionSettings.gutterWidth || 0;
-                            const scaleFactor = renderedPageData.previewScale / (300/72);
+                            const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor();
                             const gutterSizePx = gutterWidth * scaleFactor;
                               if (pdfMode.orientation === 'vertical') {
                               // Vertical gutter down the middle
@@ -485,7 +478,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                       {/* Grid overlay for card selection */}
                       <div 
                         style={(() => {
-                          const scaleFactor = renderedPageData.previewScale / (300/72);
+                          const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor();
                           
                           if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
                             // For gutter-fold mode with gutter width, we need a more complex layout
@@ -643,7 +636,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 <button onClick={handlePreviousCard} disabled={currentCard === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronLeftIcon size={16} />
                 </button>                <span className="text-sm text-gray-700">
-                  Card {cardId} of {totalCardsOfCurrentType}
+                  Card {cardId} of {totalCards}
                 </span>
                 <button onClick={handleNextCard} disabled={currentCard === cardsPerPage - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronRightIcon size={16} />

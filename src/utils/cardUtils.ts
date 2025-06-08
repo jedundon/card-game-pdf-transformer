@@ -1,3 +1,5 @@
+import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS } from '../constants';
+
 // Utility functions for card calculations and extraction
 // Shared between ExtractStep and ConfigureStep components
 
@@ -62,31 +64,7 @@ export function calculateTotalCards(
   }
 }
 
-/**
- * Calculate total cards of current type for navigation display
- */
-export function calculateTotalCardsOfCurrentType(
-  pdfMode: PdfMode,
-  activePages: PageSettings[],
-  cardsPerPage: number,
-  totalCards: number
-): number {
-  const totalPages = activePages.length;
-  
-  if (pdfMode.type === 'duplex') {
-    // In duplex mode, both front and back have the same count
-    const frontPages = activePages.filter((page: PageSettings) => page.type === 'front').length;
-    return frontPages * cardsPerPage;
-  } else if (pdfMode.type === 'gutter-fold') {
-    // In gutter-fold mode, each page has front/back pairs
-    // Count unique cards (each page contributes half the cards since they're mirrored)
-    const cardsPerHalfPage = Math.floor(cardsPerPage / 2);
-    return totalPages * cardsPerHalfPage;
-  } else {
-    // For other modes, use the total cards calculation
-    return totalCards;
-  }
-}
+
 
 /**
  * Calculate card front/back identification based on PDF mode
@@ -248,11 +226,8 @@ export async function extractCardImage(
     const actualPageNumber = getActualPageNumber(pageIndex, pageSettings);
 
     const page = await pdfData.getPage(actualPageNumber);
-    
-    // Calculate scale for 300 DPI (PDF.js uses 72 DPI as base, so 300/72 = ~4.17)
-    const targetDPI = 300;
-    const baseDPI = 72;
-    const highResScale = targetDPI / baseDPI;
+      // Calculate scale for extraction DPI (PDF.js uses 72 DPI as base)
+    const highResScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
     
     const viewport = page.getViewport({ scale: highResScale });
     
@@ -274,9 +249,8 @@ export async function extractCardImage(
     };
     
     await page.render(renderContext).promise;
-    
-    // Calculate card dimensions after cropping at high resolution
-    // Crop settings are in 300 DPI pixels, so they can be used directly
+      // Calculate card dimensions after cropping at high resolution
+    // Crop settings are in extraction DPI pixels, so they can be used directly
     const croppedWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
     const croppedHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
     
@@ -418,27 +392,99 @@ export function getAvailableCardIds(
 }
 
 /**
- * Find card index for a specific card ID and view mode
+ * Get rotation value for a specific card type from settings
  */
-export function findCardIndexByIdAndMode(
-  cardId: number,
-  viewMode: 'front' | 'back',
-  totalCards: number,
-  pdfMode: PdfMode,
+export function getRotationForCardType(
+  outputSettings: any,
+  cardType: 'front' | 'back'
+): number {
+  if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
+    return outputSettings.rotation[cardType] || 0;
+  }
+  return outputSettings.rotation || 0;
+}
+
+/**
+ * Calculate card dimensions after cropping and scaling
+ */
+export function calculateCardDimensions(
+  cropSettings: { top: number; right: number; bottom: number; left: number },
+  targetHeight: number,
+  originalDimensions = DEFAULT_CARD_DIMENSIONS
+) {
+  // Apply cropping to original dimensions
+  const croppedWidth = originalDimensions.width - (cropSettings.left + cropSettings.right);
+  const croppedHeight = originalDimensions.height - (cropSettings.top + cropSettings.bottom);
+  
+  // Calculate scale factor based on target height
+  const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
+  const scaleFactor = targetHeightPx / croppedHeight;
+  
+  // Apply scaling to cropped dimensions
+  const finalWidth = croppedWidth * scaleFactor;
+  const finalHeight = croppedHeight * scaleFactor;
+  
+  return {
+    width: finalWidth,
+    height: finalHeight,
+    scaleFactor,
+    aspectRatio: croppedWidth / croppedHeight
+  };
+}
+
+/**
+ * Count cards of a specific type (front/back) in the given parameters
+ */
+export function countCardsByType(
+  cardType: 'front' | 'back',
   activePages: PageSettings[],
   cardsPerPage: number,
+  pdfMode: PdfMode,
   extractionSettings: ExtractionSettings
-): number | null {
+): number {
+  let count = 0;
   const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
     ? activePages.length * cardsPerPage 
-    : totalCards;
+    : calculateTotalCards(pdfMode, activePages, cardsPerPage);
   
   for (let i = 0; i < maxIndex; i++) {
     const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
-    if (cardInfo.id === cardId && cardInfo.type.toLowerCase() === viewMode) {
-      return i;
+    if (cardInfo.type.toLowerCase() === cardType) {
+      count++;
     }
   }
   
-  return null;
+  return count;
+}
+
+/**
+ * Calculate preview scale for display in UI
+ */
+export function calculatePreviewScale(
+  pageWidth: number,
+  pageHeight: number,
+  maxWidth: number = 400,
+  maxHeight: number = 500
+): { scale: number; previewWidth: number; previewHeight: number } {
+  let width = pageWidth * DPI_CONSTANTS.SCREEN_DPI;
+  let height = pageHeight * DPI_CONSTANTS.SCREEN_DPI;
+  
+  let scale = 1;
+  if (width > maxWidth || height > maxHeight) {
+    const widthScale = maxWidth / width;
+    const heightScale = maxHeight / height;
+    scale = Math.min(widthScale, heightScale);
+    
+    width = width * scale;
+    height = height * scale;
+  }
+  
+  return { scale, previewWidth: width, previewHeight: height };
+}
+
+/**
+ * Calculate DPI scale factor for preview calculations
+ */
+export function getDpiScaleFactor(): number {
+  return DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
 }
