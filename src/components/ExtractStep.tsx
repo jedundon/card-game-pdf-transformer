@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon } from 'lucide-react';
 import { 
   getActivePages, 
@@ -32,6 +32,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const [renderedPageData, setRenderedPageData] = useState<any>(null);
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
+  const [canvasDisplaySize, setCanvasDisplaySize] = useState({ width: 0, height: 0 });
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
     // Memoize activePages to prevent unnecessary re-renders
@@ -164,8 +165,28 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } else {
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
+    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
+
+  // Track canvas display size for proper overlay scaling
+  useLayoutEffect(() => {
+    const updateCanvasDisplaySize = () => {
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        setCanvasDisplaySize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    updateCanvasDisplaySize();
+    
+    const resizeObserver = new ResizeObserver(updateCanvasDisplaySize);
+    if (canvasRef.current) {
+      resizeObserver.observe(canvasRef.current);
     }
-  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [renderedPageData, extractionSettings.grid, extractionSettings.crop]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -363,10 +384,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                   <div className="text-gray-400 text-center p-8">
                     <p>No PDF loaded or no active pages</p>
                   </div>
-                )}
-                
-                {/* Grid overlay showing the card extraction */}
-                {renderedPageData && canvasRef.current && renderedPageData.previewScale && (
+                )}                {/* Grid overlay showing the card extraction */}
+                {renderedPageData && canvasRef.current && renderedPageData.previewScale && canvasDisplaySize.width > 0 && (
                   <div 
                     className="absolute pointer-events-none"
                     style={{
@@ -383,108 +402,137 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                       className="pointer-events-auto"
                       style={{
                         position: 'relative',
-                        width: `${canvasRef.current.width}px`,
-                        height: `${canvasRef.current.height}px`
+                        width: `${canvasDisplaySize.width}px`,
+                        height: `${canvasDisplaySize.height}px`
                       }}
-                    >
-                      {/* Overlay for cropped margins only - four separate rectangles */}
-                      {/* Top margin */}
-                      <div
-                        className="absolute"
-                        style={{
-                          top: 0,
-                          left: 0,
-                          width: `${canvasRef.current.width}px`,
-                          height: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          background: 'rgba(0, 0, 0, 0.6)',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                      {/* Bottom margin */}
-                      <div
-                        className="absolute"
-                        style={{
-                          bottom: 0,
-                          left: 0,
-                          width: `${canvasRef.current.width}px`,
-                          height: `${extractionSettings.crop.bottom * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          background: 'rgba(0, 0, 0, 0.6)',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                      {/* Left margin */}
-                      <div
-                        className="absolute"                        style={{
-                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          left: 0,
-                          width: `${extractionSettings.crop.left * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / getDpiScaleFactor())}px`,
-                          background: 'rgba(0, 0, 0, 0.6)',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                      {/* Right margin */}
-                      <div
-                        className="absolute"                        style={{
-                          top: `${extractionSettings.crop.top * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          right: 0,
-                          width: `${extractionSettings.crop.right * renderedPageData.previewScale / getDpiScaleFactor()}px`,
-                          height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * renderedPageData.previewScale / getDpiScaleFactor())}px`,
-                          background: 'rgba(0, 0, 0, 0.6)',
-                          pointerEvents: 'none'
-                        }}
-                      />                      
-                      {/* Gutter overlay for gutter-fold mode */}
-                      {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
-                        <div
-                          className="absolute"
-                          style={(() => {
-                            const gutterWidth = extractionSettings.gutterWidth || 0;
-                            const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor();
-                            const gutterSizePx = gutterWidth * scaleFactor;
-                              if (pdfMode.orientation === 'vertical') {
-                              // Vertical gutter down the middle
-                              const croppedWidth = canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
-                              const availableWidthForCards = croppedWidth - gutterSizePx;
-                              const leftSectionWidth = availableWidthForCards / 2;
-                              
-                              return {
+                    >                      {/* Overlay for cropped margins only - four separate rectangles */}
+                      {(() => {
+                        // Calculate scale factor for CSS scaling
+                        const canvas = canvasRef.current;
+                        const cssScaleX = canvasDisplaySize.width / canvas.width;
+                        const cssScaleY = canvasDisplaySize.height / canvas.height;
+                        const cssScale = Math.min(cssScaleX, cssScaleY);
+                        
+                        const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
+                        
+                        return (
+                          <>
+                            {/* Top margin */}
+                            <div
+                              className="absolute"
+                              style={{
+                                top: 0,
+                                left: 0,
+                                width: `${canvasDisplaySize.width}px`,
+                                height: `${extractionSettings.crop.top * scaleFactor}px`,
+                                background: 'rgba(0, 0, 0, 0.6)',
+                                pointerEvents: 'none'
+                              }}
+                            />
+                            {/* Bottom margin */}
+                            <div
+                              className="absolute"
+                              style={{
+                                bottom: 0,
+                                left: 0,
+                                width: `${canvasDisplaySize.width}px`,
+                                height: `${extractionSettings.crop.bottom * scaleFactor}px`,
+                                background: 'rgba(0, 0, 0, 0.6)',
+                                pointerEvents: 'none'
+                              }}
+                            />
+                            {/* Left margin */}
+                            <div
+                              className="absolute"
+                              style={{
                                 top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                left: `${extractionSettings.crop.left * scaleFactor + leftSectionWidth}px`,
-                                width: `${gutterSizePx}px`,
-                                height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                                background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                                left: 0,
+                                width: `${extractionSettings.crop.left * scaleFactor}px`,
+                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                background: 'rgba(0, 0, 0, 0.6)',
                                 pointerEvents: 'none'
-                              };
-                            } else {
-                              // Horizontal gutter across the middle
-                              const croppedHeight = canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
-                              const availableHeightForCards = croppedHeight - gutterSizePx;
-                              const topSectionHeight = availableHeightForCards / 2;
-                              
-                              return {
-                                top: `${extractionSettings.crop.top * scaleFactor + topSectionHeight}px`,
-                                left: `${extractionSettings.crop.left * scaleFactor}px`,
-                                width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
-                                height: `${gutterSizePx}px`,
-                                background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                              }}
+                            />
+                            {/* Right margin */}
+                            <div
+                              className="absolute"
+                              style={{
+                                top: `${extractionSettings.crop.top * scaleFactor}px`,
+                                right: 0,
+                                width: `${extractionSettings.crop.right * scaleFactor}px`,
+                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                background: 'rgba(0, 0, 0, 0.6)',
                                 pointerEvents: 'none'
-                              };
-                            }
-                          })()}
-                        />
-                      )}
+                              }}
+                            />
+                          </>
+                        );
+                      })()}
                       
-                      {/* Grid overlay for card selection */}
+                      {/* Gutter overlay for gutter-fold mode */}
+                      {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (() => {
+                        const canvas = canvasRef.current;
+                        const cssScaleX = canvasDisplaySize.width / canvas.width;
+                        const cssScaleY = canvasDisplaySize.height / canvas.height;
+                        const cssScale = Math.min(cssScaleX, cssScaleY);
+                        
+                        const gutterWidth = extractionSettings.gutterWidth || 0;
+                        const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
+                        const gutterSizePx = gutterWidth * scaleFactor;
+                        
+                        return (
+                          <div
+                            className="absolute"
+                            style={(() => {
+                              if (pdfMode.orientation === 'vertical') {
+                                // Vertical gutter down the middle
+                                const croppedWidth = canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
+                                const availableWidthForCards = croppedWidth - gutterSizePx;
+                                const leftSectionWidth = availableWidthForCards / 2;
+                                
+                                return {
+                                  top: `${extractionSettings.crop.top * scaleFactor}px`,
+                                  left: `${extractionSettings.crop.left * scaleFactor + leftSectionWidth}px`,
+                                  width: `${gutterSizePx}px`,
+                                  height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                  background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                                  pointerEvents: 'none'
+                                };
+                              } else {
+                                // Horizontal gutter across the middle
+                                const croppedHeight = canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
+                                const availableHeightForCards = croppedHeight - gutterSizePx;
+                                const topSectionHeight = availableHeightForCards / 2;
+                                
+                                return {
+                                  top: `${extractionSettings.crop.top * scaleFactor + topSectionHeight}px`,
+                                  left: `${extractionSettings.crop.left * scaleFactor}px`,
+                                  width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                                  height: `${gutterSizePx}px`,
+                                  background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
+                                  pointerEvents: 'none'
+                                };
+                              }
+                            })()}
+                          />
+                        );
+                      })()}                      {/* Grid overlay for card selection */}
                       <div 
                         style={(() => {
-                          const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor();
+                          const canvas = canvasRef.current;
+                          const cssScaleX = canvasDisplaySize.width / canvas.width;
+                          const cssScaleY = canvasDisplaySize.height / canvas.height;
+                          const cssScale = Math.min(cssScaleX, cssScaleY);
+                          
+                          const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
                           
                           if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
                             // For gutter-fold mode with gutter width, we need a more complex layout
                             const gutterWidth = extractionSettings.gutterWidth || 0;
-                            const gutterSizePx = gutterWidth * scaleFactor;                            if (pdfMode.orientation === 'vertical') {
-                              const croppedWidth = canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
+                            const gutterSizePx = gutterWidth * scaleFactor;
+                            
+                            if (pdfMode.orientation === 'vertical') {
+                              const croppedWidth = canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
                               
                               // Create a custom grid that spans around the gutter
                               return {
@@ -492,7 +540,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                                 top: `${extractionSettings.crop.top * scaleFactor}px`,
                                 left: `${extractionSettings.crop.left * scaleFactor}px`,
                                 width: `${croppedWidth}px`,
-                                height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
                                 display: 'grid',
                                 gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
                                 gridTemplateColumns: `repeat(${extractionSettings.grid.columns / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.columns / 2}, 1fr)`,
@@ -500,13 +548,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                                 pointerEvents: 'auto'
                               };
                             } else {
-                              const croppedHeight = canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
+                              const croppedHeight = canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
                               
                               return {
                                 position: 'absolute',
                                 top: `${extractionSettings.crop.top * scaleFactor}px`,
                                 left: `${extractionSettings.crop.left * scaleFactor}px`,
-                                width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                                width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
                                 height: `${croppedHeight}px`,
                                 display: 'grid',
                                 gridTemplateRows: `repeat(${extractionSettings.grid.rows / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.rows / 2}, 1fr)`,
@@ -521,8 +569,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                               position: 'absolute',
                               top: `${extractionSettings.crop.top * scaleFactor}px`,
                               left: `${extractionSettings.crop.left * scaleFactor}px`,
-                              width: `${Math.max(0, canvasRef.current.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
-                              height: `${Math.max(0, canvasRef.current.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
+                              width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
+                              height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
                               display: 'grid',
                               gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
                               gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
@@ -531,7 +579,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                             };
                           }
                         })()}
-                      >                        {(() => {
+                      >{(() => {
                           if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
                             // For gutter-fold with gutter width, we need to map cells correctly
                             const totalCells = extractionSettings.grid.rows * extractionSettings.grid.columns;
