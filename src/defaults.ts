@@ -70,9 +70,8 @@ export const DEFAULT_SETTINGS = {
     },    rotation: {
       front: 0,
       back: 0
-    },
-    cardScale: {
-      targetHeight: 2.5
+    },    cardScale: {
+      targetHeight: 3.5
     }
   }
 };
