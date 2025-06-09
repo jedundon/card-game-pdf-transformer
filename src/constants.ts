@@ -12,10 +12,7 @@ export const DPI_CONSTANTS = {
   SCREEN_PPI: 96
 } as const;
 
-// Card output constants
-export const CARD_OUTPUT_DEFAULTS = {
-  TARGET_HEIGHT: 3.5 // inches
-} as const;
+
 
 // Preview size limits
 export const PREVIEW_CONSTRAINTS = {

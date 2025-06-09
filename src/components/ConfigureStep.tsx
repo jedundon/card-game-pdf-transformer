@@ -10,7 +10,8 @@ import {
   countCardsByType,
   calculatePreviewScale
 } from '../utils/cardUtils';
-import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS, CARD_OUTPUT_DEFAULTS } from '../constants';
+import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
+import { DEFAULT_SETTINGS } from '../defaults';
 interface ConfigureStepProps {
   pdfData: any;
   pdfMode: any;
@@ -338,7 +339,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   step="0.1" 
                   min="0.5" 
                   max="10" 
-                  value={outputSettings.cardScale?.targetHeight || CARD_OUTPUT_DEFAULTS.TARGET_HEIGHT} 
+                  value={outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight} 
                   onChange={e => handleCardScaleChange(parseFloat(e.target.value))} 
                   className="w-full border border-gray-300 rounded-md px-3 py-2" 
                 />
@@ -473,7 +474,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   // 3. Apply scale (resize to target height) 
                   // 4. Apply rotation (handled by CSS transform)
                   
-                  const targetHeight = outputSettings.cardScale?.targetHeight || CARD_OUTPUT_DEFAULTS.TARGET_HEIGHT; // inches
+                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight; // inches
                   
                   // Get original extracted card dimensions (before any transformations)
                   const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width; 
@@ -522,7 +523,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                           );
                           
                           // Calculate card scaling for background with correct transformation order
-                          const targetHeight = outputSettings.cardScale?.targetHeight || CARD_OUTPUT_DEFAULTS.TARGET_HEIGHT; // inches
+                          const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight; // inches
                           
                           // Original extracted card dimensions
                           const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width;
@@ -601,7 +602,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <p>
                 <span className="font-medium">Card size:</span>{' '}
                 {(() => {
-                  const targetHeight = outputSettings.cardScale?.targetHeight || CARD_OUTPUT_DEFAULTS.TARGET_HEIGHT;
+                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
                   // Calculate width based on cropped dimensions, not original
                   const originalWidth = DEFAULT_CARD_DIMENSIONS.width;
                   const originalHeight = DEFAULT_CARD_DIMENSIONS.height;
