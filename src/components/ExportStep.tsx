@@ -159,10 +159,8 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
         // Convert pixels to inches at target DPI
         const cardWidthInches = cardDimensions.width / DPI_CONSTANTS.EXTRACTION_DPI;
-        const cardHeightInches = cardDimensions.height / DPI_CONSTANTS.EXTRACTION_DPI;
-
-        // Apply rotation if needed by rotating the image on a canvas before adding to PDF
-        const rotation = getRotationForCardType(outputSettings.rotation, cardType);
+        const cardHeightInches = cardDimensions.height / DPI_CONSTANTS.EXTRACTION_DPI;        // Apply rotation if needed by rotating the image on a canvas before adding to PDF
+        const rotation = getRotationForCardType(outputSettings, cardType);
         let finalImageUrl = cardImageUrl;
         let finalWidth = cardWidthInches;
         let finalHeight = cardHeightInches;
@@ -355,11 +353,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
                 {outputSettings.offset.vertical > 0 ? '+' : ''}
                 {outputSettings.offset.vertical}" V
               </span>
-            </div>
-            <div className="flex justify-between text-sm">
+            </div>            <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
-                Front {getRotationForCardType(outputSettings.rotation, 'front')}°, Back {getRotationForCardType(outputSettings.rotation, 'back')}°
+                Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
               </span>
             </div>
             <div className="flex justify-between text-sm">
