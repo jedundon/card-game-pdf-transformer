@@ -18,6 +18,7 @@ interface ExportStepProps {
   pageSettings: any;
   extractionSettings: any;
   outputSettings: any;
+  currentPdfFileName?: string;
   onPrevious: () => void;
 }
 
@@ -27,6 +28,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   pageSettings,
   extractionSettings,
   outputSettings,
+  currentPdfFileName,
   onPrevious
 }) => {
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
@@ -49,7 +51,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     calculateTotalCards(pdfMode, activePages, cardsPerPage), 
     [pdfMode, activePages, cardsPerPage]
   );
-
   // Cleanup blob URLs when component unmounts or files change
   useEffect(() => {
     return () => {
@@ -61,6 +62,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       }
     };
   }, [exportedFiles]);
+
+  // Generate filename based on PDF name
+  const generateFileName = (fileType: 'fronts' | 'backs'): string => {
+    if (currentPdfFileName) {
+      // Remove .pdf extension and add the type suffix
+      const baseName = currentPdfFileName.replace(/\.pdf$/i, '');
+      return `${baseName} - ${fileType}.pdf`;
+    }
+    return `card_${fileType}.pdf`;
+  };
 
   // Validate export settings before generating PDFs
   const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
@@ -295,7 +306,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       setExportStatus('idle');
     }
   };
-
   const handleDownload = (fileType: 'fronts' | 'backs') => {
     const url = exportedFiles[fileType];
     if (!url) {
@@ -307,7 +317,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       // Create download link and trigger download
       const link = document.createElement('a');
       link.href = url;
-      link.download = `card_${fileType}.pdf`;
+      link.download = generateFileName(fileType);
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
