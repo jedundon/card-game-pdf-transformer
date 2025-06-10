@@ -6,7 +6,9 @@ import {
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
   getActualPageNumber,
-  getDpiScaleFactor
+  getDpiScaleFactor,
+  countCardsByType,
+  getAvailableCardIds
 } from '../utils/cardUtils';
 interface ExtractStepProps {
   pdfData: any;
@@ -51,9 +53,28 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     // Calculate card front/back identification based on PDF mode
   // Calculate the global card index from current page and card
   const globalCardIndex = currentPage * cardsPerPage + currentCard;
-  
-  // Get current card info (type and ID) for display
-  const { type: cardType, id: cardId } = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);  // Remove excessive logging
+    // Get current card info (type and ID) for display
+  const { type: cardType, id: cardId } = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+  // Calculate total cards of the current card type for context-aware navigation
+  const totalCardsOfType = useMemo(() => {
+    if (pdfMode.type === 'gutter-fold') {
+      // For gutter-fold mode, count only cards of the current type
+      return countCardsByType(cardType.toLowerCase() as 'front' | 'back', activePages, cardsPerPage, pdfMode, extractionSettings);
+    } else {
+      // For other modes, use the existing total calculation
+      return totalCards;
+    }
+  }, [cardType, pdfMode, activePages, cardsPerPage, extractionSettings, totalCards]);
+
+  // Calculate the position of the current card within cards of the same type
+  const currentCardPosition = useMemo(() => {
+    if (pdfMode.type === 'gutter-fold') {
+      const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+      return availableCardIds.indexOf(cardId) + 1; // 1-based position
+    } else {
+      return cardId; // For other modes, use the card ID directly
+    }
+  }, [cardType, cardId, pdfMode, totalCards, activePages, cardsPerPage, extractionSettings]);// Remove excessive logging
   // Extract individual card from canvas at 300 DPI using utility function
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
@@ -684,7 +705,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 <button onClick={handlePreviousCard} disabled={currentCard === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronLeftIcon size={16} />
                 </button>                <span className="text-sm text-gray-700">
-                  Card {cardId} of {totalCards}
+                  {cardType} {currentCardPosition} of {totalCardsOfType}
                 </span>
                 <button onClick={handleNextCard} disabled={currentCard === cardsPerPage - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronRightIcon size={16} />
