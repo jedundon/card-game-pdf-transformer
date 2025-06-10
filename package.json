@@ -21,6 +21,7 @@
     "copy-worker": "node -e \"require('fs').copyFileSync('node_modules/pdfjs-dist/build/pdf.worker.min.mjs', 'public/pdf.worker.min.js')\""
   },
   "dependencies": {
+    "jspdf": "^3.0.1",
     "lucide-react": "^0.441.0",
     "pdfjs-dist": "^5.3.31",
     "react": "^18.3.1",
