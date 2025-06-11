@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon, ZoomInIcon, ZoomOutIcon } from 'lucide-react';
 import { 
   getActivePages, 
   calculateTotalCards, 
@@ -27,14 +27,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   onSettingsChange,
   onPrevious,
   onNext
-}) => {
-  const [currentPage, setCurrentPage] = useState(0);
+}) => {  const [currentPage, setCurrentPage] = useState(0);
   const [currentCard, setCurrentCard] = useState(0);
+  const [zoom, setZoom] = useState(1.0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderedPageData, setRenderedPageData] = useState<any>(null);
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
-  const [canvasDisplaySize, setCanvasDisplaySize] = useState({ width: 0, height: 0 });
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
     // Memoize activePages to prevent unnecessary re-renders
@@ -172,42 +171,29 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       renderingRef.current = false;
     };
   }, [pdfData, currentPage, activePages, pageSettings]);
-
-  // Update card preview when current card or extraction settings change  // Update card preview when current card or extraction settings change
+  // Update card preview when current card or extraction settings change
   useEffect(() => {
+    let cancelled = false;
+    
     if (renderedPageData && !isRendering && canvasRef.current) {
       // Delay the card extraction to ensure canvas is fully rendered
       const timer = setTimeout(async () => {
-        const cardUrl = await extractCardImage(globalCardIndex);
-        setCardPreviewUrl(cardUrl);
-      }, 500);
+        if (!cancelled) {
+          const cardUrl = await extractCardImage(globalCardIndex);
+          if (!cancelled) {
+            setCardPreviewUrl(cardUrl);
+          }
+        }
+      }, 100); // Reduced delay for better responsiveness
       
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
     } else {
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
     }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
-
-  // Track canvas display size for proper overlay scaling
-  useLayoutEffect(() => {
-    const updateCanvasDisplaySize = () => {
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        setCanvasDisplaySize({ width: rect.width, height: rect.height });
-      }
-    };
-
-    updateCanvasDisplaySize();
-    
-    const resizeObserver = new ResizeObserver(updateCanvasDisplaySize);
-    if (canvasRef.current) {
-      resizeObserver.observe(canvasRef.current);
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [renderedPageData, extractionSettings.grid, extractionSettings.crop]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -246,9 +232,219 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   };
   const handlePreviousCard = () => {
     setCurrentCard(prev => Math.max(0, prev - 1));
+  };  const handleNextCard = () => {
+    setCurrentCard(prev => Math.min(cardsPerPage - 1, prev + 1));
   };
-  const handleNextCard = () => {
-    setCurrentCard(prev => Math.min(totalCards - 1, prev + 1));
+
+  // Zoom controls
+  const handleZoomIn = () => {
+    setZoom(prev => Math.min(5.0, prev + 0.25));
+  };
+
+  const handleZoomOut = () => {
+    setZoom(prev => Math.max(1.0, prev - 0.25));
+  };
+
+  const handleZoomReset = () => {
+    setZoom(1.0);
+  };  // --- Helper: Centralize overlay scale factor ---
+  const getOverlayScaleFactor = useCallback(() => {
+    if (!canvasRef.current || !renderedPageData) return 1;
+    
+    // Since we're inside the zoom wrapper, we don't need to multiply by zoom
+    // The CSS transform handles the zoom scaling automatically
+    // We just need the scale to convert from 300 DPI pixels to canvas pixels
+    const extractionToPreviewScale = renderedPageData.previewScale / getDpiScaleFactor();
+    
+    return extractionToPreviewScale;
+  }, [renderedPageData]);
+  // --- Overlay: Margins ---
+  const MarginOverlays = ({ scale }: { scale: number }) => {
+    if (!canvasRef.current) return null;
+    const canvasWidth = canvasRef.current.width;
+    const canvasHeight = canvasRef.current.height;
+    
+    return (
+      <>
+        {/* Top */}
+        <div className="absolute" style={{
+          top: 0, left: 0, width: `${canvasWidth}px`,
+          height: `${extractionSettings.crop.top * scale}px`,
+          background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
+        }}/>
+        {/* Bottom */}
+        <div className="absolute" style={{
+          bottom: 0, left: 0, width: `${canvasWidth}px`,
+          height: `${extractionSettings.crop.bottom * scale}px`,
+          background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
+        }}/>
+        {/* Left */}
+        <div className="absolute" style={{
+          top: `${extractionSettings.crop.top * scale}px`, left: 0,
+          width: `${extractionSettings.crop.left * scale}px`,
+          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
+        }}/>
+        {/* Right */}
+        <div className="absolute" style={{
+          top: `${extractionSettings.crop.top * scale}px`, right: 0,
+          width: `${extractionSettings.crop.right * scale}px`,
+          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
+        }}/>
+      </>
+    );
+  };
+  // --- Overlay: Gutter ---
+  const GutterOverlay = ({ scale }: { scale: number }) => {
+    if (pdfMode.type !== 'gutter-fold' || !(extractionSettings.gutterWidth > 0)) return null;
+    if (!canvasRef.current) return null;
+    
+    const canvasWidth = canvasRef.current.width;
+    const canvasHeight = canvasRef.current.height;
+    const gutterSizePx = extractionSettings.gutterWidth * scale;
+    
+    if (pdfMode.orientation === 'vertical') {
+      const croppedWidth = canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale;
+      const availableWidthForCards = croppedWidth - gutterSizePx;
+      const leftSectionWidth = availableWidthForCards / 2;
+      return (
+        <div className="absolute" style={{
+          top: `${extractionSettings.crop.top * scale}px`,
+          left: `${extractionSettings.crop.left * scale + leftSectionWidth}px`,
+          width: `${gutterSizePx}px`,
+          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          background: 'rgba(255,0,0,0.3)', pointerEvents: 'none'
+        }}/>
+      );
+    } else {
+      const croppedHeight = canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale;
+      const availableHeightForCards = croppedHeight - gutterSizePx;
+      const topSectionHeight = availableHeightForCards / 2;
+      return (
+        <div className="absolute" style={{
+          top: `${extractionSettings.crop.top * scale + topSectionHeight}px`,
+          left: `${extractionSettings.crop.left * scale}px`,
+          width: `${Math.max(0, canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale)}px`,
+          height: `${gutterSizePx}px`,
+          background: 'rgba(255,0,0,0.3)', pointerEvents: 'none'
+        }}/>
+      );
+    }
+  };
+  // --- Overlay: Grid ---
+  const GridOverlay = ({ scale }: { scale: number }) => {
+    if (!canvasRef.current) return null;
+    
+    const canvasWidth = canvasRef.current.width;
+    const canvasHeight = canvasRef.current.height;
+    
+    // Calculate grid area
+    const gridLeft = extractionSettings.crop.left * scale;
+    const gridTop = extractionSettings.crop.top * scale;
+    const gridWidth = Math.max(0, canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale);
+    const gridHeight = Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale);
+
+    // Gutter-fold mode
+    if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth > 0) {
+      const gutterSizePx = extractionSettings.gutterWidth * scale;
+      if (pdfMode.orientation === 'vertical') {
+        const cols = extractionSettings.grid.columns;
+        const rows = extractionSettings.grid.rows;
+        const leftCols = cols / 2;
+        const rightCols = cols / 2;
+        const totalCols = cols + 1; // +1 for gutter
+        let cells = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < totalCols; c++) {
+            if (c === leftCols) {
+              // gutter cell
+              cells.push(<div key={`gutter-${r}-${c}`} style={{ pointerEvents: 'none' }} />);
+            } else {
+              const actualCol = c > leftCols ? c - 1 : c;
+              const cardIdx = r * cols + actualCol;
+              if (cardIdx >= cols * rows) continue;
+              cells.push(
+                <div key={`cell-${r}-${c}`}
+                  className={`cursor-pointer transition-all duration-200 ${cardIdx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
+                  style={{ background: cardIdx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
+                  onClick={() => setCurrentCard(cardIdx)}
+                />
+              );
+            }
+          }
+        }
+        return (
+          <div style={{
+            position: 'absolute',
+            top: `${gridTop}px`, left: `${gridLeft}px`,
+            width: `${gridWidth}px`, height: `${gridHeight}px`,
+            display: 'grid',
+            gridTemplateRows: `repeat(${rows}, 1fr)`,
+            gridTemplateColumns: `repeat(${leftCols}, 1fr) ${gutterSizePx}px repeat(${rightCols}, 1fr)`,
+            gap: '1px', pointerEvents: 'auto'
+          }}>{cells}</div>
+        );
+      } else {
+        // horizontal gutter
+        const cols = extractionSettings.grid.columns;
+        const rows = extractionSettings.grid.rows;
+        const topRows = rows / 2;
+        const bottomRows = rows / 2;
+        const totalRows = rows + 1;
+        let cells = [];
+        for (let r = 0; r < totalRows; r++) {
+          for (let c = 0; c < cols; c++) {
+            if (r === topRows) {
+              cells.push(<div key={`gutter-${r}-${c}`} style={{ pointerEvents: 'none' }} />);
+            } else {
+              const actualRow = r > topRows ? r - 1 : r;
+              const cardIdx = actualRow * cols + c;
+              if (cardIdx >= cols * rows) continue;
+              cells.push(
+                <div key={`cell-${r}-${c}`}
+                  className={`cursor-pointer transition-all duration-200 ${cardIdx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
+                  style={{ background: cardIdx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
+                  onClick={() => setCurrentCard(cardIdx)}
+                />
+              );
+            }
+          }
+        }
+        return (
+          <div style={{
+            position: 'absolute',
+            top: `${gridTop}px`, left: `${gridLeft}px`,
+            width: `${gridWidth}px`, height: `${gridHeight}px`,
+            display: 'grid',
+            gridTemplateRows: `repeat(${topRows}, 1fr) ${gutterSizePx}px repeat(${bottomRows}, 1fr)`,
+            gridTemplateColumns: `repeat(${cols}, 1fr)` ,
+            gap: '1px', pointerEvents: 'auto'
+          }}>{cells}</div>
+        );
+      }
+    }
+    // Standard grid
+    const totalCells = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    return (
+      <div style={{
+        position: 'absolute',
+        top: `${gridTop}px`, left: `${gridLeft}px`,
+        width: `${gridWidth}px`, height: `${gridHeight}px`,
+        display: 'grid',
+        gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
+        gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
+        gap: '1px', pointerEvents: 'auto'
+      }}>
+        {Array.from({ length: totalCells }).map((_, idx) => (
+          <div key={idx}
+            className={`cursor-pointer transition-all duration-200 ${idx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
+            style={{ background: idx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
+            onClick={() => setCurrentCard(idx)}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -371,8 +567,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           </div>
         </div>
         <div className="space-y-4">
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
+          <div className="border border-gray-200 rounded-lg overflow-hidden">            <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
               <div className="flex items-center space-x-2">
                 <button onClick={handlePreviousPage} disabled={currentPage === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                   <ChevronLeftIcon size={16} />
@@ -384,320 +579,83 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                   <ChevronRightIcon size={16} />
                 </button>
               </div>
-              <div className="text-sm text-gray-500">
-                {activePages[currentPage]?.type === 'front' ? 'Front' : 'Back'}{' '}
-                page
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-1">
+                  <button onClick={handleZoomOut} disabled={zoom <= 1.0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                    <ZoomOutIcon size={14} />
+                  </button>
+                  <span className="text-xs text-gray-600 min-w-[40px] text-center">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button onClick={handleZoomIn} disabled={zoom >= 5.0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+                    <ZoomInIcon size={14} />
+                  </button>
+                  <button onClick={handleZoomReset} className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded">
+                    Reset
+                  </button>
+                </div>
+                <div className="text-sm text-gray-500">
+                  {activePages[currentPage]?.type === 'front' ? 'Front' : 'Back'}{' '}
+                  page
+                </div>
               </div>
-            </div>
-            <div className="bg-gray-100 min-h-[500px] flex items-center justify-center p-4">
-              <div className="relative bg-white shadow-lg rounded-lg p-4 min-w-[300px] min-h-[400px] flex items-center justify-center">
-                <canvas 
-                  ref={canvasRef}
-                  className="block"
+            </div>            <div className="bg-gray-100 min-h-[500px] flex items-center justify-center p-4 overflow-auto">
+              <div className="relative bg-white shadow-lg rounded-lg p-4 min-w-[300px] min-h-[400px] flex items-center justify-center overflow-auto">
+                {/* Zoom wrapper */}
+                <div 
+                  className="zoom-wrapper"
                   style={{ 
-                    display: pdfData && activePages.length > 0 ? 'block' : 'none',
-                    maxWidth: '100%',
-                    maxHeight: '100%'
+                    transform: `scale(${zoom})`,
+                    transformOrigin: 'top left',
+                    display: 'inline-block'
                   }}
-                />
-                {(!pdfData || activePages.length === 0) && (
-                  <div className="text-gray-400 text-center p-8">
-                    <p>No PDF loaded or no active pages</p>
-                  </div>
-                )}                {/* Grid overlay showing the card extraction */}
-                {renderedPageData && canvasRef.current && renderedPageData.previewScale && canvasDisplaySize.width > 0 && (
-                  <div 
-                    className="absolute pointer-events-none"
-                    style={{
-                      top: '0',
-                      left: '0',
-                      width: '100%',
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                >
+                  <canvas 
+                    ref={canvasRef}
+                    className="block"
+                    style={{ 
+                      display: pdfData && activePages.length > 0 ? 'block' : 'none'
                     }}
-                  >
-                    <div
-                      className="pointer-events-auto"
+                  />
+                  {(!pdfData || activePages.length === 0) && (
+                    <div className="text-gray-400 text-center p-8">
+                      <p>No PDF loaded or no active pages</p>
+                    </div>
+                  )}                  {/* Grid overlay showing the card extraction */}
+                  {renderedPageData && canvasRef.current && renderedPageData.previewScale && (
+                    <div 
+                      className="absolute pointer-events-none"
                       style={{
-                        position: 'relative',
-                        width: `${canvasDisplaySize.width}px`,
-                        height: `${canvasDisplaySize.height}px`
+                        top: '0',
+                        left: '0',
+                        width: `${canvasRef.current.width}px`,
+                        height: `${canvasRef.current.height}px`
                       }}
-                    >                      {/* Overlay for cropped margins only - four separate rectangles */}
-                      {(() => {
-                        // Calculate scale factor for CSS scaling
-                        const canvas = canvasRef.current;
-                        const cssScaleX = canvasDisplaySize.width / canvas.width;
-                        const cssScaleY = canvasDisplaySize.height / canvas.height;
-                        const cssScale = Math.min(cssScaleX, cssScaleY);
-                        
-                        const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
-                        
-                        return (
-                          <>
-                            {/* Top margin */}
-                            <div
-                              className="absolute"
-                              style={{
-                                top: 0,
-                                left: 0,
-                                width: `${canvasDisplaySize.width}px`,
-                                height: `${extractionSettings.crop.top * scaleFactor}px`,
-                                background: 'rgba(0, 0, 0, 0.6)',
-                                pointerEvents: 'none'
-                              }}
-                            />
-                            {/* Bottom margin */}
-                            <div
-                              className="absolute"
-                              style={{
-                                bottom: 0,
-                                left: 0,
-                                width: `${canvasDisplaySize.width}px`,
-                                height: `${extractionSettings.crop.bottom * scaleFactor}px`,
-                                background: 'rgba(0, 0, 0, 0.6)',
-                                pointerEvents: 'none'
-                              }}
-                            />
-                            {/* Left margin */}
-                            <div
-                              className="absolute"
-                              style={{
-                                top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                left: 0,
-                                width: `${extractionSettings.crop.left * scaleFactor}px`,
-                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                                background: 'rgba(0, 0, 0, 0.6)',
-                                pointerEvents: 'none'
-                              }}
-                            />
-                            {/* Right margin */}
-                            <div
-                              className="absolute"
-                              style={{
-                                top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                right: 0,
-                                width: `${extractionSettings.crop.right * scaleFactor}px`,
-                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                                background: 'rgba(0, 0, 0, 0.6)',
-                                pointerEvents: 'none'
-                              }}
-                            />
-                          </>
-                        );
-                      })()}
-                      
-                      {/* Gutter overlay for gutter-fold mode */}
-                      {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (() => {
-                        const canvas = canvasRef.current;
-                        const cssScaleX = canvasDisplaySize.width / canvas.width;
-                        const cssScaleY = canvasDisplaySize.height / canvas.height;
-                        const cssScale = Math.min(cssScaleX, cssScaleY);
-                        
-                        const gutterWidth = extractionSettings.gutterWidth || 0;
-                        const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
-                        const gutterSizePx = gutterWidth * scaleFactor;
-                        
-                        return (
-                          <div
-                            className="absolute"
-                            style={(() => {
-                              if (pdfMode.orientation === 'vertical') {
-                                // Vertical gutter down the middle
-                                const croppedWidth = canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
-                                const availableWidthForCards = croppedWidth - gutterSizePx;
-                                const leftSectionWidth = availableWidthForCards / 2;
-                                
-                                return {
-                                  top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                  left: `${extractionSettings.crop.left * scaleFactor + leftSectionWidth}px`,
-                                  width: `${gutterSizePx}px`,
-                                  height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                                  background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
-                                  pointerEvents: 'none'
-                                };
-                              } else {
-                                // Horizontal gutter across the middle
-                                const croppedHeight = canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
-                                const availableHeightForCards = croppedHeight - gutterSizePx;
-                                const topSectionHeight = availableHeightForCards / 2;
-                                
-                                return {
-                                  top: `${extractionSettings.crop.top * scaleFactor + topSectionHeight}px`,
-                                  left: `${extractionSettings.crop.left * scaleFactor}px`,
-                                  width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
-                                  height: `${gutterSizePx}px`,
-                                  background: 'rgba(255, 0, 0, 0.3)', // Red tint to show gutter area
-                                  pointerEvents: 'none'
-                                };
-                              }
-                            })()}
-                          />
-                        );
-                      })()}                      {/* Grid overlay for card selection */}
-                      <div 
-                        style={(() => {
-                          const canvas = canvasRef.current;
-                          const cssScaleX = canvasDisplaySize.width / canvas.width;
-                          const cssScaleY = canvasDisplaySize.height / canvas.height;
-                          const cssScale = Math.min(cssScaleX, cssScaleY);
-                          
-                          const scaleFactor = renderedPageData.previewScale / getDpiScaleFactor() * cssScale;
-                          
-                          if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
-                            // For gutter-fold mode with gutter width, we need a more complex layout
-                            const gutterWidth = extractionSettings.gutterWidth || 0;
-                            const gutterSizePx = gutterWidth * scaleFactor;
-                            
-                            if (pdfMode.orientation === 'vertical') {
-                              const croppedWidth = canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor;
-                              
-                              // Create a custom grid that spans around the gutter
-                              return {
-                                position: 'absolute',
-                                top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                left: `${extractionSettings.crop.left * scaleFactor}px`,
-                                width: `${croppedWidth}px`,
-                                height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                                display: 'grid',
-                                gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
-                                gridTemplateColumns: `repeat(${extractionSettings.grid.columns / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.columns / 2}, 1fr)`,
-                                gap: '1px',
-                                pointerEvents: 'auto'
-                              };
-                            } else {
-                              const croppedHeight = canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor;
-                              
-                              return {
-                                position: 'absolute',
-                                top: `${extractionSettings.crop.top * scaleFactor}px`,
-                                left: `${extractionSettings.crop.left * scaleFactor}px`,
-                                width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
-                                height: `${croppedHeight}px`,
-                                display: 'grid',
-                                gridTemplateRows: `repeat(${extractionSettings.grid.rows / 2}, 1fr) ${gutterSizePx}px repeat(${extractionSettings.grid.rows / 2}, 1fr)`,
-                                gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
-                                gap: '1px',
-                                pointerEvents: 'auto'
-                              };
-                            }
-                          } else {
-                            // Standard grid layout
-                            return {
-                              position: 'absolute',
-                              top: `${extractionSettings.crop.top * scaleFactor}px`,
-                              left: `${extractionSettings.crop.left * scaleFactor}px`,
-                              width: `${Math.max(0, canvasDisplaySize.width - (extractionSettings.crop.left + extractionSettings.crop.right) * scaleFactor)}px`,
-                              height: `${Math.max(0, canvasDisplaySize.height - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scaleFactor)}px`,
-                              display: 'grid',
-                              gridTemplateRows: `repeat(${extractionSettings.grid.rows}, 1fr)`,
-                              gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
-                              gap: '1px',
-                              pointerEvents: 'auto'
-                            };
-                          }
-                        })()}
-                      >{(() => {
-                          if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
-                            // For gutter-fold with gutter width, we need to map cells correctly
-                            const totalCells = extractionSettings.grid.rows * extractionSettings.grid.columns;
-                            
-                            return Array.from({ length: totalCells + (pdfMode.orientation === 'vertical' ? extractionSettings.grid.rows : extractionSettings.grid.columns) }).map((_, idx) => {
-                              // Skip gutter cells (they shouldn't be clickable)
-                              if (pdfMode.orientation === 'vertical') {
-                                const gridRow = Math.floor(idx / (extractionSettings.grid.columns + 1));
-                                const gridCol = idx % (extractionSettings.grid.columns + 1);
-                                const gutterCol = extractionSettings.grid.columns / 2;
-                                
-                                if (gridCol === gutterCol) {
-                                  // This is a gutter cell - make it invisible/non-interactive
-                                  return <div key={idx} style={{ pointerEvents: 'none' }} />;
-                                }
-                                
-                                // Calculate the actual card index (excluding gutter cells)
-                                const actualCol = gridCol > gutterCol ? gridCol - 1 : gridCol;
-                                const cardIdx = gridRow * extractionSettings.grid.columns + actualCol;
-                                
-                                if (cardIdx >= totalCells) return null;
-                                
-                                return (
-                                  <div 
-                                    key={idx} 
-                                    className={`cursor-pointer transition-all duration-200 ${
-                                      cardIdx === currentCard 
-                                        ? 'border-2 border-blue-500' 
-                                        : 'border border-blue-300 hover:border-blue-400'
-                                    }`}
-                                    style={{
-                                      background: cardIdx === currentCard 
-                                        ? 'transparent' 
-                                        : 'rgba(0, 0, 0, 0.25)'
-                                    }}
-                                    onClick={() => setCurrentCard(cardIdx)}
-                                  />
-                                );
-                              } else {
-                                // Horizontal gutter logic
-                                const totalCols = extractionSettings.grid.columns;
-                                const gridRow = Math.floor(idx / totalCols);
-                                const gridCol = idx % totalCols;
-                                const gutterRow = extractionSettings.grid.rows / 2;
-                                
-                                if (gridRow === gutterRow) {
-                                  return <div key={idx} style={{ pointerEvents: 'none' }} />;
-                                }
-                                
-                                const actualRow = gridRow > gutterRow ? gridRow - 1 : gridRow;
-                                const cardIdx = actualRow * totalCols + gridCol;
-                                
-                                if (cardIdx >= totalCells) return null;
-                                
-                                return (
-                                  <div 
-                                    key={idx} 
-                                    className={`cursor-pointer transition-all duration-200 ${
-                                      cardIdx === currentCard 
-                                        ? 'border-2 border-blue-500' 
-                                        : 'border border-blue-300 hover:border-blue-400'
-                                    }`}
-                                    style={{
-                                      background: cardIdx === currentCard 
-                                        ? 'transparent' 
-                                        : 'rgba(0, 0, 0, 0.25)'
-                                    }}
-                                    onClick={() => setCurrentCard(cardIdx)}
-                                  />
-                                );
-                              }
-                            }).filter(Boolean);
-                          } else {
-                            // Standard grid
-                            return Array.from({
-                              length: extractionSettings.grid.rows * extractionSettings.grid.columns
-                            }).map((_, idx) => (
-                              <div 
-                                key={idx} 
-                                className={`cursor-pointer transition-all duration-200 ${
-                                  idx === currentCard 
-                                    ? 'border-2 border-blue-500' 
-                                    : 'border border-blue-300 hover:border-blue-400'
-                                }`}
-                                style={{
-                                  background: idx === currentCard 
-                                    ? 'transparent' 
-                                    : 'rgba(0, 0, 0, 0.25)'
-                                }}
-                                onClick={() => setCurrentCard(idx)}
-                              />
-                            ));
-                          }
+                    >                      <div
+                        className="pointer-events-auto"
+                        style={{
+                          position: 'relative',
+                          width: `${canvasRef.current.width}px`,
+                          height: `${canvasRef.current.height}px`
+                        }}
+                      >
+                        {/* --- Simplified overlays --- */}
+                        {(() => {
+                          const scale = getOverlayScaleFactor();
+                          // Only render overlays if we have a valid scale
+                          if (scale <= 0 || !isFinite(scale)) return null;
+                          return (
+                            <>
+                              <MarginOverlays scale={scale} />
+                              <GutterOverlay scale={scale} />
+                              <GridOverlay scale={scale} />
+                            </>
+                          );
                         })()}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
             <div className="bg-gray-50 p-3 border-t border-gray-200 flex justify-between items-center">              <div className="flex items-center space-x-2">
