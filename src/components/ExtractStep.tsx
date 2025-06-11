@@ -262,29 +262,28 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </h3>
             <p className="text-sm text-gray-600 mb-3">
               Specify margins to crop from each edge (values in 300 DPI pixels for precise control)
-            </p>
-            <div className="grid grid-cols-2 gap-4">
+            </p>            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Top Margin (px at 300 DPI)
+                  Top Margin
                 </label>
                 <input type="number" value={extractionSettings.crop.top} onChange={e => handleCropChange('top', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Right Margin (px at 300 DPI)
+                  Right Margin
                 </label>
                 <input type="number" value={extractionSettings.crop.right} onChange={e => handleCropChange('right', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bottom Margin (px at 300 DPI)
+                  Bottom Margin
                 </label>
                 <input type="number" value={extractionSettings.crop.bottom} onChange={e => handleCropChange('bottom', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Left Margin (px at 300 DPI)
+                  Left Margin
                 </label>
                 <input type="number" value={extractionSettings.crop.left} onChange={e => handleCropChange('left', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
