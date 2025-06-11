@@ -78,7 +78,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
   }, [pdfData, extractionSettings, pdfMode, activePages, pageSettings]);
-
   // Render PDF page to canvas
   useEffect(() => {
     const renderPage = async () => {
@@ -109,23 +108,37 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
         const page = await pdfData.getPage(actualPageNumber);
         
-        // Calculate scale to fit the preview area nicely
+        // Calculate base scale to fit the preview area nicely
         const baseViewport = page.getViewport({ scale: 1.0 });
         const maxWidth = 450; // Fixed max width for consistency
         const maxHeight = 600; // Fixed max height for consistency
         
         const scaleX = maxWidth / baseViewport.width;
         const scaleY = maxHeight / baseViewport.height;
-        const scale = Math.min(scaleX, scaleY, 2.0); // Allow up to 2x scaling
+        const baseScale = Math.min(scaleX, scaleY, 2.0); // Allow up to 2x scaling
+          // Apply zoom-aware DPI scaling for crisp rendering at high zoom levels
+        // When zoom >= 3.0 (300%), render at higher DPI to maintain sharpness
+        const dpiMultiplier = zoom >= 3.0 ? Math.min(zoom, 5.0) : 1.0;
+        const renderScale = baseScale * dpiMultiplier;
         
-        const viewport = page.getViewport({ scale });
-        
-        // Set canvas size to match scaled viewport with minimum dimensions
+        const viewport = page.getViewport({ scale: renderScale });
+          // Set canvas internal size to the high-DPI rendered size
         const canvasWidth = Math.max(200, viewport.width);
         const canvasHeight = Math.max(250, viewport.height);
         
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
+        
+        // Apply CSS scaling to counteract DPI scaling so canvas appears at normal size
+        // The zoom wrapper will then handle the user's intended zoom level
+        if (dpiMultiplier > 1.0) {
+          const cssScale = 1.0 / dpiMultiplier;
+          canvas.style.width = `${canvasWidth * cssScale}px`;
+          canvas.style.height = `${canvasHeight * cssScale}px`;
+        } else {
+          canvas.style.width = '';
+          canvas.style.height = '';
+        }
         
         // Clear the canvas after setting dimensions
         context.clearRect(0, 0, canvas.width, canvas.height);
@@ -140,13 +153,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         renderTaskRef.current = renderTask;
         
         await renderTask.promise;
-        
-        // Store page data for card extraction preview including the scale
+          // Store page data for card extraction preview including the scale
         setRenderedPageData({
           width: canvasWidth,
           height: canvasHeight,
           actualPageNumber,
-          previewScale: scale // Store the preview scale for crop calculations
+          previewScale: baseScale, // Store the base preview scale for crop calculations
+          dpiMultiplier // Store the DPI multiplier for overlay calculations
         });
         
       } catch (error: any) {
@@ -170,7 +183,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
       renderingRef.current = false;
     };
-  }, [pdfData, currentPage, activePages, pageSettings]);
+  }, [pdfData, currentPage, activePages, pageSettings, zoom]); // Add zoom dependency
   // Update card preview when current card or extraction settings change
   useEffect(() => {
     let cancelled = false;
@@ -256,25 +269,35 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     // We just need the scale to convert from 300 DPI pixels to canvas pixels
     const extractionToPreviewScale = renderedPageData.previewScale / getDpiScaleFactor();
     
-    return extractionToPreviewScale;
-  }, [renderedPageData]);
-  // --- Overlay: Margins ---
+    // When DPI scaling is active (dpiMultiplier > 1), we apply CSS counter-scaling
+    // to the canvas, so the overlays should use the CSS-scaled dimensions
+    // and NOT apply additional DPI scaling to avoid double-scaling
+    const dpiMultiplier = renderedPageData.dpiMultiplier || 1.0;
+    if (dpiMultiplier > 1.0) {
+      // CSS scaling is applied, so overlays use offsetWidth/Height which are already scaled down
+      // Don't apply additional DPI scaling
+      return extractionToPreviewScale;
+    } else {
+      // No CSS scaling applied, overlays use canvas width/height directly
+      return extractionToPreviewScale;
+    }
+  }, [renderedPageData]);// --- Overlay: Margins ---
   const MarginOverlays = ({ scale }: { scale: number }) => {
-    if (!canvasRef.current) return null;
-    const canvasWidth = canvasRef.current.width;
-    const canvasHeight = canvasRef.current.height;
+    if (!canvasRef.current || !renderedPageData) return null;
+    const overlayWidth = canvasRef.current.offsetWidth || canvasRef.current.width;
+    const overlayHeight = canvasRef.current.offsetHeight || canvasRef.current.height;
     
     return (
       <>
         {/* Top */}
         <div className="absolute" style={{
-          top: 0, left: 0, width: `${canvasWidth}px`,
+          top: 0, left: 0, width: `${overlayWidth}px`,
           height: `${extractionSettings.crop.top * scale}px`,
           background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
         }}/>
         {/* Bottom */}
         <div className="absolute" style={{
-          bottom: 0, left: 0, width: `${canvasWidth}px`,
+          bottom: 0, left: 0, width: `${overlayWidth}px`,
           height: `${extractionSettings.crop.bottom * scale}px`,
           background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
         }}/>
@@ -282,30 +305,29 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         <div className="absolute" style={{
           top: `${extractionSettings.crop.top * scale}px`, left: 0,
           width: `${extractionSettings.crop.left * scale}px`,
-          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          height: `${Math.max(0, overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
           background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
         }}/>
         {/* Right */}
         <div className="absolute" style={{
           top: `${extractionSettings.crop.top * scale}px`, right: 0,
           width: `${extractionSettings.crop.right * scale}px`,
-          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          height: `${Math.max(0, overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
           background: 'rgba(0,0,0,0.6)', pointerEvents: 'none'
         }}/>
       </>
     );
-  };
-  // --- Overlay: Gutter ---
+  };  // --- Overlay: Gutter ---
   const GutterOverlay = ({ scale }: { scale: number }) => {
     if (pdfMode.type !== 'gutter-fold' || !(extractionSettings.gutterWidth > 0)) return null;
-    if (!canvasRef.current) return null;
+    if (!canvasRef.current || !renderedPageData) return null;
     
-    const canvasWidth = canvasRef.current.width;
-    const canvasHeight = canvasRef.current.height;
+    const overlayWidth = canvasRef.current.offsetWidth || canvasRef.current.width;
+    const overlayHeight = canvasRef.current.offsetHeight || canvasRef.current.height;
     const gutterSizePx = extractionSettings.gutterWidth * scale;
     
     if (pdfMode.orientation === 'vertical') {
-      const croppedWidth = canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale;
+      const croppedWidth = overlayWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale;
       const availableWidthForCards = croppedWidth - gutterSizePx;
       const leftSectionWidth = availableWidthForCards / 2;
       return (
@@ -313,37 +335,36 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           top: `${extractionSettings.crop.top * scale}px`,
           left: `${extractionSettings.crop.left * scale + leftSectionWidth}px`,
           width: `${gutterSizePx}px`,
-          height: `${Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
+          height: `${Math.max(0, overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale)}px`,
           background: 'rgba(255,0,0,0.3)', pointerEvents: 'none'
         }}/>
       );
     } else {
-      const croppedHeight = canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale;
+      const croppedHeight = overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale;
       const availableHeightForCards = croppedHeight - gutterSizePx;
       const topSectionHeight = availableHeightForCards / 2;
       return (
         <div className="absolute" style={{
           top: `${extractionSettings.crop.top * scale + topSectionHeight}px`,
           left: `${extractionSettings.crop.left * scale}px`,
-          width: `${Math.max(0, canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale)}px`,
+          width: `${Math.max(0, overlayWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale)}px`,
           height: `${gutterSizePx}px`,
           background: 'rgba(255,0,0,0.3)', pointerEvents: 'none'
         }}/>
       );
     }
-  };
-  // --- Overlay: Grid ---
+  };  // --- Overlay: Grid ---
   const GridOverlay = ({ scale }: { scale: number }) => {
-    if (!canvasRef.current) return null;
+    if (!canvasRef.current || !renderedPageData) return null;
     
-    const canvasWidth = canvasRef.current.width;
-    const canvasHeight = canvasRef.current.height;
+    const overlayWidth = canvasRef.current.offsetWidth || canvasRef.current.width;
+    const overlayHeight = canvasRef.current.offsetHeight || canvasRef.current.height;
     
     // Calculate grid area
     const gridLeft = extractionSettings.crop.left * scale;
     const gridTop = extractionSettings.crop.top * scale;
-    const gridWidth = Math.max(0, canvasWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale);
-    const gridHeight = Math.max(0, canvasHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale);
+    const gridWidth = Math.max(0, overlayWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale);
+    const gridHeight = Math.max(0, overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale);
 
     // Gutter-fold mode
     if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth > 0) {
@@ -628,15 +649,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                       style={{
                         top: '0',
                         left: '0',
-                        width: `${canvasRef.current.width}px`,
-                        height: `${canvasRef.current.height}px`
+                        width: `${canvasRef.current.offsetWidth || canvasRef.current.width}px`,
+                        height: `${canvasRef.current.offsetHeight || canvasRef.current.height}px`
                       }}
-                    >                      <div
+                    >
+                      <div
                         className="pointer-events-auto"
                         style={{
                           position: 'relative',
-                          width: `${canvasRef.current.width}px`,
-                          height: `${canvasRef.current.height}px`
+                          width: `${canvasRef.current.offsetWidth || canvasRef.current.width}px`,
+                          height: `${canvasRef.current.offsetHeight || canvasRef.current.height}px`
                         }}
                       >
                         {/* --- Simplified overlays --- */}
