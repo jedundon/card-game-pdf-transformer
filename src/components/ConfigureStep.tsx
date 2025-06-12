@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon, PrinterIcon, RulerIcon } from 'lucide-react';
 import { 
   getActivePages, 
   calculateTotalCards, 
@@ -10,6 +10,7 @@ import {
   countCardsByType,
   calculatePreviewScale
 } from '../utils/cardUtils';
+import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
 import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
 interface ConfigureStepProps {
@@ -35,6 +36,15 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
+  const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
+  const [calibrationMeasurements, setCalibrationMeasurements] = useState({
+    leftMargin: '',
+    rightMargin: '',
+    topMargin: '',
+    bottomMargin: '',
+    horizontalScale: '',
+    verticalScale: ''
+  });
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -201,6 +211,90 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     }
   }, [currentCardExists, totalFilteredCards, availableCardIds]);
 
+  // Handle calibration PDF generation
+  const handlePrintCalibration = useCallback(() => {
+    // Calculate actual target card dimensions based on user settings
+    const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
+    
+    // Convert pixel dimensions to inches for aspect ratio calculation
+    const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
+    const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
+    
+    // Calculate the width based on cropped aspect ratio
+    const croppedWidthPx = originalWidthPx - (outputSettings.crop.left + outputSettings.crop.right);
+    const croppedHeightPx = originalHeightPx - (outputSettings.crop.top + outputSettings.crop.bottom);
+    const aspectRatio = croppedWidthPx / croppedHeightPx;
+    const targetWidth = targetHeight * aspectRatio;
+    
+    console.log(`Calibration card: ${targetWidth.toFixed(2)}" × ${targetHeight}" on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
+    
+    const pdfBlob = generateCalibrationPDF(
+      targetWidth,
+      targetHeight,
+      outputSettings.pageSize.width,
+      outputSettings.pageSize.height
+    );
+    
+    // Create a download link and click it programmatically
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'printer_calibration_card.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [outputSettings.pageSize, outputSettings.cardScale, outputSettings.crop]);
+
+  // Handle calibration measurements and apply settings
+  const handleApplyCalibration = useCallback(() => {
+    const measurements = calibrationMeasurements;
+    
+    if (!measurements.leftMargin || !measurements.rightMargin || 
+        !measurements.topMargin || !measurements.bottomMargin || 
+        !measurements.horizontalScale || !measurements.verticalScale) {
+      alert('Please enter all measurements before applying calibration.');
+      return;
+    }
+
+    const settings = calculateCalibrationSettings(
+      parseFloat(measurements.leftMargin),
+      parseFloat(measurements.rightMargin),
+      parseFloat(measurements.topMargin),
+      parseFloat(measurements.bottomMargin),
+      parseFloat(measurements.horizontalScale),
+      parseFloat(measurements.verticalScale)
+    );
+
+    // Apply the calculated offsets
+    handleOffsetChange('horizontal', settings.horizontalOffset);
+    handleOffsetChange('vertical', settings.verticalOffset);
+    
+    // Apply the scale factors to the card height (use vertical scale factor for height)
+    const currentHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
+    handleCardScaleChange(currentHeight * settings.verticalScaleFactor);
+    
+    // Close the wizard
+    setShowCalibrationWizard(false);
+    
+    // Clear measurements
+    setCalibrationMeasurements({
+      leftMargin: '',
+      rightMargin: '',
+      topMargin: '',
+      bottomMargin: '',
+      horizontalScale: '',
+      verticalScale: ''
+    });
+  }, [calibrationMeasurements, outputSettings.cardScale, handleOffsetChange, handleCardScaleChange]);
+
+  const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
+    setCalibrationMeasurements(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  }, []);
+
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
       
@@ -288,6 +382,69 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Printer Calibration Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Printer Calibration
+            </h3>
+            <p className="text-sm text-gray-600 mb-2">
+              Print a test card on larger media to determine your printer's exact offset and scale. Place poker card stock in the center of the media for borderless printing.
+            </p>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-gray-600">
+                <span className="font-medium">Calibration target:</span>{' '}
+                {(() => {
+                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
+                  const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
+                  const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
+                  const croppedWidthPx = originalWidthPx - (outputSettings.crop.left + outputSettings.crop.right);
+                  const croppedHeightPx = originalHeightPx - (outputSettings.crop.top + outputSettings.crop.bottom);
+                  const aspectRatio = croppedWidthPx / croppedHeightPx;
+                  const targetWidth = targetHeight * aspectRatio;
+                  return `${targetWidth.toFixed(2)}" × ${targetHeight}" direct card printing`;
+                })()}
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Step 1: Print Calibration Card */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center">
+                  <PrinterIcon size={16} className="mr-2" />
+                  Step 1: Print Calibration Card
+                </h4>
+                <p className="text-sm text-blue-700 mb-3">
+                  Download and print this test card using borderless mode. Place poker card stock in the center of the media where the calibration pattern is positioned.
+                </p>
+                <button
+                  onClick={handlePrintCalibration}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                >
+                  Download Calibration PDF
+                </button>
+              </div>
+
+              {/* Step 2: Measure and Enter Values */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center">
+                  <RulerIcon size={16} className="mr-2" />
+                  Step 2: Measure and Enter Values
+                </h4>
+                <p className="text-sm text-green-700 mb-3">
+                  Use a ruler to measure the printed card. The card should be centered where the calibration pattern appears on the media.
+                </p>
+                
+                <button
+                  onClick={() => setShowCalibrationWizard(true)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                >
+                  Enter Measurements
+                </button>
+              </div>
+            </div>
+          </div>
+          
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
               Card Crop Settings
@@ -627,5 +784,129 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           <ChevronRightIcon size={16} className="ml-2" />
         </button>
       </div>
+
+      {/* Calibration Wizard Modal */}
+      {showCalibrationWizard && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              Calibration Measurements
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Measure the printed calibration card with a ruler. For a perfectly aligned printer, all margins should measure approximately 0.5 inches:
+            </p>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Left Margin (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calibrationMeasurements.leftMargin}
+                    onChange={(e) => handleCalibrationMeasurementChange('leftMargin', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Distance from left card edge to reference line</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Right Margin (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calibrationMeasurements.rightMargin}
+                    onChange={(e) => handleCalibrationMeasurementChange('rightMargin', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Distance from right card edge to reference line</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Top Margin (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calibrationMeasurements.topMargin}
+                    onChange={(e) => handleCalibrationMeasurementChange('topMargin', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Distance from top card edge to reference line</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Bottom Margin (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={calibrationMeasurements.bottomMargin}
+                    onChange={(e) => handleCalibrationMeasurementChange('bottomMargin', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="0.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Distance from bottom card edge to reference line</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Horizontal Scale Bar (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={calibrationMeasurements.horizontalScale}
+                    onChange={(e) => handleCalibrationMeasurementChange('horizontalScale', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="1.000"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the horizontal crosshair</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vertical Scale Bar (inches)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={calibrationMeasurements.verticalScale}
+                    onChange={(e) => handleCalibrationMeasurementChange('verticalScale', e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    placeholder="1.000"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the vertical crosshair</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setShowCalibrationWizard(false)}
+                className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyCalibration}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Apply Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>;
 };
