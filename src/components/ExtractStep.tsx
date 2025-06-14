@@ -11,6 +11,7 @@ import {
 } from '../utils/cardUtils';
 import { DPI_CONSTANTS } from '../constants';
 import { useTransformations } from '../pipeline';
+import { useOptimizedPreview } from '../pipeline/previewOptimization';
 
 interface ExtractStepProps {
   pdfData: any;
@@ -36,13 +37,11 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   onCardDimensionsChange,
   onPrevious,
   onNext
-}) => {
-  const [currentPage, setCurrentPage] = useState(0);
+}) => {  const [currentPage, setCurrentPage] = useState(0);
   const [currentCard, setCurrentCard] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderedPageData, setRenderedPageData] = useState<any>(null);
-  const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
@@ -197,30 +196,46 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
       renderingRef.current = false;
     };
-  }, [pdfData, currentPage, activePages, pageSettings, zoom, renderPdfPage]); // Add zoom dependency
-  // Update card preview when current card or extraction settings change
+  }, [pdfData, currentPage, activePages, pageSettings, zoom, renderPdfPage]); // Add zoom dependency  // Optimized card preview generation with performance monitoring
+  const cardPreviewDependencies = useMemo(() => [
+    currentCard,
+    currentPage,
+    renderedPageData?.url,
+    isRendering,
+    extractionSettings.crop,
+    extractionSettings.grid,
+    extractionSettings.gutterWidth,
+    globalCardIndex
+  ], [currentCard, currentPage, renderedPageData?.url, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, globalCardIndex]);
+
+  const cardPreviewRenderer = useCallback(async () => {
+    if (!renderedPageData || isRendering || !canvasRef.current) {
+      throw new Error('Prerequisites not met for card preview');
+    }
+    return await extractCardImage(globalCardIndex);
+  }, [renderedPageData, isRendering, extractCardImage, globalCardIndex]);
+  const {
+    result: cardPreviewUrl,
+    isLoading: isCardPreviewLoading,
+    error: cardPreviewError,
+    metrics: cardPreviewMetrics,
+    forceRefresh: refreshCardPreview
+  } = useOptimizedPreview(
+    cardPreviewRenderer,
+    cardPreviewDependencies,
+    {
+      debounceMs: 100, // 100ms debounce for better responsiveness
+      targetRenderTime: 50, // Target <50ms for card preview updates
+      maxCacheSize: 10 // Cache up to 10 card previews
+    }
+  );
+
+  // Show performance warnings in development
   useEffect(() => {
-    let cancelled = false;
-    
-    if (renderedPageData && !isRendering && canvasRef.current) {
-      // Delay the card extraction to ensure canvas is fully rendered
-      const timer = setTimeout(async () => {
-        if (!cancelled) {
-          const cardUrl = await extractCardImage(globalCardIndex);
-          if (!cancelled) {
-            setCardPreviewUrl(cardUrl);
-          }
-        }
-      }, 100); // Reduced delay for better responsiveness
-      
-      return () => {
-        cancelled = true;
-        clearTimeout(timer);
-      };
-    } else {
-      // Clear the preview if prerequisites aren't met
-      setCardPreviewUrl(null);
-    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
+    if (process.env.NODE_ENV === 'development' && cardPreviewMetrics.lastRenderTime > 100) {
+      console.warn(`Card preview render took ${cardPreviewMetrics.lastRenderTime}ms, target is <50ms`);
+    }
+  }, [cardPreviewMetrics.lastRenderTime]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -720,12 +735,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           </div>          <div className="p-4 border border-gray-200 rounded-lg">            <div className="flex justify-between items-center mb-2">
               <h4 className="text-sm font-medium text-gray-700">
                 {cardType} {cardId} Preview
-              </h4>
-              <button 
-                onClick={async () => {
-                  const cardUrl = await extractCardImage(globalCardIndex);
-                  setCardPreviewUrl(cardUrl);
-                }}
+              </h4>              <button
+                onClick={refreshCardPreview}
                 className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded"
               >
                 Refresh
@@ -737,13 +748,24 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                   src={cardPreviewUrl} 
                   alt={`${cardType} ${cardId}`}
                   className="max-w-full max-h-full object-contain"
-                />
-              ) : (
+                />              ) : (
                 <div className="flex items-center justify-center text-gray-400">
-                  {isRendering ? 'Rendering...' : `Card ${currentCard + 1} Preview`}
+                  {isCardPreviewLoading ? 'Optimizing preview...' : 
+                   cardPreviewError ? `Error: ${cardPreviewError}` :
+                   `Card ${currentCard + 1} Preview`}
                 </div>
               )}
             </div>
+            
+            {/* Performance metrics in development */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-2 text-xs text-gray-500 space-y-1">
+                <div>Preview Performance:</div>
+                <div>• Renders: {cardPreviewMetrics.renderCount}, Cache hits: {cardPreviewMetrics.cacheHits}</div>
+                <div>• Avg time: {cardPreviewMetrics.averageRenderTime.toFixed(1)}ms, Last: {cardPreviewMetrics.lastRenderTime}ms</div>
+                <div>• Cache hit rate: {((cardPreviewMetrics.cacheHits / cardPreviewMetrics.totalRequests) * 100 || 0).toFixed(1)}%</div>
+              </div>
+            )}
           </div>
         </div>
       </div>

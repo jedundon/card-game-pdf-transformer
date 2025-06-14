@@ -14,6 +14,7 @@ import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/c
 import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
 import { useTransformations } from '../pipeline';
+import { useOptimizedPreview } from '../pipeline/previewOptimization';
 interface ConfigureStepProps {
   pdfData: any;
   pdfMode: any;
@@ -42,8 +43,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   onNext
 }) => {
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
-  const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
-  const [cardPreviewDimensions, setCardPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
   const [calibrationMeasurements, setCalibrationMeasurements] = useState({
@@ -111,41 +110,50 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     }
       return null;
   }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
-
-  // Update card preview when current card changes
-  useEffect(() => {
-    if (totalFilteredCards > 0 && currentCardExists && currentCardIndex !== null) {
-      const updatePreview = async () => {
-        const cardUrl = await extractCardImage(currentCardIndex);
-        setCardPreviewUrl(cardUrl);
-        
-        // Load image dimensions
-        if (cardUrl) {
-          const img = new Image();
-          img.onload = () => {
-            setCardPreviewDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-          };
-          img.onerror = () => {
-            setCardPreviewDimensions(null);
-          };
-          img.src = cardUrl;
-        } else {
-          setCardPreviewDimensions(null);
-        }
-      };
-      updatePreview();
-    } else {
-      setCardPreviewUrl(null);
-      setCardPreviewDimensions(null);
-    }
-  }, [
+  // Optimized card preview generation for ConfigureStep
+  const configurePreviewDependencies = useMemo(() => [
     currentCardId,
     viewMode,
-    extractCardImage, 
     totalFilteredCards,
     currentCardExists,
     currentCardIndex
-  ]);
+  ], [currentCardId, viewMode, totalFilteredCards, currentCardExists, currentCardIndex]);
+
+  const configurePreviewRenderer = useCallback(async () => {
+    if (totalFilteredCards <= 0 || !currentCardExists || currentCardIndex === null) {
+      throw new Error('No valid card to preview');
+    }
+    return await extractCardImage(currentCardIndex);
+  }, [totalFilteredCards, currentCardExists, currentCardIndex, extractCardImage]);
+  const {
+    result: cardPreviewUrl
+  } = useOptimizedPreview(
+    configurePreviewRenderer,
+    configurePreviewDependencies,
+    {
+      debounceMs: 150, // Slightly longer debounce for configure step
+      targetRenderTime: 100, // Target <100ms for configure preview updates
+      maxCacheSize: 15 // Cache more previews for configure step
+    }
+  );
+
+  // Calculate preview dimensions when URL changes
+  const [cardPreviewDimensions, setCardPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
+  
+  useEffect(() => {
+    if (cardPreviewUrl) {
+      const img = new Image();
+      img.onload = () => {
+        setCardPreviewDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+      };
+      img.onerror = () => {
+        setCardPreviewDimensions(null);
+      };
+      img.src = cardPreviewUrl;
+    } else {
+      setCardPreviewDimensions(null);
+    }
+  }, [cardPreviewUrl]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
     if (dimension === 'preset' && typeof value === 'object') {

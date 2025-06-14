@@ -20,8 +20,19 @@ export {
   useSettings,
   useAppStatus,
   usePipelineState,
-  useTransformations
+  useTransformations,
+  useOptimizedPreview,
+  useProgressivePreview,
+  useDeltaPreview
 } from './hooks';
+
+// Performance optimization hooks
+export {
+  useOptimizedPreview as useOptimizedPreviewSimple,
+  useProgressivePreview as useProgressivePreviewSimple,
+  type PreviewPerformanceMetrics,
+  type PreviewOptimizationOptions
+} from './previewOptimization';
 
 // Types
 export type * from './types';

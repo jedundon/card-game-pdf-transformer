@@ -2,8 +2,10 @@
  * React hooks for integrating with the centralized StateManager
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { StateManager, AppState } from './StateManager';
+import { PreviewGenerator, PreviewRequest, PreviewResult, PreviewOptions } from './PreviewGenerator';
+import type { CardData, WorkflowSettings } from './types';
 
 // Global state manager instance (will be initialized when needed)
 let globalStateManager: StateManager | null = null;
@@ -326,5 +328,314 @@ export function useTransformations() {
   return {
     extractCardImage,
     renderPdfPage
+  };
+}
+
+/**
+ * Performance-optimized preview hook with debouncing and caching
+ */
+export function useOptimizedPreview(
+  stepId: string,
+  input: CardData[],
+  settings: WorkflowSettings,
+  options: PreviewOptions = {},
+  debounceMs: number = 100
+): {
+  previewData: PreviewResult | null;
+  isLoading: boolean;
+  error: string | null;
+  regeneratePreview: () => void;
+  queueBackgroundPreview: (newOptions?: PreviewOptions) => void;
+} {
+  const [previewData, setPreviewData] = useState<PreviewResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const previewGenerator = useMemo(() => new PreviewGenerator({
+    maxCacheSize: 50,
+    maxCacheAge: 10 * 60 * 1000, // 10 minutes
+    enableBackgroundRender: true
+  }), []);
+  
+  const debounceRef = useRef<NodeJS.Timeout>();
+  const lastRequestRef = useRef<string>('');
+  const mountedRef = useRef(true);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      previewGenerator.destroy();
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [previewGenerator]);
+
+  const generatePreview = useCallback(async (
+    request: PreviewRequest,
+    isBackground: boolean = false
+  ) => {
+    const requestKey = previewGenerator['generateCacheKey'](request);
+    
+    // Skip if this is the same request we just processed
+    if (requestKey === lastRequestRef.current) {
+      return;
+    }
+    
+    lastRequestRef.current = requestKey;
+
+    if (!isBackground) {
+      setIsLoading(true);
+      setError(null);
+    }
+
+    try {
+      const result = await previewGenerator.generatePreview(request);
+      
+      if (!mountedRef.current) return;
+      
+      if (result.success) {
+        setPreviewData(result);
+        setError(null);
+      } else {
+        setError(result.error || 'Preview generation failed');
+      }
+    } catch (err) {
+      if (!mountedRef.current) return;
+      setError(err instanceof Error ? err.message : 'Unknown preview error');
+    } finally {
+      if (!mountedRef.current) return;
+      if (!isBackground) {
+        setIsLoading(false);
+      }
+    }
+  }, [previewGenerator]);
+
+  // Debounced preview generation
+  const debouncedGenerate = useCallback((request: PreviewRequest) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(() => {
+      generatePreview(request);
+    }, debounceMs);
+  }, [generatePreview, debounceMs]);
+  // Main effect to trigger preview generation
+  useEffect(() => {
+    const request: PreviewRequest = {
+      stepId,
+      input,
+      settings,
+      options,
+      priority: 'normal'
+    };
+
+    // Use immediate generation for cached previews
+    const cacheKey = previewGenerator['generateCacheKey'](request);
+    const cached = previewGenerator['cache'].has(cacheKey);
+    
+    if (cached) {
+      generatePreview(request);
+    } else {
+      debouncedGenerate(request);
+    }
+  }, [stepId, input, settings, options, generatePreview, debouncedGenerate, previewGenerator]);
+
+  const regeneratePreview = useCallback(() => {
+    const request: PreviewRequest = {
+      stepId,
+      input,
+      settings,
+      options,
+      priority: 'high'
+    };
+    
+    // Force cache invalidation for this request
+    const cacheKey = previewGenerator['generateCacheKey'](request);
+    previewGenerator.invalidateCache(cacheKey);
+    
+    generatePreview(request);
+  }, [stepId, input, settings, options, generatePreview, previewGenerator]);
+
+  const queueBackgroundPreview = useCallback((newOptions: PreviewOptions = {}) => {
+    const request: PreviewRequest = {
+      stepId,
+      input,
+      settings,
+      options: { ...options, ...newOptions },
+      priority: 'low'
+    };
+    
+    previewGenerator.queueBackgroundRender(request);
+  }, [stepId, input, settings, options, previewGenerator]);
+
+  return {
+    previewData,
+    isLoading,
+    error,
+    regeneratePreview,
+    queueBackgroundPreview
+  };
+}
+
+/**
+ * Hook for progressive preview rendering (renders low-quality first, then high-quality)
+ */
+export function useProgressivePreview(
+  stepId: string,
+  input: CardData[],
+  settings: WorkflowSettings,
+  options: PreviewOptions = {}
+): {
+  lowQualityPreview: PreviewResult | null;
+  highQualityPreview: PreviewResult | null;
+  isLoadingLowQuality: boolean;
+  isLoadingHighQuality: boolean;
+  error: string | null;
+} {
+  // Low quality preview (fast)
+  const lowQualityOptions: PreviewOptions = {
+    ...options,
+    quality: 0.3,
+    width: (options.width || 800) * 0.5,
+    height: (options.height || 600) * 0.5
+  };
+
+  const {
+    previewData: lowQualityPreview,
+    isLoading: isLoadingLowQuality,
+    error: lowQualityError
+  } = useOptimizedPreview(stepId, input, settings, lowQualityOptions, 50);
+
+  // High quality preview (slower, starts after low quality)
+  const highQualityOptions: PreviewOptions = {
+    ...options,
+    quality: options.quality || 1.0
+  };
+
+  const {
+    previewData: highQualityPreview,
+    isLoading: isLoadingHighQuality,
+    error: highQualityError
+  } = useOptimizedPreview(
+    stepId,
+    input,
+    settings,
+    highQualityOptions,
+    200 // Longer debounce for high quality
+  );
+
+  // Start high quality render after low quality is done
+  useEffect(() => {
+    if (lowQualityPreview && !isLoadingLowQuality) {
+      // Queue high quality render in background
+      // This will automatically start due to the useOptimizedPreview effect
+    }
+  }, [lowQualityPreview, isLoadingLowQuality]);
+
+  return {
+    lowQualityPreview,
+    highQualityPreview,
+    isLoadingLowQuality,
+    isLoadingHighQuality,
+    error: lowQualityError || highQualityError
+  };
+}
+
+/**
+ * Hook for delta preview updates (optimized for setting changes)
+ */
+export function useDeltaPreview(
+  baseStepId: string,
+  baseInput: CardData[],
+  baseSettings: WorkflowSettings,
+  baseOptions: PreviewOptions = {}
+): {
+  currentPreview: PreviewResult | null;
+  isLoading: boolean;
+  error: string | null;
+  updateWithDelta: (changes: Partial<PreviewRequest>) => void;
+  metrics: { deltaUpdates: number; cacheHitRate: number; averageRenderTime: number };
+} {
+  const [currentPreview, setCurrentPreview] = useState<PreviewResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const previewGenerator = useMemo(() => new PreviewGenerator({
+    maxCacheSize: 30,
+    maxCacheAge: 5 * 60 * 1000, // 5 minutes for delta previews
+    enableBackgroundRender: true
+  }), []);
+  
+  const baseRequestRef = useRef<PreviewRequest>({
+    stepId: baseStepId,
+    input: baseInput,
+    settings: baseSettings,
+    options: baseOptions
+  });
+
+  // Update base request when props change
+  useEffect(() => {
+    baseRequestRef.current = {
+      stepId: baseStepId,
+      input: baseInput,
+      settings: baseSettings,
+      options: baseOptions
+    };
+  }, [baseStepId, baseInput, baseSettings, baseOptions]);
+
+  const updateWithDelta = useCallback(async (changes: Partial<PreviewRequest>) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await previewGenerator.generateDeltaPreview(
+        baseRequestRef.current,
+        changes
+      );
+
+      if (result.success) {
+        setCurrentPreview(result);
+        setError(null);
+      } else {
+        setError(result.error || 'Delta preview generation failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown delta preview error');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [previewGenerator]);
+
+  // Generate initial preview
+  useEffect(() => {
+    updateWithDelta({});
+  }, [updateWithDelta]);
+
+  const metrics = useMemo(() => {
+    const generatorMetrics = previewGenerator.getMetrics();
+    return {
+      deltaUpdates: generatorMetrics.deltaUpdates,
+      cacheHitRate: generatorMetrics.cacheHitRate,
+      averageRenderTime: generatorMetrics.averageRenderTime
+    };
+  }, [previewGenerator, currentPreview]); // Re-calculate when preview updates
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      previewGenerator.destroy();
+    };
+  }, [previewGenerator]);
+
+  return {
+    currentPreview,
+    isLoading,
+    error,
+    updateWithDelta,
+    metrics
   };
 }
