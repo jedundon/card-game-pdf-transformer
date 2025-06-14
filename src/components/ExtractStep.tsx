@@ -10,6 +10,8 @@ import {
   countCardsByType,
   getAvailableCardIds
 } from '../utils/cardUtils';
+import { DPI_CONSTANTS } from '../constants';
+
 interface ExtractStepProps {
   pdfData: any;
   pdfMode: any;
@@ -73,7 +75,62 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } else {
       return cardId; // For other modes, use the card ID directly
     }
-  }, [cardType, cardId, pdfMode, totalCards, activePages, cardsPerPage, extractionSettings]);// Remove excessive logging
+  }, [cardType, cardId, pdfMode, totalCards, activePages, cardsPerPage, extractionSettings]);
+
+  // Calculate card dimensions for display
+  const cardDimensions = useMemo(() => {
+    if (!pdfData || !activePages.length || !renderedPageData) {
+      return null;
+    }
+
+    try {
+      // Get the extraction scale (300 DPI)
+      const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
+      
+      // Calculate cropped dimensions at extraction DPI
+      const croppedWidth = (renderedPageData.width / renderedPageData.previewScale) * extractionScale - extractionSettings.crop.left - extractionSettings.crop.right;
+      const croppedHeight = (renderedPageData.height / renderedPageData.previewScale) * extractionScale - extractionSettings.crop.top - extractionSettings.crop.bottom;
+      
+      if (croppedWidth <= 0 || croppedHeight <= 0) {
+        return null;
+      }
+
+      let cardWidthPx, cardHeightPx;
+
+      // Handle gutter-fold mode with gutter width
+      if (pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0) {
+        const gutterWidth = extractionSettings.gutterWidth || 0;
+        
+        if (pdfMode.orientation === 'vertical') {
+          const availableWidthForCards = croppedWidth - gutterWidth;
+          cardWidthPx = availableWidthForCards / extractionSettings.grid.columns;
+          cardHeightPx = croppedHeight / extractionSettings.grid.rows;
+        } else {
+          const availableHeightForCards = croppedHeight - gutterWidth;
+          cardWidthPx = croppedWidth / extractionSettings.grid.columns;
+          cardHeightPx = availableHeightForCards / extractionSettings.grid.rows;
+        }
+      } else {
+        // Standard mode
+        cardWidthPx = croppedWidth / extractionSettings.grid.columns;
+        cardHeightPx = croppedHeight / extractionSettings.grid.rows;
+      }
+
+      // Convert to inches (300 DPI means 300 pixels per inch)
+      const cardWidthInches = cardWidthPx / DPI_CONSTANTS.EXTRACTION_DPI;
+      const cardHeightInches = cardHeightPx / DPI_CONSTANTS.EXTRACTION_DPI;
+
+      return {
+        widthPx: Math.round(cardWidthPx),
+        heightPx: Math.round(cardHeightPx),
+        widthInches: cardWidthInches,
+        heightInches: cardHeightInches
+      };
+    } catch (error) {
+      console.error('Error calculating card dimensions:', error);
+      return null;
+    }
+  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode]);
   // Extract individual card from canvas at 300 DPI using utility function
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
@@ -572,7 +629,19 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 )}
               </span>
             </div>
-          </div>
+          </div>          {/* Card dimensions display */}
+          {cardDimensions && (
+            <div className="p-3 bg-gray-50 rounded-md">
+              <div className="flex items-center">
+                <span className="text-sm font-medium text-gray-800 mr-3">
+                  Card Dimensions:
+                </span>
+                <span className="text-sm text-gray-600">
+                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* 300 DPI indicator */}
           <div className="p-3 bg-blue-50 rounded-md">
@@ -691,8 +760,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 </button>
               </div>
             </div>
-          </div>
-          <div className="p-4 border border-gray-200 rounded-lg">            <div className="flex justify-between items-center mb-2">
+          </div>          <div className="p-4 border border-gray-200 rounded-lg">            <div className="flex justify-between items-center mb-2">
               <h4 className="text-sm font-medium text-gray-700">
                 {cardType} {cardId} Preview
               </h4>
@@ -706,7 +774,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 Refresh
               </button>
             </div>
-            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center">              {cardPreviewUrl ? (
+            
+            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center">{cardPreviewUrl ? (
                 <img 
                   src={cardPreviewUrl} 
                   alt={`${cardType} ${cardId}`}
