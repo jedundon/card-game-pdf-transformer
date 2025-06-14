@@ -9,7 +9,7 @@ import {
   extractCardImage as extractCardImageUtil,
   calculateCardDimensions
 } from '../utils/cardUtils';
-import { DPI_CONSTANTS, DEFAULT_CARD_DIMENSIONS } from '../constants';
+import { DPI_CONSTANTS } from '../constants';
 import jsPDF from 'jspdf';
 
 interface ExportStepProps {
@@ -91,10 +91,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     if (!outputSettings.pageSize || outputSettings.pageSize.width <= 0 || outputSettings.pageSize.height <= 0) {
       errors.push('Invalid page size settings');
     }
-    
-    // Check if card scale is reasonable
-    if (outputSettings.cardScale?.targetHeight && outputSettings.cardScale.targetHeight <= 0) {
-      errors.push('Invalid card scale settings');
+      // Check if card size settings are valid
+    if (outputSettings.cardSize && (outputSettings.cardSize.widthInches <= 0 || outputSettings.cardSize.heightInches <= 0)) {
+      errors.push('Invalid card size settings');
     }
     
     // Check if total cards is greater than 0
@@ -159,18 +158,12 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         // Create a new page for each card
         if (cardCount > 0) {
           doc.addPage();
-        }
-
-        // Calculate card dimensions after cropping and scaling
-        const cardDimensions = calculateCardDimensions(
-          outputSettings.crop,
-          outputSettings.cardScale?.targetHeight || 2.5,
-          DEFAULT_CARD_DIMENSIONS
-        );
+        }        // Calculate card dimensions using new settings
+        const cardDimensions = calculateCardDimensions(outputSettings);
 
         // Convert pixels to inches at target DPI
         const cardWidthInches = cardDimensions.width / DPI_CONSTANTS.EXTRACTION_DPI;
-        const cardHeightInches = cardDimensions.height / DPI_CONSTANTS.EXTRACTION_DPI;        // Apply rotation if needed by rotating the image on a canvas before adding to PDF
+        const cardHeightInches = cardDimensions.height / DPI_CONSTANTS.EXTRACTION_DPI;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
         const rotation = getRotationForCardType(outputSettings, cardType);
         let finalImageUrl = cardImageUrl;
         let finalWidth = cardWidthInches;
@@ -228,11 +221,12 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
             // Continue with original image if rotation fails
           }
-        }
-
-        // Recalculate position for potentially different dimensions
-        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal;
-        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical;
+        }        // Calculate position including card image offset
+        const imageOffsetXInches = (outputSettings.cardImageOffset?.horizontal || 0) / DPI_CONSTANTS.EXTRACTION_DPI;
+        const imageOffsetYInches = (outputSettings.cardImageOffset?.vertical || 0) / DPI_CONSTANTS.EXTRACTION_DPI;
+        
+        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal + imageOffsetXInches;
+        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical + imageOffsetYInches;
 
         console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 

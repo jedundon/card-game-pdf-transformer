@@ -8,7 +8,8 @@ import {
   getAvailableCardIds,
   getRotationForCardType,
   countCardsByType,
-  calculatePreviewScale
+  calculatePreviewScale,
+  calculateCardDimensions
 } from '../utils/cardUtils';
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
 import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
@@ -153,31 +154,61 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     };
     onSettingsChange(newSettings);
   };
-  const handleCropChange = (edge: string, value: number) => {
+  const handleCardSizeChange = (dimension: 'widthInches' | 'heightInches', value: number) => {
     const newSettings = {
       ...outputSettings,
-      crop: {
-        ...outputSettings.crop,
-        [edge]: value
+      cardSize: {
+        ...(outputSettings.cardSize || DEFAULT_SETTINGS.outputSettings.cardSize),
+        [dimension]: value
       }
     };
     onSettingsChange(newSettings);
   };
+
+  const handleCardScalePercentChange = (value: number) => {
+    const newSettings = {
+      ...outputSettings,
+      cardScalePercent: value
+    };
+    onSettingsChange(newSettings);
+  };
+
+  const handleBleedMarginChange = (value: number) => {
+    const newSettings = {
+      ...outputSettings,
+      bleedMarginInches: value
+    };
+    onSettingsChange(newSettings);
+  };
+
+  const handleCardImageOffsetChange = (direction: 'horizontal' | 'vertical', value: number) => {
+    const newSettings = {
+      ...outputSettings,
+      cardImageOffset: {
+        ...(outputSettings.cardImageOffset || DEFAULT_SETTINGS.outputSettings.cardImageOffset),
+        [direction]: value
+      }
+    };
+    onSettingsChange(newSettings);
+  };
+
+  const handleCardImageOffsetReset = () => {
+    const newSettings = {
+      ...outputSettings,
+      cardImageOffset: {
+        horizontal: 0,
+        vertical: 0
+      }
+    };
+    onSettingsChange(newSettings);
+  };
+
   const handleRotationChange = (cardType: 'front' | 'back', value: number) => {
     const newSettings = {
       ...outputSettings,
       rotation: {
         ...(outputSettings.rotation || { front: 0, back: 0 }),
         [cardType]: value
-      }
-    };
-    onSettingsChange(newSettings);
-  };
-  const handleCardScaleChange = (targetHeight: number) => {
-    const newSettings = {
-      ...outputSettings,
-      cardScale: {
-        targetHeight: targetHeight
       }
     };
     onSettingsChange(newSettings);
@@ -213,24 +244,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   // Handle calibration PDF generation
   const handlePrintCalibration = useCallback(() => {
-    // Calculate actual target card dimensions based on user settings
-    const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
+    // Use new card size settings for calibration
+    const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+    const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
     
-    // Convert pixel dimensions to inches for aspect ratio calculation
-    const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
-    const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
+    // Apply scale percentage
+    const scalePercent = outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent;
+    const scaledWidth = cardWidthInches * (scalePercent / 100);
+    const scaledHeight = cardHeightInches * (scalePercent / 100);
     
-    // Calculate the width based on cropped aspect ratio
-    const croppedWidthPx = originalWidthPx - (outputSettings.crop.left + outputSettings.crop.right);
-    const croppedHeightPx = originalHeightPx - (outputSettings.crop.top + outputSettings.crop.bottom);
-    const aspectRatio = croppedWidthPx / croppedHeightPx;
-    const targetWidth = targetHeight * aspectRatio;
-    
-    console.log(`Calibration card: ${targetWidth.toFixed(2)}" × ${targetHeight}" on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
+    console.log(`Calibration card: ${scaledWidth.toFixed(2)}" × ${scaledHeight}" on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
     
     const pdfBlob = generateCalibrationPDF(
-      targetWidth,
-      targetHeight,
+      scaledWidth,
+      scaledHeight,
       outputSettings.pageSize.width,
       outputSettings.pageSize.height
     );
@@ -244,7 +271,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [outputSettings.pageSize, outputSettings.cardScale, outputSettings.crop]);
+  }, [outputSettings.pageSize, outputSettings.cardSize, outputSettings.cardScalePercent]);
 
   // Handle calibration measurements and apply settings
   const handleApplyCalibration = useCallback(() => {
@@ -270,9 +297,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     handleOffsetChange('horizontal', settings.horizontalOffset);
     handleOffsetChange('vertical', settings.verticalOffset);
     
-    // Apply the scale factors to the card height (use vertical scale factor for height)
-    const currentHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
-    handleCardScaleChange(currentHeight * settings.verticalScaleFactor);
+    // Note: Scale factors will be applied to new card size settings in later steps
     
     // Close the wizard
     setShowCalibrationWizard(false);
@@ -286,7 +311,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       horizontalScale: '',
       verticalScale: ''
     });
-  }, [calibrationMeasurements, outputSettings.cardScale, handleOffsetChange, handleCardScaleChange]);
+  }, [calibrationMeasurements, handleOffsetChange]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({
@@ -294,6 +319,14 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       [field]: value
     }));
   }, []);
+
+  const handleCardSizePreset = (size: { widthInches: number; heightInches: number }) => {
+    const newSettings = {
+      ...outputSettings,
+      cardSize: size
+    };
+    onSettingsChange(newSettings);
+  };
 
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
@@ -383,6 +416,220 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             </div>
           </div>
 
+          {/* Card Size Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Card Image Size
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Set the target card dimensions. Bleed extends the print area beyond the card edges for better coverage.
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              {/* Width */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Width (inches)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  min="1" 
+                  max="12" 
+                  value={outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches} 
+                  onChange={e => handleCardSizeChange('widthInches', parseFloat(e.target.value))} 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                />
+              </div>
+              
+              {/* Height */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Height (inches)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.1" 
+                  min="1" 
+                  max="12" 
+                  value={outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches} 
+                  onChange={e => handleCardSizeChange('heightInches', parseFloat(e.target.value))} 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                />
+              </div>
+              
+              {/* Bleed */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Bleed (inches)
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0" 
+                  max="0.5" 
+                  value={outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches} 
+                  onChange={e => handleBleedMarginChange(parseFloat(e.target.value))} 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                />
+              </div>
+            </div>
+            
+            {/* Card Size Presets and Bleed Presets Row */}
+            <div className="grid grid-cols-3 gap-4 mt-3">
+              {/* Card Size Presets - spans first two columns */}
+              <div className="col-span-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleCardSizePreset({ widthInches: 2.5, heightInches: 3.5 })}
+                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    Poker (2.5×3.5")
+                  </button>
+                  <button
+                    onClick={() => handleCardSizePreset({ widthInches: 2.25, heightInches: 3.5 })}
+                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    Bridge (2.25×3.5")
+                  </button>
+                  <button
+                    onClick={() => handleCardSizePreset({ widthInches: 3.5, heightInches: 3.5 })}
+                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                  >
+                    Square (3.5×3.5")
+                  </button>
+                </div>
+              </div>
+              
+              {/* Bleed Presets - third column */}
+              <div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleBleedMarginChange(0)}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={() => handleBleedMarginChange(0.05)}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
+                  >
+                    0.05
+                  </button>
+                  <button
+                    onClick={() => handleBleedMarginChange(0.1)}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
+                  >
+                    0.1
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card Scale Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Card Scale
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Adjust the scale to compensate for printer enlargement during borderless printing
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Scale (percent)
+              </label>
+              <input 
+                type="number" 
+                step="1" 
+                min="50" 
+                max="150" 
+                value={outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent} 
+                onChange={e => handleCardScalePercentChange(parseFloat(e.target.value))} 
+                className="w-full border border-gray-300 rounded-md px-3 py-2" 
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                100% = actual size, &lt;100% = smaller (compensate for printer enlargement)
+              </p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => handleCardScalePercentChange(100)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                100% (No scaling)
+              </button>
+              <button
+                onClick={() => handleCardScalePercentChange(95)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                95% (Common adjustment)
+              </button>
+              <button
+                onClick={() => handleCardScalePercentChange(90)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                90% (Strong adjustment)
+              </button>
+            </div>
+          </div>
+
+          {/* Card Image Offset Section */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Card Image Offset
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Fine-tune the position of the card image if it's not perfectly centered
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Horizontal (pixels)
+                </label>
+                <div className="flex items-center">
+                  <MoveHorizontalIcon size={16} className="text-gray-400 mr-2" />
+                  <input 
+                    type="number" 
+                    step="1" 
+                    min="-100" 
+                    max="100" 
+                    value={outputSettings.cardImageOffset?.horizontal || DEFAULT_SETTINGS.outputSettings.cardImageOffset.horizontal} 
+                    onChange={e => handleCardImageOffsetChange('horizontal', parseFloat(e.target.value))} 
+                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vertical (pixels)
+                </label>
+                <div className="flex items-center">
+                  <MoveVerticalIcon size={16} className="text-gray-400 mr-2" />
+                  <input 
+                    type="number" 
+                    step="1" 
+                    min="-100" 
+                    max="100" 
+                    value={outputSettings.cardImageOffset?.vertical || DEFAULT_SETTINGS.outputSettings.cardImageOffset.vertical} 
+                    onChange={e => handleCardImageOffsetChange('vertical', parseFloat(e.target.value))} 
+                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                  />
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Positive values move right/down, negative values move left/up
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => handleCardImageOffsetReset()}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Reset (0, 0)
+              </button>
+            </div>
+          </div>
+
           {/* Printer Calibration Section */}
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
@@ -395,14 +642,12 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <p className="text-xs text-gray-600">
                 <span className="font-medium">Calibration target:</span>{' '}
                 {(() => {
-                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
-                  const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
-                  const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
-                  const croppedWidthPx = originalWidthPx - (outputSettings.crop.left + outputSettings.crop.right);
-                  const croppedHeightPx = originalHeightPx - (outputSettings.crop.top + outputSettings.crop.bottom);
-                  const aspectRatio = croppedWidthPx / croppedHeightPx;
-                  const targetWidth = targetHeight * aspectRatio;
-                  return `${targetWidth.toFixed(2)}" × ${targetHeight}" direct card printing`;
+                  const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+                  const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
+                  const scalePercent = outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent;
+                  const scaledWidth = cardWidthInches * (scalePercent / 100);
+                  const scaledHeight = cardHeightInches * (scalePercent / 100);
+                  return `${scaledWidth.toFixed(2)}" × ${scaledHeight}" direct card printing`;
                 })()}
               </p>
             </div>
@@ -445,67 +690,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             </div>
           </div>
           
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Crop Settings
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Remove pixels from each edge of the extracted card (applied before scaling)
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Top Crop (px)
-                </label>
-                <input type="number" value={outputSettings.crop.top} onChange={e => handleCropChange('top', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Right Crop (px)
-                </label>
-                <input type="number" value={outputSettings.crop.right} onChange={e => handleCropChange('right', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bottom Crop (px)
-                </label>
-                <input type="number" value={outputSettings.crop.bottom} onChange={e => handleCropChange('bottom', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Left Crop (px)
-                </label>
-                <input type="number" value={outputSettings.crop.left} onChange={e => handleCropChange('left', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Size
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Set the target height for cards after cropping (before rotation)
-            </p>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Target Height (inches)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="0.5" 
-                  max="10" 
-                  value={outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight} 
-                  onChange={e => handleCardScaleChange(parseFloat(e.target.value))} 
-                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Width will be calculated automatically to maintain aspect ratio
-                </p>
-              </div>
-            </div>
-          </div>
+
 
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
@@ -625,43 +810,26 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     PREVIEW_CONSTRAINTS.MAX_HEIGHT
                   );
                   
-                  // Calculate actual card dimensions with correct transformation order:
-                  // 1. Extract card at original size
-                  // 2. Apply crop (remove pixels from edges)
-                  // 3. Apply scale (resize to target height) 
-                  // 4. Apply rotation (handled by CSS transform)
-                  
-                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight; // inches
-                  
-                  // Get original extracted card dimensions (before any transformations)
-                  const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width; 
-                  const originalCardHeight = DEFAULT_CARD_DIMENSIONS.height;
-                  
-                  // Step 1: Apply cropping to original dimensions
-                  const croppedCardWidth = originalCardWidth - (outputSettings.crop.left + outputSettings.crop.right);
-                  const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
-                  
-                  // Step 2: Calculate scale factor based on target height of cropped card
-                  const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
-                  const cardScaleFactor = targetHeightPx / croppedCardHeight;
-                  
-                  // Step 3: Apply scaling to cropped dimensions
-                  const finalCardWidth = croppedCardWidth * cardScaleFactor;
-                  const finalCardHeight = croppedCardHeight * cardScaleFactor;
+                  // Calculate card dimensions using new settings
+                  const cardDimensions = calculateCardDimensions(outputSettings);
                   
                   // Convert to preview scale for display
-                  const cardWidth = finalCardWidth * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI; // Convert to screen pixels
-                  const cardHeight = finalCardHeight * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                  const offsetX = outputSettings.offset.horizontal * DPI_CONSTANTS.SCREEN_DPI * scale;
-                  const offsetY = outputSettings.offset.vertical * DPI_CONSTANTS.SCREEN_DPI * scale;
+                  const cardWidth = cardDimensions.width * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                  const cardHeight = cardDimensions.height * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                  
+                  // Calculate offsets including page offset and card image offset
+                  const pageOffsetX = outputSettings.offset.horizontal * DPI_CONSTANTS.SCREEN_DPI * scale;
+                  const pageOffsetY = outputSettings.offset.vertical * DPI_CONSTANTS.SCREEN_DPI * scale;
+                  const imageOffsetX = (outputSettings.cardImageOffset?.horizontal || 0) * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                  const imageOffsetY = (outputSettings.cardImageOffset?.vertical || 0) * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                   
                   return {
                     width: `${cardWidth}px`,
                     height: `${cardHeight}px`,
                     top: '50%',
                     left: '50%',
-                    marginLeft: `calc(-${cardWidth / 2}px + ${offsetX}px)`,
-                    marginTop: `calc(-${cardHeight / 2}px + ${offsetY}px)`,
+                    marginLeft: `calc(-${cardWidth / 2}px + ${pageOffsetX}px + ${imageOffsetX}px)`,
+                    marginTop: `calc(-${cardHeight / 2}px + ${pageOffsetY}px + ${imageOffsetY}px)`,
                     transform: `rotate(${getRotationForCardType(outputSettings, viewMode)}deg)`
                   };
                 })()
@@ -671,7 +839,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                       className="w-full h-full bg-cover bg-center"
                       style={{
                         ...(() => {
-                          // Calculate the same scale factor for background sizing
+                          // Calculate scale for background sizing
                           const { scale } = calculatePreviewScale(
                             outputSettings.pageSize.width,
                             outputSettings.pageSize.height,
@@ -679,24 +847,40 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                             PREVIEW_CONSTRAINTS.MAX_HEIGHT
                           );
                           
-                          // Calculate card scaling for background with correct transformation order
-                          const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight; // inches
+                          // Use new card dimensions for background sizing
+                          const cardDimensions = calculateCardDimensions(outputSettings);
                           
-                          // Original extracted card dimensions
-                          const originalCardWidth = DEFAULT_CARD_DIMENSIONS.width;
-                          const originalCardHeight = DEFAULT_CARD_DIMENSIONS.height;
+                          // With the new bleed system, the image should fill the entire card area
+                          const cardWidthPx = cardDimensions.width;
+                          const cardHeightPx = cardDimensions.height;
                           
-                          // Apply cropping first
-                          const croppedCardHeight = originalCardHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
+                          // Scale the original extracted image to fit the entire card area
+                          const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
+                          const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
                           
-                          // Then apply scaling
-                          const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
-                          const cardScaleFactor = targetHeightPx / croppedCardHeight;
+                          // Calculate how much to scale the background image to cover the card
+                          const backgroundScaleX = cardWidthPx / originalWidthPx;
+                          const backgroundScaleY = cardHeightPx / originalHeightPx;
+                          const backgroundScale = Math.max(backgroundScaleX, backgroundScaleY); // Cover the entire card area
+                          
+                          const scaledImageWidth = originalWidthPx * backgroundScale;
+                          const scaledImageHeight = originalHeightPx * backgroundScale;
+                          
+                          // Convert to screen pixels for display
+                          const screenImageWidth = scaledImageWidth * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          const screenImageHeight = scaledImageHeight * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          
+                          // Center the image within the card area
+                          const offsetX = (scaledImageWidth - cardWidthPx) / 2;
+                          const offsetY = (scaledImageHeight - cardHeightPx) / 2;
+                          const screenOffsetX = offsetX * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          const screenOffsetY = offsetY * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                           
                           return {
                             backgroundImage: `url(${cardPreviewUrl})`,
-                            backgroundPosition: `${-outputSettings.crop.left * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px ${-outputSettings.crop.top * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px`,
-                            backgroundSize: `${originalCardWidth * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px ${originalCardHeight * cardScaleFactor * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI}px`
+                            backgroundPosition: `-${screenOffsetX}px -${screenOffsetY}px`,
+                            backgroundSize: `${screenImageWidth}px ${screenImageHeight}px`,
+                            backgroundRepeat: 'no-repeat'
                           };
                         })()
                       }}
@@ -747,28 +931,24 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 {outputSettings.offset.vertical}" vertical
               </p>
               <p>
-                <span className="font-medium">Card crop:</span>{' '}
-                {outputSettings.crop.top}px top, {outputSettings.crop.right}px
-                right, {outputSettings.crop.bottom}px bottom,{' '}
-                {outputSettings.crop.left}px left
-              </p>
-              <p>
                 <span className="font-medium">Rotation:</span>{' '}
                 Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
               </p>
               <p>
                 <span className="font-medium">Card size:</span>{' '}
-                {(() => {
-                  const targetHeight = outputSettings.cardScale?.targetHeight || DEFAULT_SETTINGS.outputSettings.cardScale.targetHeight;
-                  // Calculate width based on cropped dimensions, not original
-                  const originalWidth = DEFAULT_CARD_DIMENSIONS.width;
-                  const originalHeight = DEFAULT_CARD_DIMENSIONS.height;
-                  const croppedWidth = originalWidth - (outputSettings.crop.left + outputSettings.crop.right);
-                  const croppedHeight = originalHeight - (outputSettings.crop.top + outputSettings.crop.bottom);
-                  const aspectRatio = croppedWidth / croppedHeight;
-                  const targetWidth = targetHeight * aspectRatio;
-                  return `${targetWidth.toFixed(2)}" × ${targetHeight}" (after crop)`;
-                })()}
+                {outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches}" × {outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches}"
+              </p>
+              <p>
+                <span className="font-medium">Card scale:</span>{' '}
+                {outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent}%
+              </p>
+              <p>
+                <span className="font-medium">Bleed margin:</span>{' '}
+                {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
+              </p>
+              <p>
+                <span className="font-medium">Card image offset:</span>{' '}
+                {outputSettings.cardImageOffset?.horizontal || DEFAULT_SETTINGS.outputSettings.cardImageOffset.horizontal}px horizontal, {outputSettings.cardImageOffset?.vertical || DEFAULT_SETTINGS.outputSettings.cardImageOffset.vertical}px vertical
               </p>
             </div>
           </div>

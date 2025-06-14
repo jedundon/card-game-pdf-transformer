@@ -58,20 +58,35 @@ export const DEFAULT_SETTINGS = {
     pageSize: {
       width: 3.5,
       height: 3.5
-    },
-    offset: {
+    },    offset: {
       horizontal: 0,
       vertical: 0
-    },    crop: {
+    },
+    // New card size settings (poker card default)
+    cardSize: {
+      widthInches: 2.5,
+      heightInches: 3.5
+    },    // Card scale setting (percentage)
+    cardScalePercent: 100,    // Bleed margin setting (inches)
+    bleedMarginInches: 0,
+    // Card image offset setting (pixels)
+    cardImageOffset: {
+      horizontal: 0,
+      vertical: 0
+    },
+    // Legacy settings - will be replaced with new card size settings
+    crop: {
       top: 0,
       right: 0,
       bottom: 0,
       left: 0
-    },    rotation: {
+    },
+    cardScale: {
+      targetHeight: 3.5
+    },
+    rotation: {
       front: 0,
       back: 0
-    },    cardScale: {
-      targetHeight: 3.5
     }
   }
 };

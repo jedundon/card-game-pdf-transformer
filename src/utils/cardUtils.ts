@@ -1,4 +1,4 @@
-import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS } from '../constants';
+import { DPI_CONSTANTS } from '../constants';
 
 // Utility functions for card calculations and extraction
 // Shared between ExtractStep and ConfigureStep components
@@ -405,30 +405,39 @@ export function getRotationForCardType(
 }
 
 /**
- * Calculate card dimensions after cropping and scaling
+ * Calculate card dimensions using new card size settings
  */
 export function calculateCardDimensions(
-  cropSettings: { top: number; right: number; bottom: number; left: number },
-  targetHeight: number,
-  originalDimensions = DEFAULT_CARD_DIMENSIONS
+  outputSettings: any
 ) {
-  // Apply cropping to original dimensions
-  const croppedWidth = originalDimensions.width - (cropSettings.left + cropSettings.right);
-  const croppedHeight = originalDimensions.height - (cropSettings.top + cropSettings.bottom);
+  // Use new card size settings with bleed
+  const baseCardWidthInches = outputSettings.cardSize?.widthInches || 2.5;
+  const baseCardHeightInches = outputSettings.cardSize?.heightInches || 3.5;
+  const bleedMarginInches = outputSettings.bleedMarginInches || 0;  // Add bleed to the target card size (this is the actual print target)
+  // Bleed extends outward from each edge, so we add bleedMarginInches to each side
+  const targetCardWidthInches = baseCardWidthInches + (bleedMarginInches * 2);
+  const targetCardHeightInches = baseCardHeightInches + (bleedMarginInches * 2);
   
-  // Calculate scale factor based on target height
-  const targetHeightPx = targetHeight * DPI_CONSTANTS.EXTRACTION_DPI;
-  const scaleFactor = targetHeightPx / croppedHeight;
+  // Convert to pixels at extraction DPI
+  let cardWidthPx = targetCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
+  let cardHeightPx = targetCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
   
-  // Apply scaling to cropped dimensions
-  const finalWidth = croppedWidth * scaleFactor;
-  const finalHeight = croppedHeight * scaleFactor;
+  // Apply scale percentage
+  const scalePercent = outputSettings.cardScalePercent || 100;
+  cardWidthPx *= (scalePercent / 100);
+  cardHeightPx *= (scalePercent / 100);
   
   return {
-    width: finalWidth,
-    height: finalHeight,
-    scaleFactor,
-    aspectRatio: croppedWidth / croppedHeight
+    width: cardWidthPx,
+    height: cardHeightPx,
+    scaleFactor: scalePercent / 100,
+    aspectRatio: cardWidthPx / cardHeightPx,
+    // Return the base card dimensions (without bleed) for reference
+    baseCardWidthInches,
+    baseCardHeightInches,
+    // Return the target dimensions (with bleed) for display    targetCardWidthInches,
+    targetCardHeightInches,
+    bleedMarginInches
   };
 }
 
