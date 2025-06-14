@@ -305,12 +305,15 @@ Build on the Extract step migration by implementing comprehensive preview genera
 - [x] **Memory leak tests pass**
 - [x] **Integration tests with Extract step**
 
-### Task 2.3: Migrate Configure Step  
-**Assignee:** [TBD]  
+### Task 2.3: Migrate Configure Step ✅ COMPLETED
+**Assignee:** AI Assistant  
 **Priority:** High  
-**Files to Modify:**
-- `src/components/ConfigureStep.tsx`
-- Create: `src/pipeline/steps/ConfigureStep.ts`
+**Status:** ✅ **COMPLETED** - Configure Step successfully migrated to pipeline
+**Files Created:**
+- `src/pipeline/steps/ConfigureStep.ts`
+- `src/pipeline/__tests__/ConfigureStep.test.ts`
+**Files Modified:**
+- `src/pipeline/steps/index.ts` (added ConfigureStep registration)
 
 **Description:**
 Migrate the configure/layout step to use the pipeline system, building on lessons learned from Extract step.
