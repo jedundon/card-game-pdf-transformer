@@ -286,8 +286,7 @@ export class StateManager {
     const previousState = this.stateHistory.pop()!;
     this.state = previousState;
     this.emitStateChange(['*']); // All fields potentially changed
-    
-    return true;
+      return true;
   }
 
   /**

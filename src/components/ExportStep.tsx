@@ -6,11 +6,11 @@ import {
   calculateTotalCards,
   getAvailableCardIds,
   getCardInfo,
-  extractCardImage as extractCardImageUtil,
   calculateCardDimensions,
   calculateCardImageDimensions
 } from '../utils/cardUtils';
 import jsPDF from 'jspdf';
+import { useTransformations } from '../pipeline';
 
 interface ExportStepProps {
   pdfData: any;
@@ -31,6 +31,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   currentPdfFileName,
   onPrevious
 }) => {
+  // Use centralized transformations
+  const { extractCardImage } = useTransformations();
+  
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [exportedFiles, setExportedFiles] = useState<{
     fronts: string | null;
@@ -167,9 +170,8 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         if (cardInfo.type.toLowerCase() !== cardType) continue;
         
         console.log(`Processing ${cardType} card ${cardInfo.id} at index ${cardIndex}...`);
-        
-        // Extract the card image
-        const cardImageUrl = await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+          // Extract the card image
+        const cardImageUrl = await extractCardImage(cardIndex);
         
         if (!cardImageUrl) {
           console.warn(`Failed to extract card image for ${cardType} card ${cardInfo.id}`);

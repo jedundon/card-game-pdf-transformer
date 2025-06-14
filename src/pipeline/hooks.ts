@@ -231,3 +231,100 @@ export function usePipelineState() {
   const [pipelineState] = useAppStateField('pipeline');
   return pipelineState;
 }
+
+/**
+ * Hook for transformation operations
+ */
+export function useTransformations() {
+  const stateManager = getStateManager();
+  const { pdfData } = usePdfData();
+  const { pageSettings, extractionSettings, pdfMode } = useSettings();
+
+  const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
+    try {
+      stateManager.setLoading(true);
+      
+      // Use the cardUtils function which is the centralized utility
+      const { extractCardImage: extractCardImageUtil, getActivePages } = await import('../utils/cardUtils');
+      const activePages = getActivePages(pageSettings);
+      const result = await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+      
+      return result;
+    } catch (error) {
+      stateManager.addError(`Failed to extract card: ${error}`);
+      return null;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager, pdfData, pageSettings, extractionSettings, pdfMode]);
+
+  const renderPdfPage = useCallback(async (pageIndex: number, canvas: HTMLCanvasElement, zoom: number = 1.0): Promise<any | null> => {
+    try {
+      if (!pdfData || !canvas) return null;
+      
+      stateManager.setLoading(true);
+      const { getActualPageNumber } = await import('../utils/cardUtils');
+      
+      const actualPageNumber = getActualPageNumber(pageIndex, pageSettings);
+      const page = await pdfData.getPage(actualPageNumber);
+      
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+
+      // Calculate base scale to fit the preview area nicely
+      const baseViewport = page.getViewport({ scale: 1.0 });
+      const maxWidth = 450;
+      const maxHeight = 600;
+      
+      const scaleX = maxWidth / baseViewport.width;
+      const scaleY = maxHeight / baseViewport.height;
+      const baseScale = Math.min(scaleX, scaleY, 2.0);
+
+      // Apply zoom-aware DPI scaling for crisp rendering at high zoom levels
+      const dpiMultiplier = zoom >= 3.0 ? Math.min(zoom, 5.0) : 1.0;
+      const renderScale = baseScale * dpiMultiplier;
+      
+      const viewport = page.getViewport({ scale: renderScale });
+      
+      const canvasWidth = Math.max(200, viewport.width);
+      const canvasHeight = Math.max(250, viewport.height);
+      
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      
+      // Apply CSS scaling to counteract DPI scaling
+      const cssScale = baseScale * zoom;
+      canvas.style.width = `${viewport.width / dpiMultiplier}px`;
+      canvas.style.height = `${viewport.height / dpiMultiplier}px`;
+      
+      context.clearRect(0, 0, canvasWidth, canvasHeight);
+      
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+        enableWebGL: false
+      };
+      
+      const renderTask = page.render(renderContext);
+      await renderTask.promise;
+      
+      return {
+        width: canvasWidth,
+        height: canvasHeight,
+        previewScale: cssScale,
+        renderScale: renderScale,
+        viewport: viewport
+      };
+    } catch (error) {
+      stateManager.addError(`Failed to render page: ${error}`);
+      return null;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager, pdfData, pageSettings]);
+
+  return {
+    extractCardImage,
+    renderPdfPage
+  };
+}

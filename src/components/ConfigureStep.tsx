@@ -4,7 +4,6 @@ import {
   getActivePages, 
   calculateTotalCards, 
   getCardInfo, 
-  extractCardImage as extractCardImageUtil,
   getAvailableCardIds,
   getRotationForCardType,
   countCardsByType,
@@ -14,6 +13,7 @@ import {
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
 import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
+import { useTransformations } from '../pipeline';
 interface ConfigureStepProps {
   pdfData: any;
   pdfMode: any;
@@ -52,8 +52,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     topMargin: '',
     bottomMargin: '',
     horizontalScale: '',
-    verticalScale: ''
-  });
+    verticalScale: ''  });
+  
+  // Use centralized transformations
+  const { extractCardImage } = useTransformations();
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -107,14 +109,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         return i;
       }
     }
-    
-    return null;
+      return null;
   }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
-
-  // Extract card image for preview using utility function
-  const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
-    return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
-  }, [pdfData, pdfMode, activePages, pageSettings, extractionSettings]);
 
   // Update card preview when current card changes
   useEffect(() => {

@@ -4,13 +4,13 @@ import {
   getActivePages, 
   calculateTotalCards, 
   getCardInfo, 
-  extractCardImage as extractCardImageUtil,
   getActualPageNumber,
   getDpiScaleFactor,
   countCardsByType,
   getAvailableCardIds
 } from '../utils/cardUtils';
 import { DPI_CONSTANTS } from '../constants';
+import { useTransformations } from '../pipeline';
 
 interface ExtractStepProps {
   pdfData: any;
@@ -36,7 +36,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   onCardDimensionsChange,
   onPrevious,
   onNext
-}) => {const [currentPage, setCurrentPage] = useState(0);
+}) => {
+  const [currentPage, setCurrentPage] = useState(0);
   const [currentCard, setCurrentCard] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -45,6 +46,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const [isRendering, setIsRendering] = useState(false);
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
+    // Use centralized transformations
+  const { extractCardImage, renderPdfPage } = useTransformations();
     // Memoize activePages to prevent unnecessary re-renders
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 
@@ -137,17 +140,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       console.error('Error calculating card dimensions:', error);
       return null;
     }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode]);
-
   // Notify parent component when card dimensions change
   useEffect(() => {
     onCardDimensionsChange(cardDimensions);
   }, [cardDimensions, onCardDimensionsChange]);
 
-  // Extract individual card from canvas at 300 DPI using utility function
-  const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
-    return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
-  }, [pdfData, extractionSettings, pdfMode, activePages, pageSettings]);
-  // Render PDF page to canvas
+  // Render PDF page to canvas  // Render PDF page to canvas using centralized function
   useEffect(() => {
     const renderPage = async () => {
       if (!pdfData || !canvasRef.current || !activePages.length) return;
@@ -167,70 +165,17 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
       
       try {
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
-        if (!context) {
-          setIsRendering(false);
-          return;
-        }        // Get the actual page number from active pages
-        const actualPageNumber = getActualPageNumber(currentPage, pageSettings);
-
-        const page = await pdfData.getPage(actualPageNumber);
-        
-        // Calculate base scale to fit the preview area nicely
-        const baseViewport = page.getViewport({ scale: 1.0 });
-        const maxWidth = 450; // Fixed max width for consistency
-        const maxHeight = 600; // Fixed max height for consistency
-        
-        const scaleX = maxWidth / baseViewport.width;
-        const scaleY = maxHeight / baseViewport.height;
-        const baseScale = Math.min(scaleX, scaleY, 2.0); // Allow up to 2x scaling
-          // Apply zoom-aware DPI scaling for crisp rendering at high zoom levels
-        // When zoom >= 3.0 (300%), render at higher DPI to maintain sharpness
-        const dpiMultiplier = zoom >= 3.0 ? Math.min(zoom, 5.0) : 1.0;
-        const renderScale = baseScale * dpiMultiplier;
-        
-        const viewport = page.getViewport({ scale: renderScale });
-          // Set canvas internal size to the high-DPI rendered size
-        const canvasWidth = Math.max(200, viewport.width);
-        const canvasHeight = Math.max(250, viewport.height);
-        
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        
-        // Apply CSS scaling to counteract DPI scaling so canvas appears at normal size
-        // The zoom wrapper will then handle the user's intended zoom level
-        if (dpiMultiplier > 1.0) {
-          const cssScale = 1.0 / dpiMultiplier;
-          canvas.style.width = `${canvasWidth * cssScale}px`;
-          canvas.style.height = `${canvasHeight * cssScale}px`;
-        } else {
-          canvas.style.width = '';
-          canvas.style.height = '';
+        const result = await renderPdfPage(currentPage, canvasRef.current, zoom);
+        if (result) {
+          // Store page data for card extraction preview
+          setRenderedPageData({
+            width: result.width,
+            height: result.height,
+            actualPageNumber: getActualPageNumber(currentPage, pageSettings),
+            previewScale: result.previewScale / zoom, // Store the base preview scale for crop calculations
+            renderScale: result.renderScale // Store the render scale for overlay calculations
+          });
         }
-        
-        // Clear the canvas after setting dimensions
-        context.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Render the page
-        const renderContext = {
-          canvasContext: context,
-          viewport: viewport
-        };
-        
-        const renderTask = page.render(renderContext);
-        renderTaskRef.current = renderTask;
-        
-        await renderTask.promise;
-          // Store page data for card extraction preview including the scale
-        setRenderedPageData({
-          width: canvasWidth,
-          height: canvasHeight,
-          actualPageNumber,
-          previewScale: baseScale, // Store the base preview scale for crop calculations
-          dpiMultiplier // Store the DPI multiplier for overlay calculations
-        });
-        
       } catch (error: any) {
         if (error?.name !== 'RenderingCancelledException') {
           console.error('Error rendering PDF page:', error);
@@ -252,7 +197,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
       renderingRef.current = false;
     };
-  }, [pdfData, currentPage, activePages, pageSettings, zoom]); // Add zoom dependency
+  }, [pdfData, currentPage, activePages, pageSettings, zoom, renderPdfPage]); // Add zoom dependency
   // Update card preview when current card or extraction settings change
   useEffect(() => {
     let cancelled = false;
