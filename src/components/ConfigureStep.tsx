@@ -400,28 +400,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             <h3 className="text-lg font-medium text-gray-800 mb-3">
               Output Page Size
             </h3>
-            <div className="mb-3">
-              <div className="flex flex-wrap gap-2 mb-3">
-                <button
-                  onClick={() => handlePageSizeChange('preset', { width: 8.5, height: 11 })}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Letter (8.5×11")
-                </button>
-                <button
-                  onClick={() => handlePageSizeChange('preset', { width: 8.27, height: 11.69 })}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  A4 (8.27×11.69")
-                </button>
-                <button
-                  onClick={() => handlePageSizeChange('preset', { width: 3.5, height: 3.5 })}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Square (3.5×3.5")
-                </button>
-              </div>
-            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -435,6 +413,26 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 </label>
                 <input type="number" step="0.1" min="1" max="12" value={outputSettings.pageSize.height} onChange={e => handlePageSizeChange('height', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => handlePageSizeChange('preset', { width: 3.5, height: 3.5 })}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Square (3.5×3.5")
+              </button>
+              <button
+                onClick={() => handlePageSizeChange('preset', { width: 8.5, height: 11 })}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                Letter (8.5×11")
+              </button>
+              <button
+                onClick={() => handlePageSizeChange('preset', { width: 8.27, height: 11.69 })}
+                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              >
+                A4 (8.27×11.69")
+              </button>
             </div>
           </div>
           <div>
@@ -733,8 +731,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         <div className="space-y-4">
           <div className="border border-gray-200 rounded-lg overflow-hidden">
             <div className="bg-gray-50 p-3 border-b border-gray-200">
-              {/* View Mode Toggle */}
-              <div className="flex items-center justify-center mb-3">
+              {/* Combined Controls Row */}
+              <div className="relative flex items-center">
+                {/* View Mode Toggle - Left */}
                 <div className="flex bg-gray-200 rounded-lg p-1">
                   <button
                     onClick={() => handleViewModeToggle('front')}
@@ -757,11 +756,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     Backs
                   </button>
                 </div>
-              </div>
-              
-              {/* Card Navigation */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center space-x-2">
+                
+                {/* Card Navigation - Perfectly Centered */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
                   <button onClick={handlePreviousCard} disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
                     <ChevronLeftIcon size={16} />
                   </button>
@@ -772,7 +769,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     <ChevronRightIcon size={16} />
                   </button>
                 </div>
-                <div className="text-sm text-gray-500">
+                
+                {/* Card ID - Right */}
+                <div className="ml-auto text-sm text-gray-500">
                   {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
                 </div>
               </div>
