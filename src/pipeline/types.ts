@@ -1,0 +1,163 @@
+/**
+ * Core type definitions for the transformation pipeline
+ */
+
+// Card data structure
+export interface CardData {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  selected: boolean;
+  extracted: boolean;
+  sourcePageIndex?: number;
+  extractedImageUrl?: string;
+  thumbnailUrl?: string;
+}
+
+// Processing settings
+export interface WorkflowSettings {
+  inputMode: 'pdf' | 'images';
+  outputFormat: 'individual' | 'sheets' | 'combined';
+  dpi: number;
+  quality: number;
+  
+  // Grid configuration
+  gridColumns: number;
+  gridRows: number;
+  cardWidth: number;
+  cardHeight: number;
+  bleed: number;
+  
+  // PDF specific
+  pdfPages?: number[];
+  pageScale?: number;
+  
+  // Export settings
+  exportFilename?: string;
+  includeBleed?: boolean;
+  cropMarks?: boolean;
+}
+
+// Preview data
+export interface PreviewData {
+  imageUrl: string;
+  thumbnailUrl?: string;
+  metadata: {
+    width: number;
+    height: number;
+    dpi: number;
+    fileSize?: number;
+  };
+}
+
+// Processing metadata
+export interface ProcessingMetadata {
+  startTime: Date;
+  lastModified: Date;
+  stepHistory: string[];
+  performanceMetrics: {
+    [stepId: string]: {
+      duration: number;
+      memoryUsage: number;
+      cacheHits: number;
+    };
+  };
+}
+
+// Step execution result
+export interface StepResult {
+  stepId: string;
+  success: boolean;
+  data: CardData[];
+  preview?: PreviewData;
+  errors: string[];
+  warnings: string[];
+  metadata: {
+    duration: number;
+    cardsProcessed: number;
+    cacheHit: boolean;
+  };
+}
+
+// Validation result
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  code: string;
+}
+
+export interface ValidationWarning {
+  field: string;
+  message: string;
+  code: string;
+}
+
+// Pipeline state
+export interface PipelineState {
+  cards: CardData[];
+  settings: WorkflowSettings;
+  metadata: ProcessingMetadata;
+  stepResults: Map<string, StepResult>;
+  currentStep: string;
+  isProcessing: boolean;
+}
+
+// Transformation step interface
+export interface TransformationStep {
+  id: string;
+  name: string;
+  description: string;
+  
+  execute(input: CardData[], settings: WorkflowSettings): Promise<CardData[]>;
+  generatePreview(input: CardData[], settings: WorkflowSettings): Promise<PreviewData>;
+  validate(settings: WorkflowSettings): ValidationResult;
+  
+  // Optional hooks
+  onBeforeExecute?(input: CardData[], settings: WorkflowSettings): Promise<void>;
+  onAfterExecute?(result: CardData[], settings: WorkflowSettings): Promise<void>;
+  
+  // Caching support
+  getCacheKey?(input: CardData[], settings: WorkflowSettings): string;
+  shouldCache?: boolean;
+}
+
+// Pipeline configuration
+export interface PipelineConfig {
+  steps: TransformationStep[];
+  cacheEnabled: boolean;
+  maxCacheSize: number;
+  performanceMonitoring: boolean;
+  errorHandling: 'strict' | 'tolerant';
+}
+
+// Event types
+export type PipelineEvent = 
+  | { type: 'step-started'; stepId: string; timestamp: Date }
+  | { type: 'step-completed'; stepId: string; result: StepResult; timestamp: Date }
+  | { type: 'step-failed'; stepId: string; error: Error; timestamp: Date }
+  | { type: 'pipeline-reset'; timestamp: Date }
+  | { type: 'state-changed'; state: PipelineState; timestamp: Date }
+  | { type: 'preview-generated'; stepId: string; preview: PreviewData; timestamp: Date }
+  | { type: 'settings-updated'; settings: WorkflowSettings; timestamp: Date };
+
+// Event listener types
+export type PipelineEventListener = (event: PipelineEvent) => void;
+
+// Cache entry
+export interface CacheEntry<T = any> {
+  key: string;
+  data: T;
+  timestamp: Date;
+  accessCount: number;
+  lastAccess: Date;
+  size: number;
+}
