@@ -69,11 +69,6 @@ export const DEFAULT_SETTINGS = {
     },    // Card scale setting (percentage)
     cardScalePercent: 100,    // Bleed margin setting (inches)
     bleedMarginInches: 0,
-    // Card image offset setting (pixels)
-    cardImageOffset: {
-      horizontal: 0,
-      vertical: 0
-    },
     // Legacy settings - will be replaced with new card size settings
     crop: {
       top: 0,

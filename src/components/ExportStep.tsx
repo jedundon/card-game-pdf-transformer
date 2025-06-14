@@ -220,13 +220,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           } catch (error) {
             console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
             // Continue with original image if rotation fails
-          }
-        }        // Calculate position including card image offset
-        const imageOffsetXInches = (outputSettings.cardImageOffset?.horizontal || 0) / DPI_CONSTANTS.EXTRACTION_DPI;
-        const imageOffsetYInches = (outputSettings.cardImageOffset?.vertical || 0) / DPI_CONSTANTS.EXTRACTION_DPI;
-        
-        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal + imageOffsetXInches;
-        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical + imageOffsetYInches;
+          }        }        // Calculate position
+        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal;
+        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical;
 
         console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 

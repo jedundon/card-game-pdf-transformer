@@ -181,28 +181,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     onSettingsChange(newSettings);
   };
 
-  const handleCardImageOffsetChange = (direction: 'horizontal' | 'vertical', value: number) => {
-    const newSettings = {
-      ...outputSettings,
-      cardImageOffset: {
-        ...(outputSettings.cardImageOffset || DEFAULT_SETTINGS.outputSettings.cardImageOffset),
-        [direction]: value
-      }
-    };
-    onSettingsChange(newSettings);
-  };
-
-  const handleCardImageOffsetReset = () => {
-    const newSettings = {
-      ...outputSettings,
-      cardImageOffset: {
-        horizontal: 0,
-        vertical: 0
-      }
-    };
-    onSettingsChange(newSettings);
-  };
-
   const handleRotationChange = (cardType: 'front' | 'back', value: number) => {
     const newSettings = {
       ...outputSettings,
@@ -573,60 +551,51 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             </div>
           </div>
 
-          {/* Card Image Offset Section */}
+          {/* Card Rotation Section */}
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Image Offset
+              Card Rotation
             </h3>
             <p className="text-sm text-gray-600 mb-3">
-              Fine-tune the position of the card image if it's not perfectly centered
+              Rotate the final card output for different orientations
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Horizontal (pixels)
-                </label>
-                <div className="flex items-center">
-                  <MoveHorizontalIcon size={16} className="text-gray-400 mr-2" />
-                  <input 
-                    type="number" 
-                    step="1" 
-                    min="-100" 
-                    max="100" 
-                    value={outputSettings.cardImageOffset?.horizontal || DEFAULT_SETTINGS.outputSettings.cardImageOffset.horizontal} 
-                    onChange={e => handleCardImageOffsetChange('horizontal', parseFloat(e.target.value))} 
-                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vertical (pixels)
-                </label>
-                <div className="flex items-center">
-                  <MoveVerticalIcon size={16} className="text-gray-400 mr-2" />
-                  <input 
-                    type="number" 
-                    step="1" 
-                    min="-100" 
-                    max="100" 
-                    value={outputSettings.cardImageOffset?.vertical || DEFAULT_SETTINGS.outputSettings.cardImageOffset.vertical} 
-                    onChange={e => handleCardImageOffsetChange('vertical', parseFloat(e.target.value))} 
-                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                  />
+            
+            {/* Front Card Rotation */}
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Front Cards
+              </h4>
+              <div className="flex items-center space-x-4">
+                <RotateCcwIcon size={16} className="text-gray-500" />
+                <div className="flex-1 flex space-x-2">
+                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${
+                    getRotationForCardType(outputSettings, 'front') === degree 
+                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } rounded-md text-sm font-medium`}>
+                      {degree}°
+                    </button>)}
                 </div>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Positive values move right/down, negative values move left/up
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => handleCardImageOffsetReset()}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Reset (0, 0)
-              </button>
+            
+            {/* Back Card Rotation */}
+            <div>
+              <h4 className="text-sm font-medium text-gray-700 mb-2">
+                Back Cards
+              </h4>
+              <div className="flex items-center space-x-4">
+                <RotateCcwIcon size={16} className="text-gray-500" />
+                <div className="flex-1 flex space-x-2">
+                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${
+                    getRotationForCardType(outputSettings, 'back') === degree 
+                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  } rounded-md text-sm font-medium`}>
+                      {degree}°
+                    </button>)}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -686,55 +655,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 >
                   Enter Measurements
                 </button>
-              </div>
-            </div>
-          </div>
-          
-
-
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Rotation
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Rotate the final card output for different orientations
-            </p>
-            
-            {/* Front Card Rotation */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                Front Cards
-              </h4>
-              <div className="flex items-center space-x-4">
-                <RotateCcwIcon size={16} className="text-gray-500" />
-                <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${
-                    getRotationForCardType(outputSettings, 'front') === degree 
-                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  } rounded-md text-sm font-medium`}>
-                      {degree}°
-                    </button>)}
-                </div>
-              </div>
-            </div>
-            
-            {/* Back Card Rotation */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                Back Cards
-              </h4>
-              <div className="flex items-center space-x-4">
-                <RotateCcwIcon size={16} className="text-gray-500" />
-                <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${
-                    getRotationForCardType(outputSettings, 'back') === degree 
-                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  } rounded-md text-sm font-medium`}>
-                      {degree}°
-                    </button>)}
-                </div>
               </div>
             </div>
           </div>
@@ -817,19 +737,17 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   const cardWidth = cardDimensions.width * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                   const cardHeight = cardDimensions.height * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                   
-                  // Calculate offsets including page offset and card image offset
+                  // Calculate offsets including page offset
                   const pageOffsetX = outputSettings.offset.horizontal * DPI_CONSTANTS.SCREEN_DPI * scale;
                   const pageOffsetY = outputSettings.offset.vertical * DPI_CONSTANTS.SCREEN_DPI * scale;
-                  const imageOffsetX = (outputSettings.cardImageOffset?.horizontal || 0) * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                  const imageOffsetY = (outputSettings.cardImageOffset?.vertical || 0) * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                   
                   return {
                     width: `${cardWidth}px`,
                     height: `${cardHeight}px`,
                     top: '50%',
                     left: '50%',
-                    marginLeft: `calc(-${cardWidth / 2}px + ${pageOffsetX}px + ${imageOffsetX}px)`,
-                    marginTop: `calc(-${cardHeight / 2}px + ${pageOffsetY}px + ${imageOffsetY}px)`,
+                    marginLeft: `calc(-${cardWidth / 2}px + ${pageOffsetX}px)`,
+                    marginTop: `calc(-${cardHeight / 2}px + ${pageOffsetY}px)`,
                     transform: `rotate(${getRotationForCardType(outputSettings, viewMode)}deg)`
                   };
                 })()
@@ -945,10 +863,6 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <p>
                 <span className="font-medium">Bleed margin:</span>{' '}
                 {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
-              </p>
-              <p>
-                <span className="font-medium">Card image offset:</span>{' '}
-                {outputSettings.cardImageOffset?.horizontal || DEFAULT_SETTINGS.outputSettings.cardImageOffset.horizontal}px horizontal, {outputSettings.cardImageOffset?.vertical || DEFAULT_SETTINGS.outputSettings.cardImageOffset.vertical}px vertical
               </p>
             </div>
           </div>
