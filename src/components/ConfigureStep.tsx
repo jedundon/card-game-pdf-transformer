@@ -20,6 +20,12 @@ interface ConfigureStepProps {
   extractionSettings: any;
   outputSettings: any;
   pageSettings: any;
+  cardDimensions: {
+    widthPx: number;
+    heightPx: number;
+    widthInches: number;
+    heightInches: number;
+  } | null;
   onSettingsChange: (settings: any) => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -30,6 +36,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   extractionSettings,
   outputSettings,
   pageSettings,
+  cardDimensions,
   onSettingsChange,
   onPrevious,
   onNext
@@ -884,6 +891,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 </div>
               </div>
             </div>
+            
+            {/* Card Image Dimensions from Extraction */}
+            {cardDimensions && (
+              <div className="mt-4 p-3 bg-gray-50 rounded-md">
+                <div className="flex items-center">
+                  <span className="text-sm font-medium text-gray-800 mr-3">
+                    Card Image Dimensions:
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="p-4 border border-gray-200 rounded-lg">
             <h4 className="text-sm font-medium text-gray-700 mb-2">

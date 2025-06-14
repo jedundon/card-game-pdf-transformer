@@ -18,6 +18,12 @@ interface ExtractStepProps {
   pageSettings: any;
   extractionSettings: any;
   onSettingsChange: (settings: any) => void;
+  onCardDimensionsChange: (dimensions: {
+    widthPx: number;
+    heightPx: number;
+    widthInches: number;
+    heightInches: number;
+  } | null) => void;
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -27,9 +33,10 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   pageSettings,
   extractionSettings,
   onSettingsChange,
+  onCardDimensionsChange,
   onPrevious,
   onNext
-}) => {  const [currentPage, setCurrentPage] = useState(0);
+}) => {const [currentPage, setCurrentPage] = useState(0);
   const [currentCard, setCurrentCard] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -129,8 +136,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } catch (error) {
       console.error('Error calculating card dimensions:', error);
       return null;
-    }
-  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode]);
+    }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode]);
+
+  // Notify parent component when card dimensions change
+  useEffect(() => {
+    onCardDimensionsChange(cardDimensions);
+  }, [cardDimensions, onCardDimensionsChange]);
+
   // Extract individual card from canvas at 300 DPI using utility function
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);

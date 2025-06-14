@@ -13,6 +13,12 @@ export function App() {
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
   const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
   const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
+  const [cardDimensions, setCardDimensions] = useState<{
+    widthPx: number;
+    heightPx: number;
+    widthInches: number;
+    heightInches: number;
+  } | null>(null);
   
   // Initialize extraction settings with mode-specific grid
   const [extractionSettings, setExtractionSettings] = useState(() => {
@@ -78,10 +84,10 @@ export function App() {
     component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} />
   }, {
     title: 'Extract Cards',
-    component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
+    component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onCardDimensionsChange={setCardDimensions} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
   }, {
     title: 'Configure Layout',
-    component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
+    component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
   }, {
     title: 'Export',
     component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(2)} />
