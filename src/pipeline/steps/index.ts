@@ -7,11 +7,13 @@ import { StepRegistry } from '../StepRegistry';
 import { ExtractStep } from './ExtractStepMigration';
 import { ConfigureStep } from './ConfigureStep';
 import { ImportStep } from './ImportStep';
+import { ExportStep } from './ExportStep';
 
 // Create step instances
 const importStep = new ImportStep();
 const extractStep = new ExtractStep();
 const configureStep = new ConfigureStep();
+const exportStep = new ExportStep();
 
 // Create a shared registry instance
 const stepRegistry = new StepRegistry();
@@ -43,7 +45,17 @@ stepRegistry.register(configureStep, {
   tags: ['layout', 'configuration', 'dimensions', 'grid']
 });
 
+// Register the export step with metadata
+stepRegistry.register(exportStep, {
+  name: 'Export PDF',
+  description: 'Generate final PDF output files from processed cards with configured layout settings',
+  category: 'output',
+  version: '1.0.0',
+  tags: ['pdf', 'export', 'output', 'generation']
+});
+
 // Export for use in components
-export { importStep, extractStep, configureStep, stepRegistry };
+export { importStep, extractStep, configureStep, exportStep, stepRegistry };
 export { ImportStep } from './ImportStep';
 export { ExtractStep } from './ExtractStepMigration';
+export { ExportStep } from './ExportStep';

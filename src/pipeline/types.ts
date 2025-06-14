@@ -39,6 +39,13 @@ export interface WorkflowSettings {
   exportFilename?: string;
   includeBleed?: boolean;
   cropMarks?: boolean;
+  
+  // PDF import and processing data
+  pdfData?: PDFDocument | null;
+  pdfMode?: PDFMode;
+  pageSettings?: PageSetting[];
+  extractionSettings?: any; // Will be properly typed later
+  outputSettings?: OutputSettings;
 }
 
 // Preview data
@@ -191,4 +198,51 @@ export interface ImportSettings {
   pdfMode: PDFMode;
   pageSettings: PageSetting[];
   fileName: string;
+}
+
+// Export-specific types
+export interface OutputPageSize {
+  width: number;
+  height: number;
+}
+
+export interface OutputOffset {
+  horizontal: number;
+  vertical: number;
+}
+
+export interface CardSize {
+  widthInches: number;
+  heightInches: number;
+}
+
+export interface CardRotation {
+  front: number;
+  back: number;
+}
+
+export type CardImageSizingMode = 'actual-size' | 'fit-to-card' | 'fill-card';
+
+export interface OutputSettings {
+  pageSize: OutputPageSize;
+  offset: OutputOffset;
+  cardSize: CardSize;
+  cardScalePercent: number;
+  bleedMarginInches: number;
+  rotation: CardRotation;
+  cardImageSizingMode: CardImageSizingMode;
+}
+
+export interface ExportSettings {
+  outputSettings: OutputSettings;
+  outputFormat: 'individual' | 'combined';
+  exportFilename?: string;
+}
+
+export interface ExportResult {
+  frontsBlob: Blob | null;
+  backsBlob: Blob | null;
+  totalCards: number;
+  frontCards: number;
+  backCards: number;
 }

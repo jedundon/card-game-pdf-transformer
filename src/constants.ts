@@ -10,7 +10,8 @@ export const DPI_CONSTANTS = {
   EXTRACTION_DPI: 300,
   SCREEN_DPI: 72,
   SCREEN_PPI: 96,
-  PDF_BASE_DPI: 72  // PDF.js uses 72 DPI as base
+  PDF_BASE_DPI: 72,  // PDF.js uses 72 DPI as base
+  PDF_DPI: 300       // For high-quality PDF preview generation
 } as const;
 
 
