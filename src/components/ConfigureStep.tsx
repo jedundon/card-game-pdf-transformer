@@ -892,70 +892,81 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               </div>
             </div>
             
-            {/* Card Image Dimensions from Extraction */}
-            {cardDimensions && (
-              <div className="mt-4 p-3 bg-gray-50 rounded-md">
-                <div className="flex items-center">
-                  <span className="text-sm font-medium text-gray-800 mr-3">
-                    Card Image Dimensions:
-                  </span>
-                  <span className="text-sm text-gray-600">
-                    {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">
-              Output Preview
-            </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              <p>
-                <span className="font-medium">Total cards:</span>{' '}
-                {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
-              </p>
-              <p>
-                <span className="font-medium">Front cards:</span>{' '}
-                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
-              <p>
-                <span className="font-medium">Back cards:</span>{' '}
-                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
-              <p>
-                <span className="font-medium">Page size:</span>{' '}
-                {outputSettings.pageSize.width}" ×{' '}
-                {outputSettings.pageSize.height}"
-              </p>
-              <p>
-                <span className="font-medium">Card offset:</span>{' '}
-                {outputSettings.offset.horizontal}" horizontal,{' '}
-                {outputSettings.offset.vertical}" vertical
-              </p>
-              <p>
-                <span className="font-medium">Rotation:</span>{' '}
-                Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
-              </p>
-              <p>
-                <span className="font-medium">Card size:</span>{' '}
-                {outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches}" × {outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches}"
-              </p>
-              <p>
-                <span className="font-medium">Card scale:</span>{' '}
-                {outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent}%
-              </p>
-              <p>
-                <span className="font-medium">Bleed margin:</span>{' '}
-                {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
-              </p>
-              <p>
-                <span className="font-medium">Final print size:</span>{' '}
-                {(() => {
-                  const cardDimensions = calculateCardDimensions(outputSettings);
-                  return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
-                })()}
-              </p>
+          
+          {/* Information Display - Two Column Layout */}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Input/Source Information Column */}
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Input Information
+              </h4>
+              <div className="text-sm text-gray-600 space-y-2">
+                {cardDimensions && (
+                  <p>
+                    <span className="font-medium">Card image:</span>{' '}
+                    {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
+                  </p>
+                )}
+                <p>
+                  <span className="font-medium">Total cards:</span>{' '}
+                  {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
+                </p>
+                <p>
+                  <span className="font-medium">Front cards:</span>{' '}
+                  {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
+                </p>
+                <p>
+                  <span className="font-medium">Back cards:</span>{' '}
+                  {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
+                </p>
+                <p>
+                  <span className="font-medium">PDF mode:</span>{' '}
+                  {pdfMode.type === 'simplex' ? 'Single-sided' : 
+                   pdfMode.type === 'duplex' ? 'Double-sided' : 
+                   pdfMode.type === 'gutter-fold' ? 'Gutter-fold' : pdfMode.type}
+                </p>
+              </div>
+            </div>
+
+            {/* Output/Final Settings Column */}
+            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Output Settings
+              </h4>
+              <div className="text-sm text-gray-600 space-y-2">
+                <p>
+                  <span className="font-medium">Page size:</span>{' '}
+                  {outputSettings.pageSize.width}" × {outputSettings.pageSize.height}"
+                </p>
+                <p>
+                  <span className="font-medium">Card size:</span>{' '}
+                  {outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches}" × {outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches}"
+                </p>
+                <p>
+                  <span className="font-medium">Card scale:</span>{' '}
+                  {outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent}%
+                </p>
+                <p>
+                  <span className="font-medium">Bleed margin:</span>{' '}
+                  {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
+                </p>
+                <p>
+                  <span className="font-medium">Card offset:</span>{' '}
+                  {outputSettings.offset.horizontal.toFixed(3)}" horizontal, {outputSettings.offset.vertical.toFixed(3)}" vertical
+                </p>
+                <p>
+                  <span className="font-medium">Rotation:</span>{' '}
+                  Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
+                </p>
+                <p>
+                  <span className="font-medium">Final print size:</span>{' '}
+                  {(() => {
+                    const cardDimensions = calculateCardDimensions(outputSettings);
+                    return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
+                  })()}
+                </p>
+              </div>
             </div>
           </div>
         </div>
