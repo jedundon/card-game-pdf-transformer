@@ -231,13 +231,23 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     const scaledWidth = cardWidthInches * (scalePercent / 100);
     const scaledHeight = cardHeightInches * (scalePercent / 100);
     
-    console.log(`Calibration card: ${scaledWidth.toFixed(2)}" × ${scaledHeight}" on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
+    // Get current offset settings
+    const horizontalOffset = outputSettings.offset.horizontal || 0;
+    const verticalOffset = outputSettings.offset.vertical || 0;
+    
+    // Get current rotation for the view mode being tested
+    const rotation = getRotationForCardType(outputSettings, viewMode);
+    
+    console.log(`Calibration card: ${scaledWidth.toFixed(2)}" × ${scaledHeight}" with offset ${horizontalOffset.toFixed(3)}", ${verticalOffset.toFixed(3)}" and ${rotation}° rotation on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
     
     const pdfBlob = generateCalibrationPDF(
       scaledWidth,
       scaledHeight,
       outputSettings.pageSize.width,
-      outputSettings.pageSize.height
+      outputSettings.pageSize.height,
+      horizontalOffset,
+      verticalOffset,
+      rotation
     );
     
     // Create a download link and click it programmatically
@@ -249,7 +259,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [outputSettings.pageSize, outputSettings.cardSize, outputSettings.cardScalePercent]);
+  }, [outputSettings.pageSize, outputSettings.cardSize, outputSettings.cardScalePercent, outputSettings.offset, viewMode]);
 
   // Handle calibration measurements and apply settings
   const handleApplyCalibration = useCallback(() => {
@@ -262,20 +272,72 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       return;
     }
 
+    // Validate that all measurements are valid numbers
+    const leftMargin = parseFloat(measurements.leftMargin);
+    const rightMargin = parseFloat(measurements.rightMargin);
+    const topMargin = parseFloat(measurements.topMargin);
+    const bottomMargin = parseFloat(measurements.bottomMargin);
+    const horizontalScale = parseFloat(measurements.horizontalScale);
+    const verticalScale = parseFloat(measurements.verticalScale);
+    
+    if (isNaN(leftMargin) || isNaN(rightMargin) || isNaN(topMargin) || 
+        isNaN(bottomMargin) || isNaN(horizontalScale) || isNaN(verticalScale)) {
+      alert('Please enter valid numeric measurements.');
+      return;
+    }
+
     const settings = calculateCalibrationSettings(
-      parseFloat(measurements.leftMargin),
-      parseFloat(measurements.rightMargin),
-      parseFloat(measurements.topMargin),
-      parseFloat(measurements.bottomMargin),
-      parseFloat(measurements.horizontalScale),
-      parseFloat(measurements.verticalScale)
+      leftMargin,
+      rightMargin,
+      topMargin,
+      bottomMargin,
+      horizontalScale,
+      verticalScale,
+      outputSettings.offset.horizontal || 0,
+      outputSettings.offset.vertical || 0,
+      outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent
     );
 
-    // Apply the calculated offsets
-    handleOffsetChange('horizontal', settings.horizontalOffset);
-    handleOffsetChange('vertical', settings.verticalOffset);
+    // Apply the new calculated settings (batch offset changes to avoid state timing issues)
+    const newSettings = {
+      ...outputSettings,
+      offset: {
+        horizontal: settings.newHorizontalOffset,
+        vertical: settings.newVerticalOffset
+      },
+      cardScalePercent: settings.newScalePercent
+    };
     
-    // Note: Scale factors will be applied to new card size settings in later steps
+    onSettingsChange(newSettings);
+    
+    // Show feedback about what was changed with diagnostics
+    const adjustments = settings.adjustments;
+    const diagnostics = settings.diagnostics;
+    
+    let message = 'Calibration applied!\n\n';
+    
+    // Add diagnostic information
+    message += 'Analysis:\n';
+    message += `• Horizontal: ${diagnostics.horizontalCentering}\n`;
+    message += `• Vertical: ${diagnostics.verticalCentering}\n`;
+    message += `• Scale: ${diagnostics.scaleAccuracy}\n\n`;
+    
+    // Add adjustments made
+    message += 'Adjustments made:\n';
+    message += `• Horizontal offset: ${adjustments.horizontalOffsetChange >= 0 ? '+' : ''}${adjustments.horizontalOffsetChange.toFixed(3)}"\n`;
+    message += `• Vertical offset: ${adjustments.verticalOffsetChange >= 0 ? '+' : ''}${adjustments.verticalOffsetChange.toFixed(3)}"\n`;
+    message += `• Scale: ${adjustments.scalePercentChange >= 0 ? '+' : ''}${adjustments.scalePercentChange}%\n\n`;
+    
+    // Suggest next steps
+    if (Math.abs(adjustments.horizontalOffsetChange) < 0.01 && 
+        Math.abs(adjustments.verticalOffsetChange) < 0.01 && 
+        Math.abs(adjustments.scalePercentChange) < 1) {
+      message += 'Settings are well calibrated! You can proceed with card printing.';
+    } else {
+      message += 'Print a new calibration card to verify the adjustments or proceed with card printing.';
+    }
+    
+    alert(message);
     
     // Close the wizard
     setShowCalibrationWizard(false);
@@ -289,7 +351,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       horizontalScale: '',
       verticalScale: ''
     });
-  }, [calibrationMeasurements, handleOffsetChange]);
+  }, [calibrationMeasurements, handleOffsetChange, handleCardScalePercentChange, outputSettings.offset, outputSettings.cardScalePercent]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({
@@ -379,7 +441,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 </label>
                 <div className="flex items-center">
                   <MoveHorizontalIcon size={16} className="text-gray-400 mr-2" />
-                  <input type="number" step="0.01" min="-2" max="2" value={outputSettings.offset.horizontal} onChange={e => handleOffsetChange('horizontal', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
+                  <input type="number" step="0.001" min="-2" max="2" value={outputSettings.offset.horizontal} onChange={e => handleOffsetChange('horizontal', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
                 </div>
               </div>
               <div>
@@ -388,7 +450,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 </label>
                 <div className="flex items-center">
                   <MoveVerticalIcon size={16} className="text-gray-400 mr-2" />
-                  <input type="number" step="0.01" min="-2" max="2" value={outputSettings.offset.vertical} onChange={e => handleOffsetChange('vertical', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
+                  <input type="number" step="0.001" min="-2" max="2" value={outputSettings.offset.vertical} onChange={e => handleOffsetChange('vertical', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
                 </div>
               </div>
             </div>
@@ -605,18 +667,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               Printer Calibration
             </h3>
             <p className="text-sm text-gray-600 mb-2">
-              Print a test card on larger media to determine your printer's exact offset and scale. Place poker card stock in the center of the media for borderless printing.
+              Print a test card using your current settings to determine your printer's exact offset and scale. This creates a feedback loop to iteratively improve your settings.
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
               <p className="text-xs text-gray-600">
-                <span className="font-medium">Calibration target:</span>{' '}
+                <span className="font-medium">Current calibration target:</span>{' '}
                 {(() => {
                   const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
                   const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
                   const scalePercent = outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent;
-                  const scaledWidth = cardWidthInches * (scalePercent / 100);
-                  const scaledHeight = cardHeightInches * (scalePercent / 100);
-                  return `${scaledWidth.toFixed(2)}" × ${scaledHeight}" direct card printing`;
+                  const horizontalOffset = outputSettings.offset.horizontal || 0;
+                  const verticalOffset = outputSettings.offset.vertical || 0;
+                  const rotation = getRotationForCardType(outputSettings, viewMode);
+                  
+                  return `${cardWidthInches.toFixed(2)}" × ${cardHeightInches.toFixed(2)}" card at ${scalePercent}% scale with ${horizontalOffset >= 0 ? '+' : ''}${horizontalOffset.toFixed(3)}", ${verticalOffset >= 0 ? '+' : ''}${verticalOffset.toFixed(3)}" offset, ${rotation}° rotation (${viewMode} cards)`;
                 })()}
               </p>
             </div>
@@ -626,10 +690,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center">
                   <PrinterIcon size={16} className="mr-2" />
-                  Step 1: Print Calibration Card
+                  Step 1: Print Current Settings Test Card
                 </h4>
                 <p className="text-sm text-blue-700 mb-3">
-                  Download and print this test card using borderless mode. Place poker card stock in the center of the media where the calibration pattern is positioned.
+                  Download and print a calibration card using your current settings. Use borderless mode and place poker card stock in the center of the media.
                 </p>
                 <button
                   onClick={handlePrintCalibration}
@@ -643,10 +707,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center">
                   <RulerIcon size={16} className="mr-2" />
-                  Step 2: Measure and Enter Values
+                  Step 2: Measure and Refine Settings
                 </h4>
                 <p className="text-sm text-green-700 mb-3">
-                  Use a ruler to measure the printed card. The card should be centered where the calibration pattern appears on the media.
+                  Measure the printed card with a ruler and enter the values. The app will adjust your settings to improve alignment. Repeat until satisfied.
                 </p>
                 
                 <button
@@ -864,6 +928,13 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 <span className="font-medium">Bleed margin:</span>{' '}
                 {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
               </p>
+              <p>
+                <span className="font-medium">Final print size:</span>{' '}
+                {(() => {
+                  const cardDimensions = calculateCardDimensions(outputSettings);
+                  return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
+                })()}
+              </p>
             </div>
           </div>
         </div>
@@ -886,9 +957,18 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               Calibration Measurements
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Measure the printed calibration card with a ruler. For a perfectly aligned printer, all margins should measure approximately 0.5 inches:
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <h4 className="text-sm font-medium text-blue-800 mb-2">Measurement Guide</h4>
+              <p className="text-sm text-blue-700 mb-2">
+                Measure with a ruler from the <strong>edge of the printed card</strong> to the <strong>reference lines</strong> inside the card:
+              </p>
+              <div className="text-xs text-blue-600 space-y-1">
+                <p>• <strong>Perfect alignment:</strong> All margins = 0.5"</p>
+                <p>• <strong>Card too far left:</strong> Left margin &lt; 0.5", Right margin &gt; 0.5"</p>
+                <p>• <strong>Card too far right:</strong> Left margin &gt; 0.5", Right margin &lt; 0.5"</p>
+                <p>• <strong>Scale bars:</strong> Measure the crosshair lines at center (expect 1.0")</p>
+              </div>
+            </div>
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -904,7 +984,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="0.00"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Distance from left card edge to reference line</p>
+                  <p className="text-xs text-gray-500 mt-1">Distance from left card edge to reference line (expect ~0.5")</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -918,7 +998,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="0.00"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Distance from right card edge to reference line</p>
+                  <p className="text-xs text-gray-500 mt-1">Distance from right card edge to reference line (expect ~0.5")</p>
                 </div>
               </div>
               
@@ -935,7 +1015,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="0.00"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Distance from top card edge to reference line</p>
+                  <p className="text-xs text-gray-500 mt-1">Distance from top card edge to reference line (expect ~0.5")</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -949,7 +1029,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="0.00"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Distance from bottom card edge to reference line</p>
+                  <p className="text-xs text-gray-500 mt-1">Distance from bottom card edge to reference line (expect ~0.5")</p>
                 </div>
               </div>
               
@@ -966,7 +1046,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="1.000"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the horizontal crosshair</p>
+                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the horizontal crosshair (expect ~1.0")</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -980,7 +1060,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
                     placeholder="1.000"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the vertical crosshair</p>
+                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the vertical crosshair (expect ~1.0")</p>
                 </div>
               </div>
             </div>
@@ -996,7 +1076,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 onClick={handleApplyCalibration}
                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
-                Apply Settings
+                Apply Adjustments
               </button>
             </div>
           </div>

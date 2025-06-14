@@ -4,26 +4,39 @@ import { jsPDF } from 'jspdf';
  * Generates a calibration PDF for printer offset and scale testing
  * @param cardWidth Width of the card in inches (default: 2.5")
  * @param cardHeight Height of the card in inches (default: 3.5") 
+ * @param mediaWidth Width of the media in inches
+ * @param mediaHeight Height of the media in inches
+ * @param offsetX Horizontal offset in inches
+ * @param offsetY Vertical offset in inches
+ * @param rotation Rotation angle in degrees
  * @returns Blob PDF blob for download
  */
 export function generateCalibrationPDF(
   cardWidth: number = 2.5,
   cardHeight: number = 3.5,
   mediaWidth: number = 8.5,
-  mediaHeight: number = 11.0
-): Blob {
-  // Create PDF with media dimensions to trick printer into borderless mode
+  mediaHeight: number = 11.0,
+  offsetX: number = 0,
+  offsetY: number = 0,
+  rotation: number = 0
+): Blob {  // Create PDF with media dimensions to trick printer into borderless mode
   const doc = new jsPDF({
     unit: 'in',
     format: [mediaWidth, mediaHeight],
     compress: true
   });
 
-  // Center the card on the media
-  const cardX = (mediaWidth - cardWidth) / 2;
-  const cardY = (mediaHeight - cardHeight) / 2;
+  // Calculate the center position with applied offsets
+  const baseCardX = (mediaWidth - cardWidth) / 2;
+  const baseCardY = (mediaHeight - cardHeight) / 2;
+  const cardX = baseCardX + offsetX;
+  const cardY = baseCardY + offsetY;
   
-  console.log(`Generating calibration PDF: ${cardWidth}" × ${cardHeight}" card centered on ${mediaWidth}" × ${mediaHeight}" media`);
+  console.log(`Generating calibration PDF: ${cardWidth}" × ${cardHeight}" card at ${cardX.toFixed(3)}", ${cardY.toFixed(3)}" with ${rotation}° rotation on ${mediaWidth}" × ${mediaHeight}" media`);
+  
+  // For rotation, we'll apply it manually to all coordinates
+  // Note: For simplicity in this calibration, we'll focus on position and scale first
+  // Full rotation support can be added in a future iteration if needed
   // 1. Draw card outline (border of the intended card area with safe margin)
   doc.setDrawColor(0, 0, 0); // Black
   doc.setLineWidth(0.03);
@@ -108,12 +121,13 @@ export function generateCalibrationPDF(
   doc.setFontSize(8);
   doc.text('1.0"', centerX + crossLength/2 + 0.05, centerY - 0.05); // Horizontal label
   doc.text('1.0"', centerX - 0.05, centerY - crossLength/2 - 0.05); // Vertical label
-  
-  // Center point
+    // Center point
   doc.setDrawColor(100, 100, 100); // Gray
   doc.setLineWidth(0.01);
   const centerDot = 0.02;
-  doc.circle(centerX, centerY, centerDot, 'F');  // 4. Add instructions text (positioned safely within card)
+  doc.circle(centerX, centerY, centerDot, 'F');
+  
+  // 4. Add instructions text (positioned safely within card)
   doc.setFontSize(12);
   doc.setTextColor(0, 0, 0);
   
@@ -123,15 +137,24 @@ export function generateCalibrationPDF(
   doc.text('1. Print borderless on poker card stock', cardX + 0.2, cardY + cardHeight - 0.6);
   doc.text('2. Measure from card edge to reference lines', cardX + 0.2, cardY + cardHeight - 0.5);
   doc.text('3. Measure center crosshair scale bars', cardX + 0.2, cardY + cardHeight - 0.4);
+  doc.text('4. Enter measurements to refine settings', cardX + 0.2, cardY + cardHeight - 0.3);
   
   // Add note about card dimensions (positioned safely)
   doc.setFontSize(8);
   doc.text(`Card: ${cardWidth}" × ${cardHeight}"`, cardX + 0.2, cardY + 0.6);
   
-  // Add media information outside the card area
+  // Add current settings information outside the card area
   doc.setFontSize(8);
   doc.text(`Media: ${mediaWidth}" × ${mediaHeight}"`, 0.1, 0.3);
   doc.text('Place poker card in center', 0.1, 0.5);
+  
+  // Current app settings being tested
+  doc.text('Current Settings:', 0.1, 0.8);
+  doc.text(`Offset: ${offsetX >= 0 ? '+' : ''}${offsetX.toFixed(3)}", ${offsetY >= 0 ? '+' : ''}${offsetY.toFixed(3)}"`, 0.1, 0.9);
+  if (rotation !== 0) {
+    doc.text(`Rotation: ${rotation}°`, 0.1, 1.0);
+  }
+  doc.text('Expected margins: ~0.5" if aligned', 0.1, rotation !== 0 ? 1.1 : 1.0);
 
   // Return the PDF as a blob
   return doc.output('blob');
@@ -145,7 +168,10 @@ export function generateCalibrationPDF(
  * @param measuredBottomMargin Distance from bottom edge of card to bottom reference line (inches) - should be ~0.5" if aligned
  * @param measuredHorizontalScale Actual printed length of the horizontal 1" crosshair scale bar (inches)
  * @param measuredVerticalScale Actual printed length of the vertical 1" crosshair scale bar (inches)
- * @returns Object with horizontal/vertical offsets and scale factors
+ * @param currentHorizontalOffset Current horizontal offset setting (inches)
+ * @param currentVerticalOffset Current vertical offset setting (inches)
+ * @param currentScalePercent Current scale percentage setting
+ * @returns Object with new offset values and scale adjustments
  */
 export function calculateCalibrationSettings(
   measuredLeftMargin: number,
@@ -153,35 +179,112 @@ export function calculateCalibrationSettings(
   measuredTopMargin: number,
   measuredBottomMargin: number,
   measuredHorizontalScale: number,
-  measuredVerticalScale: number = measuredHorizontalScale // Default to horizontal if not provided
+  measuredVerticalScale: number = measuredHorizontalScale, // Default to horizontal if not provided
+  currentHorizontalOffset: number = 0,
+  currentVerticalOffset: number = 0,
+  currentScalePercent: number = 100
 ): {
-  horizontalOffset: number;
-  verticalOffset: number;
-  horizontalScaleFactor: number;
-  verticalScaleFactor: number;
-} {
-  // Expected margin if perfectly aligned (safe inset distance)
+  newHorizontalOffset: number;
+  newVerticalOffset: number;
+  newScalePercent: number;
+  adjustments: {
+    horizontalOffsetChange: number;
+    verticalOffsetChange: number;
+    scalePercentChange: number;
+  };
+  diagnostics: {
+    horizontalCentering: string;
+    verticalCentering: string;
+    scaleAccuracy: string;
+  };
+} {  // Expected margin if perfectly aligned (safe inset distance)
   const expectedMargin = 0.5;
   
-  // Calculate offsets from margin differences relative to expected position
-  const leftOffset = measuredLeftMargin - expectedMargin;
-  const rightOffset = measuredRightMargin - expectedMargin;
-  const topOffset = measuredTopMargin - expectedMargin;
-  const bottomOffset = measuredBottomMargin - expectedMargin;
+  // CORRECTED APPROACH: Calculate how far the card is shifted from center
+  // 
+  // If left margin is small and right margin is large:
+  //   - Card is positioned too far left
+  //   - Need positive offset to move card right
+  // 
+  // If left margin is large and right margin is small:
+  //   - Card is positioned too far right  
+  //   - Need negative offset to move card left
   
-  // Calculate net offsets (average of opposite sides)
-  const horizontalOffset = (rightOffset - leftOffset) / 2;
-  const verticalOffset = (bottomOffset - topOffset) / 2;
+  const leftError = measuredLeftMargin - expectedMargin;   // negative = less margin than expected
+  const rightError = measuredRightMargin - expectedMargin; // negative = less margin than expected  // Calculate actual position shift:
+  // If left margin is too small by 0.2" and right margin is too large by 0.2",
+  // the card is shifted left by 0.2" (need +0.2" offset to fix)
+  const horizontalShift = Math.round(((rightError - leftError) / 2) * 1000) / 1000;
+  const verticalShift = Math.round(((measuredBottomMargin - expectedMargin - (measuredTopMargin - expectedMargin)) / 2) * 1000) / 1000;
+    
+  // Apply corrections to current settings (round to avoid floating point precision issues)
+  const newHorizontalOffset = Math.round((currentHorizontalOffset + horizontalShift) * 1000) / 1000;
+  const newVerticalOffset = Math.round((currentVerticalOffset + verticalShift) * 1000) / 1000;
   
-  // Calculate scale factors from crosshair measurements
-  const intendedScaleLength = 1.0; // inches
-  const horizontalScaleFactor = intendedScaleLength / measuredHorizontalScale;
-  const verticalScaleFactor = intendedScaleLength / measuredVerticalScale;
+  // SIMPLIFIED SCALE CALCULATION: Use the more accurate measurement
+  // Instead of averaging, use the measurement that's closer to expected (more reliable)
+  const horizontalScaleError = Math.abs(measuredHorizontalScale - 1.0);
+  const verticalScaleError = Math.abs(measuredVerticalScale - 1.0);
+  
+  // Use the measurement with smaller error (more accurate)
+  const bestScaleMeasurement = horizontalScaleError <= verticalScaleError ? 
+    measuredHorizontalScale : measuredVerticalScale;
+  
+  const scaleCorrection = 1.0 / bestScaleMeasurement;
+  const newScalePercent = Math.round(currentScalePercent * scaleCorrection);
+    // Generate diagnostic messages
+  const horizontalCentering = Math.abs(horizontalShift) < 0.01 ? 
+    "Well centered" : 
+    `Off by ${Math.abs(horizontalShift).toFixed(3)}" ${horizontalShift > 0 ? 'right' : 'left'}`;
+    
+  const verticalCentering = Math.abs(verticalShift) < 0.01 ? 
+    "Well centered" : 
+    `Off by ${Math.abs(verticalShift).toFixed(3)}" ${verticalShift > 0 ? 'down' : 'up'}`;
+      const scaleAccuracy = Math.abs(bestScaleMeasurement - 1.0) < 0.01 ? 
+    "Accurate scale" : 
+    `Printer ${bestScaleMeasurement > 1.0 ? 'enlarges' : 'shrinks'} by ${Math.abs((bestScaleMeasurement - 1.0) * 100).toFixed(1)}%`;
   
   return {
-    horizontalOffset,
-    verticalOffset,
-    horizontalScaleFactor,
-    verticalScaleFactor
+    newHorizontalOffset,
+    newVerticalOffset,
+    newScalePercent,
+    adjustments: {
+      horizontalOffsetChange: horizontalShift,
+      verticalOffsetChange: verticalShift,
+      scalePercentChange: newScalePercent - currentScalePercent
+    },
+    diagnostics: {
+      horizontalCentering,
+      verticalCentering,
+      scaleAccuracy
+    }
   };
 }
+
+/*
+ * OFFSET CALCULATION EXAMPLES:
+ * 
+ * Example 1: Card too far left
+ * - Left margin: 0.3" (0.2" less than expected 0.5")
+ * - Right margin: 0.7" (0.2" more than expected 0.5")
+ * - leftError = 0.3 - 0.5 = -0.2"
+ * - rightError = 0.7 - 0.5 = +0.2"
+ * - horizontalShift = (+0.2 - (-0.2)) / 2 = +0.2"
+ * - Result: Add +0.2" offset to move card right ✓
+ * 
+ * Example 2: Card too far right  
+ * - Left margin: 0.7" (0.2" more than expected 0.5")
+ * - Right margin: 0.3" (0.2" less than expected 0.5")
+ * - leftError = 0.7 - 0.5 = +0.2"
+ * - rightError = 0.3 - 0.5 = -0.2"
+ * - horizontalShift = (-0.2 - (+0.2)) / 2 = -0.2"
+ * - Result: Add -0.2" offset to move card left ✓
+ * 
+ * Example 3: Card centered but scaled
+ * - Left margin: 0.4" (0.1" less than expected 0.5")
+ * - Right margin: 0.4" (0.1" less than expected 0.5")  
+ * - leftError = 0.4 - 0.5 = -0.1"
+ * - rightError = 0.4 - 0.5 = -0.1"
+ * - horizontalShift = (-0.1 - (-0.1)) / 2 = 0"
+ * - Result: No offset change needed (just scale issue) ✓
+ */

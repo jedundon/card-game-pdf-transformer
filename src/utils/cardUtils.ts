@@ -418,15 +418,14 @@ export function calculateCardDimensions(
   const targetCardWidthInches = baseCardWidthInches + (bleedMarginInches * 2);
   const targetCardHeightInches = baseCardHeightInches + (bleedMarginInches * 2);
   
-  // Convert to pixels at extraction DPI
-  let cardWidthPx = targetCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
-  let cardHeightPx = targetCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
-  
-  // Apply scale percentage
+  // Apply scale percentage to the target card dimensions
   const scalePercent = outputSettings.cardScalePercent || 100;
-  cardWidthPx *= (scalePercent / 100);
-  cardHeightPx *= (scalePercent / 100);
+  const scaledCardWidthInches = targetCardWidthInches * (scalePercent / 100);
+  const scaledCardHeightInches = targetCardHeightInches * (scalePercent / 100);
   
+  // Convert to pixels at extraction DPI (using the scaled dimensions)
+  const cardWidthPx = scaledCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
+  const cardHeightPx = scaledCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
   return {
     width: cardWidthPx,
     height: cardHeightPx,
@@ -435,8 +434,12 @@ export function calculateCardDimensions(
     // Return the base card dimensions (without bleed) for reference
     baseCardWidthInches,
     baseCardHeightInches,
-    // Return the target dimensions (with bleed) for display    targetCardWidthInches,
+    // Return the target dimensions (with bleed, before scaling)
+    targetCardWidthInches,
     targetCardHeightInches,
+    // Return the final scaled dimensions (with bleed and scale applied)
+    scaledCardWidthInches,
+    scaledCardHeightInches,
     bleedMarginInches
   };
 }

@@ -9,7 +9,6 @@ import {
   extractCardImage as extractCardImageUtil,
   calculateCardDimensions
 } from '../utils/cardUtils';
-import { DPI_CONSTANTS } from '../constants';
 import jsPDF from 'jspdf';
 
 interface ExportStepProps {
@@ -72,7 +71,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }
     return `card_${fileType}.pdf`;
   };
-
   // Validate export settings before generating PDFs
   const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
@@ -91,9 +89,31 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     if (!outputSettings.pageSize || outputSettings.pageSize.width <= 0 || outputSettings.pageSize.height <= 0) {
       errors.push('Invalid page size settings');
     }
-      // Check if card size settings are valid
+    
+    // Check if card size settings are valid
     if (outputSettings.cardSize && (outputSettings.cardSize.widthInches <= 0 || outputSettings.cardSize.heightInches <= 0)) {
       errors.push('Invalid card size settings');
+    }
+    
+    // Check if card scale is valid
+    const scale = outputSettings.cardScalePercent || 100;
+    if (scale <= 0 || scale > 200) {
+      errors.push('Invalid card scale percentage (must be between 1% and 200%)');
+    }
+      // Check if bleed margin is valid
+    const bleed = outputSettings.bleedMarginInches || 0;
+    if (bleed < 0 || bleed > 1) {
+      errors.push('Invalid bleed margin (must be between 0 and 1 inch)');
+    }
+    
+    // Check if offset values are reasonable
+    const horizontalOffset = outputSettings.offset.horizontal || 0;
+    const verticalOffset = outputSettings.offset.vertical || 0;
+    if (Math.abs(horizontalOffset) > outputSettings.pageSize.width / 2) {
+      errors.push('Horizontal offset is too large for page size');
+    }
+    if (Math.abs(verticalOffset) > outputSettings.pageSize.height / 2) {
+      errors.push('Vertical offset is too large for page size');
     }
     
     // Check if total cards is greater than 0
@@ -161,9 +181,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         }        // Calculate card dimensions using new settings
         const cardDimensions = calculateCardDimensions(outputSettings);
 
-        // Convert pixels to inches at target DPI
-        const cardWidthInches = cardDimensions.width / DPI_CONSTANTS.EXTRACTION_DPI;
-        const cardHeightInches = cardDimensions.height / DPI_CONSTANTS.EXTRACTION_DPI;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
+        // Use the scaled card dimensions (includes bleed and scale percentage)
+        const cardWidthInches = cardDimensions.scaledCardWidthInches;
+        const cardHeightInches = cardDimensions.scaledCardHeightInches;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
         const rotation = getRotationForCardType(outputSettings, cardType);
         let finalImageUrl = cardImageUrl;
         let finalWidth = cardWidthInches;
@@ -186,23 +206,29 @@ export const ExportStep: React.FC<ExportStepProps> = ({
                 img.src = cardImageUrl;
               });
               
-              // Calculate rotated canvas dimensions
+              // For 90° or 270° rotations, we need to swap width/height of final dimensions
+              if (rotation === 90 || rotation === 270) {
+                finalWidth = cardHeightInches;
+                finalHeight = cardWidthInches;
+              }
+              
+              // Calculate the canvas size needed for rotation
               const radians = (rotation * Math.PI) / 180;
               const cos = Math.abs(Math.cos(radians));
               const sin = Math.abs(Math.sin(radians));
               
-              const rotatedWidth = img.width * cos + img.height * sin;
-              const rotatedHeight = img.width * sin + img.height * cos;
+              const rotatedCanvasWidth = img.width * cos + img.height * sin;
+              const rotatedCanvasHeight = img.width * sin + img.height * cos;
               
-              rotationCanvas.width = rotatedWidth;
-              rotationCanvas.height = rotatedHeight;
+              rotationCanvas.width = rotatedCanvasWidth;
+              rotationCanvas.height = rotatedCanvasHeight;
               
               // Clear canvas and setup transformation
-              rotationCtx.clearRect(0, 0, rotatedWidth, rotatedHeight);
+              rotationCtx.clearRect(0, 0, rotatedCanvasWidth, rotatedCanvasHeight);
               rotationCtx.save();
               
               // Move to center, rotate, then draw image centered
-              rotationCtx.translate(rotatedWidth / 2, rotatedHeight / 2);
+              rotationCtx.translate(rotatedCanvasWidth / 2, rotatedCanvasHeight / 2);
               rotationCtx.rotate(radians);
               rotationCtx.drawImage(img, -img.width / 2, -img.height / 2);
               
@@ -211,18 +237,22 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               // Get rotated image as data URL
               finalImageUrl = rotationCanvas.toDataURL('image/png');
               
-              // Update dimensions for rotated image
-              finalWidth = rotatedWidth / DPI_CONSTANTS.EXTRACTION_DPI;
-              finalHeight = rotatedHeight / DPI_CONSTANTS.EXTRACTION_DPI;
-              
               console.log(`Rotation applied successfully to ${cardType} card #${cardInfo.id}`);
             }
           } catch (error) {
             console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
             // Continue with original image if rotation fails
-          }        }        // Calculate position
+          }}        // Calculate position
         const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal;
         const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical;
+
+        // Warn if card goes off page (but still allow it in case user intends it)
+        if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
+          console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
+        }
+        if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
+          console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
+        }
 
         console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 
@@ -256,11 +286,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     
     try {
       console.log('Starting PDF export process...');
-      
-      // Validate settings before export
+        // Validate settings before export
       const validation = validateExportSettings();
       if (!validation.isValid) {
         console.error('Export validation failed:', validation.errors);
+        alert('Export validation failed:\n\n' + validation.errors.join('\n'));
         setExportStatus('idle');
         return;
       }
@@ -325,8 +355,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <h3 className="text-lg font-medium text-gray-800 mb-3">
           Export Summary
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        </h3>        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">PDF Mode:</span>
@@ -342,6 +371,21 @@ export const ExportStep: React.FC<ExportStepProps> = ({
                 {outputSettings.pageSize.width}" ×{' '}
                 {outputSettings.pageSize.height}"
               </span>
+            </div>            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Card Size:</span>
+              <span className="font-medium text-gray-800">
+                {outputSettings.cardSize?.widthInches || 2.5}" ×{' '}
+                {outputSettings.cardSize?.heightInches || 3.5}"
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Final Print Size:</span>
+              <span className="font-medium text-gray-800">
+                {(() => {
+                  const cardDimensions = calculateCardDimensions(outputSettings);
+                  return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
+                })()}
+              </span>
             </div>
           </div>
           <div className="space-y-2">
@@ -349,21 +393,28 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               <span className="text-gray-600">Card Position:</span>
               <span className="font-medium text-gray-800">
                 {outputSettings.offset.horizontal > 0 ? '+' : ''}
-                {outputSettings.offset.horizontal}" H,
+                {outputSettings.offset.horizontal}" H,{' '}
                 {outputSettings.offset.vertical > 0 ? '+' : ''}
                 {outputSettings.offset.vertical}" V
               </span>
-            </div>            <div className="flex justify-between text-sm">
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Card Scale:</span>
+              <span className="font-medium text-gray-800">
+                {outputSettings.cardScalePercent || 100}%
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
                 Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Crop Applied:</span>
+              <span className="text-gray-600">Bleed Margin:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.crop.top + outputSettings.crop.right + outputSettings.crop.bottom + outputSettings.crop.left}
-                px total
+                {outputSettings.bleedMarginInches || 0}" 
+                ({outputSettings.bleedMarginInches ? 'applied' : 'none'})
               </span>
             </div>
           </div>

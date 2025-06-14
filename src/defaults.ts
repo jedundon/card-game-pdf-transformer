@@ -58,27 +58,21 @@ export const DEFAULT_SETTINGS = {
     pageSize: {
       width: 3.5,
       height: 3.5
-    },    offset: {
+    },
+    offset: {
       horizontal: 0,
       vertical: 0
     },
-    // New card size settings (poker card default)
+    // Card size settings (poker card default)
     cardSize: {
       widthInches: 2.5,
       heightInches: 3.5
-    },    // Card scale setting (percentage)
-    cardScalePercent: 100,    // Bleed margin setting (inches)
+    },
+    // Card scale setting (percentage)
+    cardScalePercent: 100,
+    // Bleed margin setting (inches)
     bleedMarginInches: 0,
-    // Legacy settings - will be replaced with new card size settings
-    crop: {
-      top: 0,
-      right: 0,
-      bottom: 0,
-      left: 0
-    },
-    cardScale: {
-      targetHeight: 3.5
-    },
+    // Card rotation settings
     rotation: {
       front: 0,
       back: 0
@@ -122,8 +116,7 @@ export type WorkflowSettings = {
       columns: number;
     };
     gutterWidth: number;
-  };
-  outputSettings: {
+  };  outputSettings: {
     pageSize: {
       width: number;
       height: number;
@@ -132,17 +125,15 @@ export type WorkflowSettings = {
       horizontal: number;
       vertical: number;
     };
-    crop: {
-      top: number;
-      right: number;
-      bottom: number;
-      left: number;
-    };    rotation: {
+    cardSize: {
+      widthInches: number;
+      heightInches: number;
+    };
+    cardScalePercent: number;
+    bleedMarginInches: number;
+    rotation: {
       front: number;
       back: number;
-    };
-    cardScale: {
-      targetHeight: number;
     };
   };
   savedAt?: string;
