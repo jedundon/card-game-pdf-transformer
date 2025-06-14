@@ -1,96 +1,108 @@
-import { useState } from 'react';
+/**
+ * Updated App.tsx using centralized state management
+ * This replaces the scattered state with the StateManager
+ */
+
 import { ImportStep } from './components/ImportStep';
 import { ExtractStep } from './components/ExtractStep';
 import { ConfigureStep } from './components/ConfigureStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
 import { SettingsManager } from './components/SettingsManager';
-import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
+import { 
+  TransformationPipeline, 
+  StateManager, 
+  StepRegistry, 
+  initializeStateManager,
+  useNavigation,
+  usePdfData,
+  useSettings,
+  useAppStatus
+} from './pipeline';
+
+// Initialize the pipeline and state manager
+const stepRegistry = new StepRegistry();
+const pipeline = new TransformationPipeline({
+  steps: stepRegistry.getAllSteps(),
+  cacheEnabled: true,
+  maxCacheSize: 100,
+  performanceMonitoring: true,
+  errorHandling: 'tolerant',
+});
+
+const stateManager = new StateManager(pipeline);
+initializeStateManager(stateManager);
 
 export function App() {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [pdfData, setPdfData] = useState(null);
-  const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
-  const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
-  const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
-  const [cardDimensions, setCardDimensions] = useState<{
-    widthPx: number;
-    heightPx: number;
-    widthInches: number;
-    heightInches: number;
-  } | null>(null);
-  
-  // Initialize extraction settings with mode-specific grid
-  const [extractionSettings, setExtractionSettings] = useState(() => {
-    const defaultGrid = getDefaultGrid(DEFAULT_SETTINGS.pdfMode);
-    return {
-      ...DEFAULT_SETTINGS.extractionSettings,
-      grid: defaultGrid
-    };
-  });
-  
-  // Initialize output settings with mode-specific rotation
-  const [outputSettings, setOutputSettings] = useState(() => {
-    const defaultRotation = getDefaultRotation(DEFAULT_SETTINGS.pdfMode);
-    return {
-      ...DEFAULT_SETTINGS.outputSettings,
-      rotation: defaultRotation
-    };
-  });
+  const { currentStep, nextStep, previousStep } = useNavigation();
+  const { pdfData, currentPdfFileName, setPdfData } = usePdfData();
+  const { 
+    pdfMode, 
+    pageSettings, 
+    extractionSettings, 
+    outputSettings, 
+    cardDimensions,
+    setPdfMode,
+    setPageSettings,
+    setExtractionSettings,
+    setOutputSettings,
+    setCardDimensions,
+    loadSettings
+  } = useSettings();
+  const { isLoading, errors, warnings } = useAppStatus();
 
-  // Handle PDF mode changes and update grid and rotation defaults
-  const handleModeSelect = (mode: any) => {
-    setPdfMode(mode);
-    
-    // Update extraction settings with appropriate grid for the new mode
-    const newGrid = getDefaultGrid(mode);
-    setExtractionSettings({
-      ...extractionSettings,
-      grid: newGrid
-    });
-    
-    // Update output settings with appropriate rotation for the new mode
-    const newRotation = getDefaultRotation(mode);
-    setOutputSettings({
-      ...outputSettings,
-      rotation: newRotation
-    });
-  };
-
-  // Handle loading settings from file
-  const handleLoadSettings = (settings: any) => {
-    if (settings.pdfMode) {
-      setPdfMode(settings.pdfMode);
-    }
-    if (settings.pageSettings) {
-      setPageSettings(settings.pageSettings);
-    }
-    if (settings.extractionSettings) {
-      setExtractionSettings(settings.extractionSettings);
-    }
-    if (settings.outputSettings) {
-      setOutputSettings(settings.outputSettings);
-    }
-  };
-
-  // Handle PDF file selection with filename tracking
+  // Handle PDF file selection (replacing handleFileSelect)
   const handleFileSelect = (data: any, fileName: string) => {
-    setPdfData(data);
-    setCurrentPdfFileName(fileName);
+    setPdfData(data, fileName);
   };
 
   const steps = [{
     title: 'Import PDF',
-    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} />
+    component: <ImportStep 
+      onFileSelect={handleFileSelect}
+      onModeSelect={setPdfMode}
+      onPageSettingsChange={setPageSettings}
+      onNext={() => nextStep()} 
+      pdfData={pdfData} 
+      pdfMode={pdfMode} 
+      pageSettings={pageSettings} 
+    />
   }, {
     title: 'Extract Cards',
-    component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onCardDimensionsChange={setCardDimensions} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
+    component: <ExtractStep 
+      pdfData={pdfData} 
+      pdfMode={pdfMode} 
+      pageSettings={pageSettings} 
+      extractionSettings={extractionSettings} 
+      onSettingsChange={setExtractionSettings}
+      onCardDimensionsChange={setCardDimensions}
+      onPrevious={() => previousStep()} 
+      onNext={() => nextStep()} 
+    />
   }, {
     title: 'Configure Layout',
-    component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
+    component: <ConfigureStep 
+      pdfData={pdfData} 
+      pdfMode={pdfMode} 
+      extractionSettings={extractionSettings} 
+      outputSettings={outputSettings} 
+      pageSettings={pageSettings} 
+      cardDimensions={cardDimensions} 
+      onSettingsChange={setOutputSettings}
+      onPrevious={() => previousStep()} 
+      onNext={() => nextStep()} 
+    />
   }, {
     title: 'Export',
-    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(2)} />
+    component: <ExportStep 
+      pdfData={pdfData} 
+      pdfMode={pdfMode} 
+      pageSettings={pageSettings} 
+      extractionSettings={extractionSettings} 
+      outputSettings={outputSettings} 
+      currentPdfFileName={currentPdfFileName}
+      onPrevious={() => previousStep()} 
+    />
   }];
 
   return <div className="flex flex-col w-full min-h-screen bg-gray-50">
@@ -98,9 +110,27 @@ export function App() {
         <h1 className="text-2xl font-bold text-gray-800">
           Card Game PDF Transformer
         </h1>
+        {isLoading && (
+          <div className="mt-2 text-sm text-blue-600">
+            Processing...
+          </div>
+        )}
+        {errors.length > 0 && (
+          <div className="mt-2 text-sm text-red-600">
+            {errors.join(', ')}
+          </div>
+        )}
+        {warnings.length > 0 && (
+          <div className="mt-2 text-sm text-yellow-600">
+            {warnings.join(', ')}
+          </div>
+        )}
       </header>
       <main className="flex-1 p-4 md:p-6">
-        <StepIndicator steps={steps.map(s => s.title)} currentStep={currentStep} />
+        <StepIndicator 
+          steps={steps.map(s => s.title)} 
+          currentStep={currentStep} 
+        />
         
         {/* Settings Manager - Always visible */}
         <div className="mt-6">
@@ -110,7 +140,7 @@ export function App() {
             extractionSettings={extractionSettings}
             outputSettings={outputSettings}
             currentPdfFileName={currentPdfFileName}
-            onLoadSettings={handleLoadSettings}
+            onLoadSettings={loadSettings}
           />
         </div>
         

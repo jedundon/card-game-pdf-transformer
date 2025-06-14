@@ -6,26 +6,6 @@ import {
   PreviewData,
   WorkflowSettings 
 } from '../types';
-import {
-  getActivePages,
-  calculateTotalCards,
-  getCardInfo,
-  extractCardImage as extractCardImageUtil,
-  getActualPageNumber,
-  getDpiScaleFactor,
-  countCardsByType,
-  getAvailableCardIds
-} from '../../utils/cardUtils';
-import { calculateGridLayout } from '../transformations/extractionUtils';
-
-import { BaseStep } from './BaseStep';
-import { 
-  CardData, 
-  StepResult, 
-  ValidationResult, 
-  PreviewData,
-  WorkflowSettings 
-} from '../types';
 
 export interface ExtractStepInput {
   pdfData: any;
@@ -81,7 +61,7 @@ export class ExtractStep extends BaseStep {
     };
   }
 
-  async execute(input: CardData[], settings: WorkflowSettings): Promise<CardData[]> {
+  async execute(input: CardData[], _settings: WorkflowSettings): Promise<CardData[]> {
     this.lastExecutionTime = Date.now();
     
     try {
@@ -96,7 +76,7 @@ export class ExtractStep extends BaseStep {
     }
   }
 
-  async generatePreview(input: CardData[], settings: WorkflowSettings): Promise<PreviewData> {
+  async generatePreview(_input: CardData[], settings: WorkflowSettings): Promise<PreviewData> {
     try {
       // Generate a basic preview structure
       // This will be enhanced as we migrate the preview logic
@@ -150,7 +130,7 @@ export class ExtractStep extends BaseStep {
   }
 
   // Extended API specific to extract step
-  public async executeWithInput(input: ExtractStepInput): Promise<StepResult> {
+  public async executeWithInput(_input: ExtractStepInput): Promise<StepResult> {
     this.lastExecutionTime = Date.now();
     
     try {
