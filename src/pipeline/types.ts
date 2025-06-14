@@ -50,6 +50,12 @@ export interface PreviewData {
     height: number;
     dpi: number;
     fileSize?: number;
+    // Extended metadata for preview system
+    renderTime?: number;
+    stepId?: string;
+    cacheKey?: string;
+    timestamp?: number;
+    deltaRender?: boolean;
   };
 }
 
