@@ -7,7 +7,8 @@ import {
   getAvailableCardIds,
   getCardInfo,
   extractCardImage as extractCardImageUtil,
-  calculateCardDimensions
+  calculateCardDimensions,
+  calculateCardImageDimensions
 } from '../utils/cardUtils';
 import jsPDF from 'jspdf';
 
@@ -179,11 +180,35 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         if (cardCount > 0) {
           doc.addPage();
         }        // Calculate card dimensions using new settings
-        const cardDimensions = calculateCardDimensions(outputSettings);
+        const cardDimensions = calculateCardDimensions(outputSettings);        // Calculate card image dimensions based on the sizing mode
+        const sizingMode = outputSettings.cardImageSizingMode || 'actual-size';
+        let cardImageDims;
+        
+        console.log(`Applying sizing mode "${sizingMode}" to ${cardType} card ${cardInfo.id}`);
+        
+        try {
+          cardImageDims = await calculateCardImageDimensions(
+            cardImageUrl,
+            cardDimensions.scaledCardWidthInches,
+            cardDimensions.scaledCardHeightInches,
+            sizingMode
+          );
+          
+          console.log(`Card ${cardInfo.id} image sizing: ${cardImageDims.imageWidth.toFixed(3)}" × ${cardImageDims.imageHeight.toFixed(3)}" → ${cardImageDims.width.toFixed(3)}" × ${cardImageDims.height.toFixed(3)}" (${sizingMode})`);
+        } catch (error) {
+          console.warn(`Failed to calculate image dimensions for ${cardType} card ${cardInfo.id}:`, error);
+          // Fallback to scaled card dimensions
+          cardImageDims = {
+            width: cardDimensions.scaledCardWidthInches,
+            height: cardDimensions.scaledCardHeightInches,
+            imageWidth: cardDimensions.scaledCardWidthInches,
+            imageHeight: cardDimensions.scaledCardHeightInches
+          };
+        }
 
-        // Use the scaled card dimensions (includes bleed and scale percentage)
-        const cardWidthInches = cardDimensions.scaledCardWidthInches;
-        const cardHeightInches = cardDimensions.scaledCardHeightInches;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
+        // Use the calculated image dimensions
+        const cardWidthInches = cardImageDims.width;
+        const cardHeightInches = cardImageDims.height;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
         const rotation = getRotationForCardType(outputSettings, cardType);
         let finalImageUrl = cardImageUrl;
         let finalWidth = cardWidthInches;

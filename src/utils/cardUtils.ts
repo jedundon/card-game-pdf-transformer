@@ -500,3 +500,77 @@ export function calculatePreviewScale(
 export function getDpiScaleFactor(): number {
   return DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
 }
+
+/**
+ * Calculate card image dimensions based on sizing mode
+ */
+export function calculateCardImageDimensions(
+  cardImageUrl: string,
+  targetCardWidthInches: number,
+  targetCardHeightInches: number,
+  sizingMode: 'actual-size' | 'fit-to-card' | 'fill-card' = 'actual-size'
+): Promise<{ width: number; height: number; imageWidth: number; imageHeight: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const imageWidthPx = img.naturalWidth;
+      const imageHeightPx = img.naturalHeight;
+      
+      // Convert image pixels to inches (assuming the image was extracted at EXTRACTION_DPI)
+      const imageWidthInches = imageWidthPx / DPI_CONSTANTS.EXTRACTION_DPI;
+      const imageHeightInches = imageHeightPx / DPI_CONSTANTS.EXTRACTION_DPI;
+      
+      let finalWidthInches = imageWidthInches;
+      let finalHeightInches = imageHeightInches;
+      
+      switch (sizingMode) {
+        case 'actual-size':
+          // Use the image at its original size (no scaling)
+          finalWidthInches = imageWidthInches;
+          finalHeightInches = imageHeightInches;
+          break;
+          
+        case 'fit-to-card':
+          // Scale the image to fit entirely within the card boundaries, maintaining aspect ratio
+          const imageAspectRatio = imageWidthInches / imageHeightInches;
+          const cardAspectRatio = targetCardWidthInches / targetCardHeightInches;
+          
+          if (imageAspectRatio > cardAspectRatio) {
+            // Image is wider relative to its height than the card - fit to width
+            finalWidthInches = targetCardWidthInches;
+            finalHeightInches = targetCardWidthInches / imageAspectRatio;
+          } else {
+            // Image is taller relative to its width than the card - fit to height
+            finalHeightInches = targetCardHeightInches;
+            finalWidthInches = targetCardHeightInches * imageAspectRatio;
+          }
+          break;
+          
+        case 'fill-card':
+          // Scale the image to fill the entire card area, maintaining aspect ratio (may crop edges)
+          const imageAspectRatioFill = imageWidthInches / imageHeightInches;
+          const cardAspectRatioFill = targetCardWidthInches / targetCardHeightInches;
+          
+          if (imageAspectRatioFill > cardAspectRatioFill) {
+            // Image is wider - scale to fill height and crop width
+            finalHeightInches = targetCardHeightInches;
+            finalWidthInches = targetCardHeightInches * imageAspectRatioFill;
+          } else {
+            // Image is taller - scale to fill width and crop height
+            finalWidthInches = targetCardWidthInches;
+            finalHeightInches = targetCardWidthInches / imageAspectRatioFill;
+          }
+          break;
+      }
+      
+      resolve({
+        width: finalWidthInches,
+        height: finalHeightInches,
+        imageWidth: imageWidthInches,
+        imageHeight: imageHeightInches
+      });
+    };
+    img.onerror = reject;
+    img.src = cardImageUrl;
+  });
+}

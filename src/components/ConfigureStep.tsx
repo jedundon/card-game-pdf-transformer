@@ -12,7 +12,7 @@ import {
   calculateCardDimensions
 } from '../utils/cardUtils';
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
-import { DEFAULT_CARD_DIMENSIONS, DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
+import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
 interface ConfigureStepProps {
   pdfData: any;
@@ -43,6 +43,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 }) => {
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
+  const [cardPreviewDimensions, setCardPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
   const [calibrationMeasurements, setCalibrationMeasurements] = useState({
@@ -121,8 +122,25 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       const updatePreview = async () => {
         const cardUrl = await extractCardImage(currentCardIndex);
         setCardPreviewUrl(cardUrl);
+        
+        // Load image dimensions
+        if (cardUrl) {
+          const img = new Image();
+          img.onload = () => {
+            setCardPreviewDimensions({ width: img.naturalWidth, height: img.naturalHeight });
+          };
+          img.onerror = () => {
+            setCardPreviewDimensions(null);
+          };
+          img.src = cardUrl;
+        } else {
+          setCardPreviewDimensions(null);
+        }
       };
       updatePreview();
+    } else {
+      setCardPreviewUrl(null);
+      setCardPreviewDimensions(null);
     }
   }, [
     currentCardId,
@@ -375,6 +393,14 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     onSettingsChange(newSettings);
   };
 
+  const handleCardImageSizingModeChange = (mode: 'actual-size' | 'fit-to-card' | 'fill-card') => {
+    const newSettings = {
+      ...outputSettings,
+      cardImageSizingMode: mode
+    };
+    onSettingsChange(newSettings);
+  };
+
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
       
@@ -469,6 +495,61 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             <p className="text-sm text-gray-600 mb-3">
               Set the target card dimensions. Bleed extends the print area beyond the card edges for better coverage.
             </p>
+            
+            {/* Card Image Sizing Mode */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Image Sizing Mode
+              </label>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => handleCardImageSizingModeChange('actual-size')}
+                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
+                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'actual-size'
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Actual Size
+                </button>
+                <button
+                  onClick={() => handleCardImageSizingModeChange('fit-to-card')}
+                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
+                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'fit-to-card'
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Fit to Card
+                </button>
+                <button
+                  onClick={() => handleCardImageSizingModeChange('fill-card')}
+                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
+                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'fill-card'
+                      ? 'bg-blue-50 border-blue-300 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  Fill Card
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-gray-500">
+                {(() => {
+                  const mode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
+                  switch (mode) {
+                    case 'actual-size':
+                      return 'Use the image at its original size without scaling';
+                    case 'fit-to-card':
+                      return 'Scale the image to fit entirely within the card boundaries, maintaining aspect ratio';
+                    case 'fill-card':
+                      return 'Scale the image to fill the entire card area, maintaining aspect ratio (may crop edges)';
+                    default:
+                      return '';
+                  }
+                })()}
+              </div>
+            </div>
+            
             <div className="grid grid-cols-3 gap-4">
               {/* Width */}
               <div>
@@ -684,8 +765,13 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   const horizontalOffset = outputSettings.offset.horizontal || 0;
                   const verticalOffset = outputSettings.offset.vertical || 0;
                   const rotation = getRotationForCardType(outputSettings, viewMode);
+                  const sizingMode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
                   
-                  return `${cardWidthInches.toFixed(2)}" × ${cardHeightInches.toFixed(2)}" card at ${scalePercent}% scale with ${horizontalOffset >= 0 ? '+' : ''}${horizontalOffset.toFixed(3)}", ${verticalOffset >= 0 ? '+' : ''}${verticalOffset.toFixed(3)}" offset, ${rotation}° rotation (${viewMode} cards)`;
+                  const sizingModeText = sizingMode === 'actual-size' ? 'actual size' : 
+                                       sizingMode === 'fit-to-card' ? 'fit to card' : 
+                                       'fill card';
+                  
+                  return `${cardWidthInches.toFixed(2)}" × ${cardHeightInches.toFixed(2)}" card at ${scalePercent}% scale with ${horizontalOffset >= 0 ? '+' : ''}${horizontalOffset.toFixed(3)}", ${verticalOffset >= 0 ? '+' : ''}${verticalOffset.toFixed(3)}" offset, ${rotation}° rotation, ${sizingModeText} sizing (${viewMode} cards)`;
                 })()}
               </p>
             </div>
@@ -822,7 +908,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   };
                 })()
               }}>
-                  {cardPreviewUrl ? (
+                  {cardPreviewUrl && cardPreviewDimensions ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
@@ -835,44 +921,87 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                             PREVIEW_CONSTRAINTS.MAX_HEIGHT
                           );
                           
-                          // Use new card dimensions for background sizing
+                          // Get card dimensions and sizing mode
                           const cardDimensions = calculateCardDimensions(outputSettings);
+                          const sizingMode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
                           
-                          // With the new bleed system, the image should fill the entire card area
-                          const cardWidthPx = cardDimensions.width;
-                          const cardHeightPx = cardDimensions.height;
+                          // Get card target dimensions in pixels
+                          const targetCardWidthPx = cardDimensions.scaledCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
+                          const targetCardHeightPx = cardDimensions.scaledCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
                           
-                          // Scale the original extracted image to fit the entire card area
-                          const originalWidthPx = DEFAULT_CARD_DIMENSIONS.width;
-                          const originalHeightPx = DEFAULT_CARD_DIMENSIONS.height;
+                          let imageWidthPx = targetCardWidthPx;
+                          let imageHeightPx = targetCardHeightPx;
                           
-                          // Calculate how much to scale the background image to cover the card
-                          const backgroundScaleX = cardWidthPx / originalWidthPx;
-                          const backgroundScaleY = cardHeightPx / originalHeightPx;
-                          const backgroundScale = Math.max(backgroundScaleX, backgroundScaleY); // Cover the entire card area
+                          // Calculate proper dimensions based on sizing mode using loaded dimensions
+                          const imageAspectRatio = cardPreviewDimensions.width / cardPreviewDimensions.height;
+                          const cardAspectRatio = targetCardWidthPx / targetCardHeightPx;
                           
-                          const scaledImageWidth = originalWidthPx * backgroundScale;
-                          const scaledImageHeight = originalHeightPx * backgroundScale;
+                          switch (sizingMode) {
+                            case 'actual-size':
+                              // Use image at actual extracted size
+                              imageWidthPx = cardPreviewDimensions.width;
+                              imageHeightPx = cardPreviewDimensions.height;
+                              break;
+                              
+                            case 'fit-to-card':
+                              // Scale to fit within card boundaries
+                              if (imageAspectRatio > cardAspectRatio) {
+                                imageWidthPx = targetCardWidthPx;
+                                imageHeightPx = targetCardWidthPx / imageAspectRatio;
+                              } else {
+                                imageHeightPx = targetCardHeightPx;
+                                imageWidthPx = targetCardHeightPx * imageAspectRatio;
+                              }
+                              break;
+                              
+                            case 'fill-card':
+                              // Scale to fill entire card area
+                              if (imageAspectRatio > cardAspectRatio) {
+                                imageHeightPx = targetCardHeightPx;
+                                imageWidthPx = targetCardHeightPx * imageAspectRatio;
+                              } else {
+                                imageWidthPx = targetCardWidthPx;
+                                imageHeightPx = targetCardWidthPx / imageAspectRatio;
+                              }
+                              break;
+                          }
                           
                           // Convert to screen pixels for display
-                          const screenImageWidth = scaledImageWidth * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          const screenImageHeight = scaledImageHeight * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          const screenImageWidth = imageWidthPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          const screenImageHeight = imageHeightPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          
+                          // Calculate card display dimensions for centering
+                          const cardDisplayWidth = targetCardWidthPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          const cardDisplayHeight = targetCardHeightPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
                           
                           // Center the image within the card area
-                          const offsetX = (scaledImageWidth - cardWidthPx) / 2;
-                          const offsetY = (scaledImageHeight - cardHeightPx) / 2;
-                          const screenOffsetX = offsetX * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          const screenOffsetY = offsetY * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
+                          // For backgroundPosition, we need to position the image so it's centered within the container
+                          // If image is larger than container: negative offset to crop edges
+                          // If image is smaller than container: positive offset (but we'll use 'center' for simplicity)
+                          
+                          let backgroundSize = `${screenImageWidth}px ${screenImageHeight}px`;
+                          let backgroundPosition = 'center center';
+                          
+                          // Only use manual positioning if we need to crop (image larger than container)
+                          if (screenImageWidth > cardDisplayWidth || screenImageHeight > cardDisplayHeight) {
+                            const offsetX = (screenImageWidth - cardDisplayWidth) / 2;
+                            const offsetY = (screenImageHeight - cardDisplayHeight) / 2;
+                            backgroundPosition = `-${offsetX}px -${offsetY}px`;
+                          }
                           
                           return {
                             backgroundImage: `url(${cardPreviewUrl})`,
-                            backgroundPosition: `-${screenOffsetX}px -${screenOffsetY}px`,
-                            backgroundSize: `${screenImageWidth}px ${screenImageHeight}px`,
+                            backgroundPosition: backgroundPosition,
+                            backgroundSize: backgroundSize,
                             backgroundRepeat: 'no-repeat'
                           };
                         })()
                       }}
                     />
+                  ) : cardPreviewUrl ? (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+                      Loading dimensions...
+                    </div>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
                       Card ID {currentCardId}

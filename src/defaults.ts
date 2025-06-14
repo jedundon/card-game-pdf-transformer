@@ -71,12 +71,13 @@ export const DEFAULT_SETTINGS = {
     // Card scale setting (percentage)
     cardScalePercent: 100,
     // Bleed margin setting (inches)
-    bleedMarginInches: 0,
-    // Card rotation settings
+    bleedMarginInches: 0,    // Card rotation settings
     rotation: {
       front: 0,
       back: 0
-    }
+    },
+    // Card image sizing mode
+    cardImageSizingMode: 'actual-size' as 'actual-size' | 'fit-to-card' | 'fill-card'
   }
 };
 
@@ -130,11 +131,11 @@ export type WorkflowSettings = {
       heightInches: number;
     };
     cardScalePercent: number;
-    bleedMarginInches: number;
-    rotation: {
+    bleedMarginInches: number;    rotation: {
       front: number;
       back: number;
     };
+    cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
   };
   savedAt?: string;
   version?: string;
