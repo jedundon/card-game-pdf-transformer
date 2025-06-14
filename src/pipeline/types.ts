@@ -167,3 +167,28 @@ export interface CacheEntry<T = any> {
   lastAccess: Date;
   size: number;
 }
+
+// Import-specific types
+export interface PDFDocument {
+  numPages: number;
+  fingerprint?: string;
+  _pdfInfo?: any;
+}
+
+export interface PageSetting {
+  skip: boolean;
+  type: 'front' | 'back';
+}
+
+export interface PDFMode {
+  type: 'duplex' | 'gutter-fold';
+  orientation: 'vertical' | 'horizontal';
+  flipEdge: 'short' | 'long';
+}
+
+export interface ImportSettings {
+  pdfData: PDFDocument | null;
+  pdfMode: PDFMode;
+  pageSettings: PageSetting[];
+  fileName: string;
+}

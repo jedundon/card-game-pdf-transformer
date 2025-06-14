@@ -6,15 +6,24 @@
 import { StepRegistry } from '../StepRegistry';
 import { ExtractStep } from './ExtractStepMigration';
 import { ConfigureStep } from './ConfigureStep';
+import { ImportStep } from './ImportStep';
 
-// Create and register the extract step
+// Create step instances
+const importStep = new ImportStep();
 const extractStep = new ExtractStep();
-
-// Create and register the configure step
 const configureStep = new ConfigureStep();
 
 // Create a shared registry instance
 const stepRegistry = new StepRegistry();
+
+// Register the import step with metadata
+stepRegistry.register(importStep, {
+  name: 'Import PDF',
+  description: 'Import PDF documents and configure page settings for card extraction',
+  category: 'input',
+  version: '1.0.0',
+  tags: ['pdf', 'import', 'pages', 'configuration']
+});
 
 // Register the extract step with metadata
 stepRegistry.register(extractStep, {
@@ -35,5 +44,6 @@ stepRegistry.register(configureStep, {
 });
 
 // Export for use in components
-export { extractStep, stepRegistry };
+export { importStep, extractStep, configureStep, stepRegistry };
+export { ImportStep } from './ImportStep';
 export { ExtractStep } from './ExtractStepMigration';
