@@ -6,7 +6,7 @@ import {
   calculateTotalCards,
   calculateCardDimensions
 } from '../utils/cardUtils';
-import { useExportStep } from '../pipeline';
+import { useExportStep, useConfigureStep } from '../pipeline';
 
 interface ExportStepProps {
   pdfData: any;
@@ -28,7 +28,37 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   onPrevious
 }) => {  // Use pipeline for export operations
   const { exportPdf, validateExportSettings: pipelineValidateExportSettings } = useExportStep();
+  const { calculateLayout } = useConfigureStep();
   
+  // State for pipeline-calculated card dimensions
+  const [pipelineCardDimensions, setPipelineCardDimensions] = useState<{
+    width: number;
+    height: number;
+    widthInches: number;
+    heightInches: number;
+  } | null>(null);
+
+  // Effect to update pipeline card dimensions when settings change
+  useEffect(() => {
+    const updateCardDimensions = async () => {
+      try {
+        const result = await calculateLayout(pdfData, pdfMode, pageSettings, outputSettings);
+        const dimensions = result.cardDimensions;
+        
+        setPipelineCardDimensions({
+          width: dimensions.widthPx,
+          height: dimensions.heightPx,
+          widthInches: dimensions.widthInches,
+          heightInches: dimensions.heightInches
+        });
+      } catch (error) {
+        console.error('Failed to update card dimensions in ExportStep:', error);
+      }
+    };
+    
+    updateCardDimensions();
+  }, [calculateLayout, pdfData, pdfMode, pageSettings, outputSettings]);
+
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [exportedFiles, setExportedFiles] = useState<{
     fronts: string | null;
@@ -236,10 +266,17 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Final Print Size:</span>
-              <span className="font-medium text-gray-800">
-                {(() => {
-                  const cardDimensions = calculateCardDimensions(outputSettings);
-                  return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
+              <span className="font-medium text-gray-800">                {(() => {
+                  const cardDimensions = pipelineCardDimensions || (() => {
+                    // Fallback to direct calculation if pipeline hasn't updated yet
+                    return calculateCardDimensions(outputSettings);
+                  })();
+                  
+                  // Handle both pipeline and fallback formats
+                  const widthInches = (cardDimensions as any).widthInches || (cardDimensions as any).scaledCardWidthInches;
+                  const heightInches = (cardDimensions as any).heightInches || (cardDimensions as any).scaledCardHeightInches;
+                  
+                  return `${widthInches.toFixed(2)}" × ${heightInches.toFixed(2)}"`;
                 })()}
               </span>
             </div>

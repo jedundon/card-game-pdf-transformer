@@ -53,11 +53,61 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     horizontalScale: '',
     verticalScale: ''  });
   
-  // Use centralized transformations
-  // Use pipeline for configuration operations  
+  // State for pipeline-calculated card dimensions
+  const [pipelineCardDimensions, setPipelineCardDimensions] = useState<{
+    width: number;
+    height: number;
+    widthInches: number;
+    heightInches: number;
+  } | null>(null);
+
+  // Use centralized transformations and pipeline for configuration operations  
   const { extractCardImage } = useTransformations();
-  const { validateSettings } = useConfigureStep();
-  
+  const { validateSettings, calculateLayout } = useConfigureStep();
+    // Helper function to get card dimensions via pipeline instead of direct utility calls
+  const getCardDimensionsFromPipeline = useCallback(async (outputSettingsParam = outputSettings) => {
+    try {
+      const result = await calculateLayout(pdfData, pdfMode, pageSettings, outputSettingsParam);
+      return result.cardDimensions;
+    } catch (error) {
+      console.error('Failed to calculate card dimensions via pipeline:', error);
+      // Fallback to direct calculation for now
+      const { calculateCardDimensions } = await import('../utils/cardUtils');
+      return calculateCardDimensions(outputSettingsParam);
+    }
+  }, [calculateLayout, pdfData, pdfMode, pageSettings, outputSettings]);
+  // Effect to update pipeline card dimensions when settings change
+  useEffect(() => {
+    const updateCardDimensions = async () => {
+      try {
+        const dimensions = await getCardDimensionsFromPipeline(outputSettings);
+        
+        // Handle both pipeline format and fallback format
+        if ('widthPx' in dimensions) {
+          // Pipeline format
+          setPipelineCardDimensions({
+            width: dimensions.widthPx,
+            height: dimensions.heightPx,
+            widthInches: dimensions.widthInches,
+            heightInches: dimensions.heightInches
+          });
+        } else {
+          // Fallback format from direct calculation
+          setPipelineCardDimensions({
+            width: dimensions.width,
+            height: dimensions.height,
+            widthInches: dimensions.targetCardWidthInches || dimensions.scaledCardWidthInches,
+            heightInches: dimensions.targetCardHeightInches || dimensions.scaledCardHeightInches
+          });
+        }
+      } catch (error) {
+        console.error('Failed to update card dimensions:', error);
+      }
+    };
+    
+    updateCardDimensions();
+  }, [getCardDimensionsFromPipeline, outputSettings]);
+
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 
@@ -907,10 +957,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     outputSettings.pageSize.height,
                     PREVIEW_CONSTRAINTS.MAX_WIDTH,
                     PREVIEW_CONSTRAINTS.MAX_HEIGHT
-                  );
-                  
-                  // Calculate card dimensions using new settings
-                  const cardDimensions = calculateCardDimensions(outputSettings);
+                  );                  // Use pipeline-calculated card dimensions or fallback
+                  const cardDimensions = pipelineCardDimensions || (() => {
+                    // Fallback to direct calculation if pipeline hasn't updated yet
+                    return calculateCardDimensions(outputSettings);
+                  })();
                   
                   // Convert to preview scale for display
                   const cardWidth = cardDimensions.width * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
@@ -942,15 +993,14 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                             outputSettings.pageSize.height,
                             PREVIEW_CONSTRAINTS.MAX_WIDTH,
                             PREVIEW_CONSTRAINTS.MAX_HEIGHT
-                          );
-                          
-                          // Get card dimensions and sizing mode
-                          const cardDimensions = calculateCardDimensions(outputSettings);
-                          const sizingMode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
-                          
-                          // Get card target dimensions in pixels
-                          const targetCardWidthPx = cardDimensions.scaledCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
-                          const targetCardHeightPx = cardDimensions.scaledCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
+                          );                          // Get card dimensions and sizing mode using pipeline
+                          const cardDimensions = pipelineCardDimensions || (() => {
+                            // Fallback to direct calculation if pipeline hasn't updated yet
+                            return calculateCardDimensions(outputSettings);
+                          })();
+                          const sizingMode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;                          // Get card target dimensions in pixels
+                          const targetCardWidthPx = ((cardDimensions as any).scaledCardWidthInches || (cardDimensions as any).widthInches) * DPI_CONSTANTS.EXTRACTION_DPI;
+                          const targetCardHeightPx = ((cardDimensions as any).scaledCardHeightInches || (cardDimensions as any).heightInches) * DPI_CONSTANTS.EXTRACTION_DPI;
                           
                           let imageWidthPx = targetCardWidthPx;
                           let imageHeightPx = targetCardHeightPx;
@@ -1110,11 +1160,16 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   <span className="font-medium">Rotation:</span>{' '}
                   Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
                 </p>
-                <p>
-                  <span className="font-medium">Final print size:</span>{' '}
-                  {(() => {
-                    const cardDimensions = calculateCardDimensions(outputSettings);
-                    return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
+                <p>                  <span className="font-medium">Final print size:</span>{' '}                  {(() => {
+                    const cardDimensions = pipelineCardDimensions || (() => {
+                      // Fallback to direct calculation if pipeline hasn't updated yet
+                      return calculateCardDimensions(outputSettings);
+                    })();
+                      // Handle both pipeline and fallback formats
+                    const widthInches = (cardDimensions as any).widthInches || (cardDimensions as any).scaledCardWidthInches;
+                    const heightInches = (cardDimensions as any).heightInches || (cardDimensions as any).scaledCardHeightInches;
+                    
+                    return `${widthInches.toFixed(2)}" × ${heightInches.toFixed(2)}"`;
                   })()}
                 </p>
               </div>
