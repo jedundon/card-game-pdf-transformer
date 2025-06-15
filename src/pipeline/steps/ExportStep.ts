@@ -314,6 +314,148 @@ export class ExportStep extends BaseStep {
   }
 
   /**
+   * Export to PDF files - main export operation
+   */
+  async exportToPdf(input: {
+    pdfData: any;
+    pdfMode: any;
+    pageSettings: any;
+    extractionSettings: any;
+    outputSettings: any;
+  }): Promise<{
+    success: boolean;
+    frontsBlob: Blob | null;
+    backsBlob: Blob | null;
+    metadata: any;
+    errors: string[];
+  }> {
+    try {      // Create workflow settings format expected by the pipeline
+      const workflowSettings: WorkflowSettings = {
+        pdfData: input.pdfData,
+        pdfMode: input.pdfMode,
+        pageSettings: input.pageSettings,
+        extractionSettings: input.extractionSettings,
+        outputSettings: input.outputSettings,
+        // Required fields from WorkflowSettings interface
+        gridColumns: input.extractionSettings.grid?.columns || 1,
+        gridRows: input.extractionSettings.grid?.rows || 1,
+        cardWidth: input.outputSettings.cardSize?.widthInches || 2.5,
+        cardHeight: input.outputSettings.cardSize?.heightInches || 3.5,
+        dpi: input.outputSettings.dpi || 300,
+        bleed: input.outputSettings.bleedMarginInches || 0,        inputMode: 'pdf',
+        outputFormat: 'individual',
+        quality: 0.9
+      };
+
+      // Execute the export through the base execute method
+      await this.execute([], workflowSettings);
+      
+      if (!this.exportResults) {
+        throw new Error('Export execution failed to produce results');
+      }
+
+      return {
+        success: true,
+        frontsBlob: this.exportResults.frontsBlob,
+        backsBlob: this.exportResults.backsBlob,
+        metadata: {
+          totalCards: this.exportResults.totalCards,
+          frontCards: this.exportResults.frontCards,
+          backCards: this.exportResults.backCards
+        },
+        errors: []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        frontsBlob: null,
+        backsBlob: null,
+        metadata: {},
+        errors: [error instanceof Error ? error.message : 'Unknown export error']
+      };
+    }
+  }
+
+  /**
+   * Validate export settings
+   */
+  validateExportSettings(outputSettings: any): ValidationResult {
+    const errors: any[] = [];
+    const warnings: any[] = [];
+
+    try {
+      // Validate page size
+      if (outputSettings.pageSize) {
+        if (outputSettings.pageSize.width <= 0) {
+          errors.push({
+            field: 'pageSize.width',
+            message: 'Page width must be greater than 0',
+            code: 'INVALID_PAGE_WIDTH'
+          });
+        }
+
+        if (outputSettings.pageSize.height <= 0) {
+          errors.push({
+            field: 'pageSize.height',
+            message: 'Page height must be greater than 0',
+            code: 'INVALID_PAGE_HEIGHT'
+          });
+        }
+      }
+
+      // Validate card size
+      if (outputSettings.cardSize) {
+        if (outputSettings.cardSize.widthInches <= 0) {
+          errors.push({
+            field: 'cardSize.widthInches',
+            message: 'Card width must be greater than 0',
+            code: 'INVALID_CARD_WIDTH'
+          });
+        }
+
+        if (outputSettings.cardSize.heightInches <= 0) {
+          errors.push({
+            field: 'cardSize.heightInches',
+            message: 'Card height must be greater than 0',
+            code: 'INVALID_CARD_HEIGHT'
+          });
+        }
+      }
+
+      // Validate DPI
+      if (outputSettings.dpi <= 0) {
+        errors.push({
+          field: 'dpi',
+          message: 'DPI must be greater than 0',
+          code: 'INVALID_DPI'
+        });
+      }
+
+      // Validate scale
+      if (outputSettings.scalePercent !== undefined && outputSettings.scalePercent <= 0) {
+        errors.push({
+          field: 'scalePercent',
+          message: 'Scale percent must be greater than 0',
+          code: 'INVALID_SCALE'
+        });
+      }
+
+    } catch (error) {
+      errors.push({
+        field: 'general',
+        message: `Export validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        code: 'VALIDATION_ERROR'
+      });
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+
+  /**
    * Generate cache key for export results
    */  getCacheKey(_input: CardData[], settings: WorkflowSettings): string {
     const exportSettings = this.getExportSettings(settings);

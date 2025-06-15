@@ -884,3 +884,78 @@ export function useImportStep() {
     validateImportSettings
   };
 }
+
+/**
+ * Hook for export operations using the pipeline step
+ */
+export function useExportStep() {
+  const stateManager = getStateManager();
+  
+  const exportPdf = useCallback(async (
+    pdfData: any, 
+    pdfMode: any, 
+    pageSettings: any, 
+    extractionSettings: any, 
+    outputSettings: any
+  ) => {
+    try {
+      stateManager.setLoading(true);
+      
+      // Import and create ExportStep instance 
+      const { ExportStep } = await import('./steps/ExportStep');
+      const exportStep = new ExportStep();
+      
+      // Execute the export through the pipeline step
+      const result = await exportStep.exportToPdf({
+        pdfData,
+        pdfMode,
+        pageSettings,
+        extractionSettings,
+        outputSettings
+      });
+      
+      if (!result.success) {
+        throw new Error(result.errors[0] || 'Export failed');
+      }
+      
+      return {
+        fronts: result.frontsBlob,
+        backs: result.backsBlob,
+        metadata: result.metadata
+      };
+    } catch (error) {
+      stateManager.addError(`Failed to export PDF: ${error}`);
+      throw error;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager]);
+
+  const validateExportSettings = useCallback(async (outputSettings: any) => {
+    try {
+      // Import and create ExportStep instance 
+      const { ExportStep } = await import('./steps/ExportStep');
+      const exportStep = new ExportStep();
+      
+      // Validate settings through the pipeline step
+      const validation = exportStep.validateExportSettings(outputSettings);
+      
+      if (!validation.valid) {
+        // Add validation errors to state
+        validation.errors.forEach((error: any) => {
+          stateManager.addError(`Export configuration error: ${error.message}`);
+        });
+      }
+      
+      return validation;
+    } catch (error) {
+      stateManager.addError(`Failed to validate export settings: ${error}`);
+      throw error;
+    }
+  }, [stateManager]);
+
+  return {
+    exportPdf,
+    validateExportSettings
+  };
+}

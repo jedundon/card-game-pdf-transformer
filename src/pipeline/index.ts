@@ -27,7 +27,8 @@ export {
   usePipeline,
   useExtractStep,
   useConfigureStep,
-  useImportStep
+  useImportStep,
+  useExportStep
 } from './hooks';
 
 // Performance optimization hooks

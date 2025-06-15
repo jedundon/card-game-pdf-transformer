@@ -6,7 +6,7 @@ import {
   calculateTotalCards,
   calculateCardDimensions
 } from '../utils/cardUtils';
-import { useTransformations } from '../pipeline';
+import { useExportStep } from '../pipeline';
 
 interface ExportStepProps {
   pdfData: any;
@@ -26,9 +26,8 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   outputSettings,
   currentPdfFileName,
   onPrevious
-}) => {
-  // Use centralized transformations
-  const { generateExport } = useTransformations();
+}) => {  // Use pipeline for export operations
+  const { exportPdf, validateExportSettings: pipelineValidateExportSettings } = useExportStep();
   
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [exportedFiles, setExportedFiles] = useState<{
@@ -130,8 +129,17 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     setExportStatus('processing');
     
     try {
-      console.log('Starting PDF export process...');
-        // Validate settings before export
+      console.log('Starting PDF export process...');        // Validate settings before export
+      // First validate through pipeline
+      const pipelineValidation = await pipelineValidateExportSettings(outputSettings);
+      if (!pipelineValidation.valid) {
+        console.error('Pipeline export validation failed:', pipelineValidation.errors);
+        alert('Export validation failed (Pipeline):\n\n' + pipelineValidation.errors.map((e: any) => e.message).join('\n'));
+        setExportStatus('idle');
+        return;
+      }
+      
+      // Also run local validation for UI-specific checks
       const validation = validateExportSettings();
       if (!validation.isValid) {
         console.error('Export validation failed:', validation.errors);
@@ -143,22 +151,29 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       console.log('PDF Mode:', pdfMode);
       console.log('Total Cards:', totalCards);
       console.log('Active Pages:', activePages.length);
-      console.log('Output Settings:', outputSettings);
-        // Use pipeline export functionality
-      const exportResults = await generateExport({
-        cardType: 'both', // Generate both fronts and backs
+      console.log('Output Settings:', outputSettings);        // Use pipeline export functionality through ExportStep pipeline class
+      const exportResults = await exportPdf(
+        pdfData,
+        pdfMode,
+        pageSettings,
+        extractionSettings,
         outputSettings
-      });
+      );
 
       console.log('PDF generation completed:', {
-        frontsPdf: exportResults.frontsPdf ? 'Generated' : 'No fronts found',
-        backsPdf: exportResults.backsPdf ? 'Generated' : 'No backs found'
+        frontsPdf: exportResults.fronts ? 'Generated' : 'No fronts found',
+        backsPdf: exportResults.backs ? 'Generated' : 'No backs found',
+        metadata: exportResults.metadata
       });
+
+      // Convert blobs to URLs for download
+      const frontsUrl = exportResults.fronts ? URL.createObjectURL(exportResults.fronts) : null;
+      const backsUrl = exportResults.backs ? URL.createObjectURL(exportResults.backs) : null;
 
       // Set the exported files URLs from the pipeline results
       setExportedFiles({
-        fronts: exportResults.frontsUrl || null,
-        backs: exportResults.backsUrl || null
+        fronts: frontsUrl,
+        backs: backsUrl
       });
       
       setExportStatus('completed');
