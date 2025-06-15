@@ -820,3 +820,67 @@ export function useConfigureStep() {
     calculateLayout
   };
 }
+
+/**
+ * Hook for import operations using the pipeline step
+ */
+export function useImportStep() {
+  const stateManager = getStateManager();
+  
+  const importPdf = useCallback(async (file: File) => {
+    try {
+      stateManager.setLoading(true);
+      
+      // Import and create ImportStep instance 
+      const { ImportStep } = await import('./steps/ImportStep');
+      const importStep = new ImportStep();
+      
+      // Process the file through the pipeline step
+      const result = await importStep.importPdfFile(file);
+      
+      if (!result.success) {
+        throw new Error(result.errors[0] || 'Import failed');
+      }
+      
+      return {
+        pdfData: result.pdfData,
+        fileName: result.fileName,
+        pageCount: result.pageCount,
+        pageSettings: result.pageSettings
+      };
+    } catch (error) {
+      stateManager.addError(`Failed to import PDF: ${error}`);
+      throw error;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager]);
+
+  const validateImportSettings = useCallback(async (pdfMode: any, pageSettings: any) => {
+    try {
+      // Import and create ImportStep instance 
+      const { ImportStep } = await import('./steps/ImportStep');
+      const importStep = new ImportStep();
+      
+      // Validate settings through the pipeline step
+      const validation = importStep.validateImportConfiguration(pdfMode, pageSettings);
+      
+      if (!validation.valid) {
+        // Add validation errors to state
+        validation.errors.forEach((error: any) => {
+          stateManager.addError(`Import configuration error: ${error.message}`);
+        });
+      }
+      
+      return validation;
+    } catch (error) {
+      stateManager.addError(`Failed to validate import settings: ${error}`);
+      throw error;
+    }
+  }, [stateManager]);
+
+  return {
+    importPdf,
+    validateImportSettings
+  };
+}

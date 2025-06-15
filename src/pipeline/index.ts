@@ -26,7 +26,8 @@ export {
   useDeltaPreview,
   usePipeline,
   useExtractStep,
-  useConfigureStep
+  useConfigureStep,
+  useImportStep
 } from './hooks';
 
 // Performance optimization hooks

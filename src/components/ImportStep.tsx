@@ -1,10 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ChevronRightIcon } from 'lucide-react';
-import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
-
-// Configure PDF.js worker for Vite
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
+import { useImportStep } from '../pipeline';
 interface ImportStepProps {
   onFileSelect: (data: any, fileName: string) => void;
   onModeSelect: (mode: any) => void;
@@ -26,33 +23,46 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
   const [pageCount, setPageCount] = useState<number>(0);
+  
+  // Use pipeline for import operations
+  const { importPdf, validateImportSettings } = useImportStep();
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFileName(file.name);
       setPageCount(0); // Reset page count
       onPageSettingsChange([]); // Reset page settings
-      // Read the file as ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer();
-      // Load PDF using pdfjs-dist
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      setPageCount(pdf.numPages);
-      onFileSelect(pdf, file.name); // Pass the PDF.js document object and filename up
-      // Initialize page settings with default values
-      const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
-        skip: false,
-        type: i % 2 === 0 ? 'front' : 'back' // Default alternating front/back for duplex
-      }));
-      onPageSettingsChange(initialPageSettings);
+      
+      try {
+        // Use pipeline step for PDF import instead of direct PDF.js calls
+        const result = await importPdf(file);
+        
+        setPageCount(result.pageCount);
+        onFileSelect(result.pdfData, result.fileName);
+        onPageSettingsChange(result.pageSettings);
+      } catch (error) {
+        console.error('Failed to import PDF through pipeline:', error);
+        // Fall back to showing error to user
+        setPageCount(0);
+        onPageSettingsChange([]);
+      }
     }
   };
-  const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleModeChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const type = e.target.value as 'duplex' | 'gutter-fold';
-    onModeSelect({
+    const newMode = {
       ...pdfMode,
       type
-    });
+    };
+    
+    // Validate through pipeline before applying
+    try {
+      await validateImportSettings(newMode, pageSettings);
+      onModeSelect(newMode);
+    } catch (error) {
+      // Pipeline validation failed, still apply settings but user will see error
+      onModeSelect(newMode);
+    }
   };
   const handleOrientationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const orientation = e.target.value as 'vertical' | 'horizontal';

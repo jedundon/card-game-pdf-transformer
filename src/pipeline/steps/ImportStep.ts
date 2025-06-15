@@ -489,4 +489,152 @@ export class ImportStep extends BaseStep {
     
     return validPages.length * cardsPerPage;
   }
+
+  /**
+   * Import a PDF file and process it
+   */
+  async importPdfFile(file: File): Promise<{
+    success: boolean;
+    pdfData: any;
+    fileName: string;
+    pageCount: number;
+    pageSettings: any[];
+    errors: string[];
+  }> {
+    try {
+      // Import PDF.js dynamically to avoid bundling issues
+      const pdfjsLib = await import('pdfjs-dist');
+      
+      // Configure worker
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
+      
+      // Read the file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Load PDF using pdfjs-dist
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+        // Initialize page settings with default values
+      const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
+        skip: false,
+        type: (i % 2 === 0 ? 'front' : 'back') as 'front' | 'back' // Default alternating front/back for duplex
+      }));
+      
+      // Update internal state
+      this.pdfDocument = pdf;
+      this.fileName = file.name;
+      this.pageSettings = initialPageSettings;
+      
+      return {
+        success: true,
+        pdfData: pdf,
+        fileName: file.name,
+        pageCount: pdf.numPages,
+        pageSettings: initialPageSettings,
+        errors: []
+      };
+    } catch (error) {
+      return {
+        success: false,
+        pdfData: null,
+        fileName: '',
+        pageCount: 0,
+        pageSettings: [],
+        errors: [error instanceof Error ? error.message : 'Unknown import error']
+      };
+    }
+  }
+
+  /**
+   * Validate import configuration
+   */
+  validateImportConfiguration(pdfMode: any, pageSettings: any[]): ValidationResult {
+    const errors: any[] = [];
+    const warnings: any[] = [];
+
+    try {
+      // Validate PDF mode
+      if (!pdfMode || typeof pdfMode !== 'object') {
+        errors.push({
+          field: 'pdfMode',
+          message: 'Invalid PDF mode configuration',
+          code: 'INVALID_PDF_MODE'
+        });
+      } else {
+        const { type, orientation, flipEdge } = pdfMode;
+        
+        if (!['duplex', 'gutter-fold'].includes(type)) {
+          errors.push({
+            field: 'pdfMode.type',
+            message: 'PDF mode type must be "duplex" or "gutter-fold"',
+            code: 'INVALID_PDF_MODE_TYPE'
+          });
+        }
+
+        if (!['vertical', 'horizontal'].includes(orientation)) {
+          errors.push({
+            field: 'pdfMode.orientation',
+            message: 'PDF mode orientation must be "vertical" or "horizontal"',
+            code: 'INVALID_PDF_ORIENTATION'
+          });
+        }
+
+        if (flipEdge && !['short', 'long'].includes(flipEdge)) {
+          errors.push({
+            field: 'pdfMode.flipEdge',
+            message: 'PDF mode flip edge must be "short" or "long"',
+            code: 'INVALID_PDF_FLIP_EDGE'
+          });
+        }
+      }
+
+      // Validate page settings
+      if (!Array.isArray(pageSettings)) {
+        errors.push({
+          field: 'pageSettings',
+          message: 'Page settings must be an array',
+          code: 'INVALID_PAGE_SETTINGS'
+        });
+      } else {
+        pageSettings.forEach((setting, index) => {
+          if (typeof setting !== 'object' || setting === null) {
+            errors.push({
+              field: `pageSettings[${index}]`,
+              message: `Page setting ${index} must be an object`,
+              code: 'INVALID_PAGE_SETTING'
+            });
+          } else {
+            if (typeof setting.skip !== 'boolean') {
+              errors.push({
+                field: `pageSettings[${index}].skip`,
+                message: `Page setting ${index} skip must be a boolean`,
+                code: 'INVALID_PAGE_SKIP'
+              });
+            }
+            
+            if (!['front', 'back'].includes(setting.type)) {
+              errors.push({
+                field: `pageSettings[${index}].type`,
+                message: `Page setting ${index} type must be "front" or "back"`,
+                code: 'INVALID_PAGE_TYPE'
+              });
+            }
+          }
+        });
+      }
+
+    } catch (error) {
+      errors.push({
+        field: 'general',
+        message: `Configuration validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        code: 'VALIDATION_ERROR'
+      });
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
 }
