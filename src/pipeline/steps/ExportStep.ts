@@ -18,8 +18,7 @@ import {
   getAvailableCardIds,
   getCardInfo,
   extractCardImage as extractCardImageUtil,
-  calculateCardDimensions,
-  calculateCardImageDimensions
+  calculateCardDimensions
 } from '../../utils/cardUtils';
 
 /**
@@ -496,28 +495,39 @@ export class ExportStep extends BaseStep {
         orientation: outputSettings.pageSize.width > outputSettings.pageSize.height ? 'landscape' : 'portrait',
         unit: 'in',
         format: [outputSettings.pageSize.width, outputSettings.pageSize.height]
-      });
-
-      let cardCount = 0;
-      const maxCardIndex = activePages.length * cardsPerPage;
+      });      let cardCount = 0;
       
-      console.log(`Processing up to ${maxCardIndex} card indices for ${cardType} cards...`);
+      console.log(`Processing ${cardIds.length} ${cardType} cards...`);
       
-      // Process each card index to find cards of the specified type
-      for (let cardIndex = 0; cardIndex < maxCardIndex; cardIndex++) {
-        const cardInfo = getCardInfo(
-          cardIndex,
-          activePages,
-          settings.extractionSettings || DEFAULT_SETTINGS.extractionSettings,
-          settings.pdfMode || DEFAULT_SETTINGS.pdfMode,
-          cardsPerPage
-        );
+      // Process each card ID that matches the type we're generating
+      for (const cardId of cardIds) {
+        console.log(`Processing ${cardType} card ID ${cardId}...`);
         
-        // Skip cards that don't match the type we're generating
-        if (cardInfo.type.toLowerCase() !== cardType) continue;
+        // Find the card index that corresponds to this card ID
+        let cardIndex = -1;
+        const maxCardIndex = activePages.length * cardsPerPage;
         
-        console.log(`Processing ${cardType} card ${cardInfo.id} at index ${cardIndex}...`);
+        for (let i = 0; i < maxCardIndex; i++) {
+          const cardInfo = getCardInfo(
+            i,
+            activePages,
+            settings.extractionSettings || DEFAULT_SETTINGS.extractionSettings,
+            settings.pdfMode || DEFAULT_SETTINGS.pdfMode,
+            cardsPerPage
+          );
+          
+          if (cardInfo.id === cardId && cardInfo.type.toLowerCase() === cardType) {
+            cardIndex = i;
+            break;
+          }
+        }
         
+        if (cardIndex === -1) {
+          console.warn(`Could not find card index for ${cardType} card ID ${cardId}`);
+          continue;
+        }
+        
+        console.log(`Found ${cardType} card ID ${cardId} at index ${cardIndex}...`);        
         // Extract the card image
         const cardImageUrl = await extractCardImageUtil(
           cardIndex,
@@ -529,7 +539,7 @@ export class ExportStep extends BaseStep {
         );
         
         if (!cardImageUrl) {
-          console.warn(`Failed to extract card image for ${cardType} card ${cardInfo.id}`);
+          console.warn(`Failed to extract card image for ${cardType} card ID ${cardId}`);
           continue;
         }
 
@@ -539,38 +549,31 @@ export class ExportStep extends BaseStep {
         }
 
         // Calculate card dimensions using output settings
-        const cardDimensions = calculateCardDimensions(outputSettings);
-
-        // Calculate card image dimensions based on the sizing mode
+        const cardDimensions = calculateCardDimensions(outputSettings);        // Apply card image sizing and cropping to match the preview exactly
         const sizingMode = outputSettings.cardImageSizingMode || 'actual-size';
-        let cardImageDims;
+        let processedImageUrl = cardImageUrl;
+        let finalWidth = cardDimensions.scaledCardWidthInches;
+        let finalHeight = cardDimensions.scaledCardHeightInches;
         
         try {
-          cardImageDims = await calculateCardImageDimensions(
+          // Process the image to apply sizing mode with actual cropping/scaling
+          processedImageUrl = await this.processCardImageForSizing(
             cardImageUrl,
             cardDimensions.scaledCardWidthInches,
             cardDimensions.scaledCardHeightInches,
             sizingMode
           );
         } catch (error) {
-          console.warn(`Failed to calculate image dimensions for ${cardType} card ${cardInfo.id}:`, error);
-          // Fallback to scaled card dimensions
-          cardImageDims = {
-            width: cardDimensions.scaledCardWidthInches,
-            height: cardDimensions.scaledCardHeightInches,
-            imageWidth: cardDimensions.scaledCardWidthInches,
-            imageHeight: cardDimensions.scaledCardHeightInches
-          };
+          console.warn(`Failed to process card image sizing for ${cardType} card ID ${cardId}:`, error);
+          // Continue with original image
         }
 
         // Apply rotation if needed
         const rotation = getRotationForCardType(outputSettings, cardType);
-        let finalImageUrl = cardImageUrl;
-        let finalWidth = cardImageDims.width;
-        let finalHeight = cardImageDims.height;
+        let finalImageUrl = processedImageUrl;
         
         if (rotation !== 0) {
-          console.log(`Applying ${rotation}° rotation to ${cardType} card #${cardInfo.id}`);
+          console.log(`Applying ${rotation}° rotation to ${cardType} card ID ${cardId}`);
           
           try {
             const rotatedResult = await this.rotateImage(cardImageUrl, rotation);
@@ -578,7 +581,7 @@ export class ExportStep extends BaseStep {
             finalWidth = rotatedResult.width;
             finalHeight = rotatedResult.height;
           } catch (error) {
-            console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
+            console.warn(`Failed to apply rotation to ${cardType} card ID ${cardId}:`, error);
           }
         }
 
@@ -588,13 +591,13 @@ export class ExportStep extends BaseStep {
 
         // Warn if card goes off page
         if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
-          console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
+          console.warn(`Card ID ${cardId} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
         }
         if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
-          console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
+          console.warn(`Card ID ${cardId} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
         }
 
-        console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
+        console.log(`Adding ${cardType} card ID ${cardId} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 
         // Add the card image to PDF
         doc.addImage(
@@ -674,6 +677,109 @@ export class ExportStep extends BaseStep {
       };
       img.onerror = reject;
       img.src = imageUrl;
+    });
+  }
+
+  /**
+   * Process card image to apply sizing mode with actual cropping/scaling to match preview exactly
+   */
+  private async processCardImageForSizing(
+    cardImageUrl: string,
+    targetWidthInches: number,
+    targetHeightInches: number,
+    sizingMode: 'actual-size' | 'fit-to-card' | 'fill-card' = 'actual-size'
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Get image dimensions
+          const imageWidth = img.naturalWidth;
+          const imageHeight = img.naturalHeight;
+          
+          // Convert target dimensions to pixels at extraction DPI
+          const targetWidthPx = targetWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
+          const targetHeightPx = targetHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
+          
+          // Create canvas for the final processed image
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            throw new Error('Unable to create canvas context');
+          }
+          
+          // Set canvas to target card dimensions
+          canvas.width = targetWidthPx;
+          canvas.height = targetHeightPx;
+          
+          // Calculate image dimensions based on sizing mode
+          const imageAspectRatio = imageWidth / imageHeight;
+          const cardAspectRatio = targetWidthPx / targetHeightPx;
+          
+          let drawWidth = imageWidth;
+          let drawHeight = imageHeight;
+          let offsetX = 0;
+          let offsetY = 0;
+          
+          switch (sizingMode) {
+            case 'actual-size':
+              // Use image at its actual extracted size, centered in card area
+              drawWidth = imageWidth;
+              drawHeight = imageHeight;
+              offsetX = (targetWidthPx - drawWidth) / 2;
+              offsetY = (targetHeightPx - drawHeight) / 2;
+              break;
+              
+            case 'fit-to-card':
+              // Scale image to fit entirely within card boundaries, maintaining aspect ratio
+              if (imageAspectRatio > cardAspectRatio) {
+                // Image is wider relative to its height than the card - fit to width
+                drawWidth = targetWidthPx;
+                drawHeight = targetWidthPx / imageAspectRatio;
+                offsetX = 0;
+                offsetY = (targetHeightPx - drawHeight) / 2;
+              } else {
+                // Image is taller relative to its width than the card - fit to height
+                drawHeight = targetHeightPx;
+                drawWidth = targetHeightPx * imageAspectRatio;
+                offsetX = (targetWidthPx - drawWidth) / 2;
+                offsetY = 0;
+              }
+              break;
+              
+            case 'fill-card':
+              // Scale image to fill entire card area, maintaining aspect ratio (may crop edges)
+              if (imageAspectRatio > cardAspectRatio) {
+                // Image is wider - scale to fill height and crop width
+                drawHeight = targetHeightPx;
+                drawWidth = targetHeightPx * imageAspectRatio;
+                offsetX = (targetWidthPx - drawWidth) / 2; // This will be negative, cropping the sides
+                offsetY = 0;
+              } else {
+                // Image is taller - scale to fill width and crop height
+                drawWidth = targetWidthPx;
+                drawHeight = targetWidthPx / imageAspectRatio;
+                offsetX = 0;
+                offsetY = (targetHeightPx - drawHeight) / 2; // This will be negative, cropping top/bottom
+              }
+              break;
+          }
+          
+          // Clear canvas with white background
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetWidthPx, targetHeightPx);
+          
+          // Draw the image with calculated dimensions and position
+          ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+          
+          resolve(canvas.toDataURL('image/png'));
+        } catch (error) {
+          reject(error);
+        }
+      };
+      img.onerror = reject;
+      img.src = cardImageUrl;
     });
   }
 }
