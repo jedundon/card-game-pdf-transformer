@@ -56,7 +56,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   // Use centralized transformations
   // Use pipeline for configuration operations  
   const { extractCardImage } = useTransformations();
-  const { validateSettings, calculateLayout } = useConfigureStep();
+  const { validateSettings } = useConfigureStep();
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
