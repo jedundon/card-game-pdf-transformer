@@ -290,6 +290,34 @@ export class StateManager {
   }
 
   /**
+   * Get the pipeline instance for direct step execution
+   */
+  getPipeline(): TransformationPipeline {
+    return this.pipeline;
+  }
+
+  /**
+   * Execute a pipeline step through the state manager
+   */
+  async executeStep(stepId: string, input?: any): Promise<any> {
+    try {
+      this.setLoading(true);
+      const result = await this.pipeline.executeStep(stepId, input);
+      
+      // Update pipeline state after execution
+      this.state.pipeline = this.pipeline.getState();
+      this.emitStateChange(['pipeline']);
+      
+      return result;
+    } catch (error) {
+      this.addError(`Step execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error;
+    } finally {
+      this.setLoading(false);
+    }
+  }
+
+  /**
    * Private methods
    */
   private setupPipelineListeners(): void {

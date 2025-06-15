@@ -704,3 +704,23 @@ export function useDeltaPreview(
     metrics
   };
 }
+
+/**
+ * Hook to access the pipeline directly for step execution
+ */
+export function usePipeline() {
+  const stateManager = getStateManager();
+  
+  const executeStep = useCallback(async (stepId: string, input?: any) => {
+    return await stateManager.executeStep(stepId, input);
+  }, [stateManager]);
+
+  const getPipeline = useCallback(() => {
+    return stateManager.getPipeline();
+  }, [stateManager]);
+
+  return {
+    executeStep,
+    getPipeline
+  };
+}

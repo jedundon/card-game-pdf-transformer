@@ -23,7 +23,8 @@ export {
   useTransformations,
   useOptimizedPreview,
   useProgressivePreview,
-  useDeltaPreview
+  useDeltaPreview,
+  usePipeline
 } from './hooks';
 
 // Performance optimization hooks
