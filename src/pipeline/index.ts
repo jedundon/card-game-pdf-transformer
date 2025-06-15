@@ -24,7 +24,8 @@ export {
   useOptimizedPreview,
   useProgressivePreview,
   useDeltaPreview,
-  usePipeline
+  usePipeline,
+  useExtractStep
 } from './hooks';
 
 // Performance optimization hooks

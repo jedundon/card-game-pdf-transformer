@@ -4,7 +4,7 @@
  */
 
 import { StepRegistry } from '../StepRegistry';
-import { ExtractStep } from './ExtractStepMigration';
+import { ExtractStep } from './ExtractStep';
 import { ConfigureStep } from './ConfigureStep';
 import { ImportStep } from './ImportStep';
 import { ExportStep } from './ExportStep';

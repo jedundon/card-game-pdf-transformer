@@ -724,3 +724,44 @@ export function usePipeline() {
     getPipeline
   };
 }
+
+/**
+ * Hook for extraction operations using the pipeline step
+ */
+export function useExtractStep() {
+  const stateManager = getStateManager();
+  
+  const extractCard = useCallback(async (cardIndex: number, pdfData: any, pdfMode: any, pageSettings: any, extractionSettings: any) => {
+    try {
+      stateManager.setLoading(true);
+      
+      // Import and create ExtractStep instance 
+      const { ExtractStep } = await import('./steps/ExtractStep');
+      const extractStep = new ExtractStep();
+      
+      // Execute the extraction through the pipeline step
+      const result = await extractStep.extractCard({
+        pdfData,
+        pdfMode, 
+        pageSettings,
+        extractionSettings,
+        cardIndex
+      });
+      
+      if (!result.success) {
+        throw new Error(result.errors[0] || 'Extraction failed');
+      }
+      
+      return result.cardImageUrl;
+    } catch (error) {
+      stateManager.addError(`Failed to extract card: ${error}`);
+      throw error;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager]);
+
+  return {
+    extractCard
+  };
+}

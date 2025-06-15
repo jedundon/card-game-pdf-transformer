@@ -6,12 +6,15 @@ import {
   PreviewData,
   WorkflowSettings 
 } from '../types';
+import { extractCardImage } from '../../utils/cardUtils';
 
 export interface ExtractStepInput {
   pdfData: any;
   pdfMode: any;
   pageSettings: any;
   extractionSettings: any;
+  cardIndex?: number; // For single card extraction
+  batchExtraction?: boolean; // For extracting all cards
 }
 
 export interface ExtractStepSettings {
@@ -21,6 +24,17 @@ export interface ExtractStepSettings {
   selectedCards: Set<string>;
   showGrid: boolean;
   enableSelection: boolean;
+}
+
+export interface ExtractStepResult extends StepResult {
+  cardData?: CardData;
+  cardImageUrl?: string;
+  cardDimensions?: {
+    widthPx: number;
+    heightPx: number;
+    widthInches: number;
+    heightInches: number;
+  };
 }
 
 export interface ExtractStepState {
@@ -60,19 +74,102 @@ export class ExtractStep extends BaseStep {
       }
     };
   }
-
   async execute(input: CardData[], _settings: WorkflowSettings): Promise<CardData[]> {
     this.lastExecutionTime = Date.now();
     
     try {
       // For now, return input cards unchanged
-      // This will be implemented incrementally as we migrate logic
+      // This method is for batch processing all cards
       this.state.extractedCards = input;
       
       return input;
     } catch (error) {
       console.error('Extract step execution failed:', error);
       return [];
+    }
+  }
+  /**
+   * Extract a single card image - the main extraction operation
+   */
+  async extractCard(input: ExtractStepInput): Promise<ExtractStepResult> {
+    this.lastExecutionTime = Date.now();
+    
+    try {
+      const { pdfData, pdfMode, pageSettings, extractionSettings, cardIndex } = input;
+      
+      if (cardIndex === undefined) {
+        throw new Error('Card index required for single card extraction');
+      }
+
+      // Get active pages for extraction utility
+      const { getActivePages } = await import('../../utils/cardUtils');
+      const activePages = getActivePages(pageSettings);
+
+      // Use the centralized extraction utility
+      const cardImageUrl = await extractCardImage(
+        cardIndex,
+        pdfData,
+        pdfMode,
+        activePages,
+        pageSettings,
+        extractionSettings
+      );
+
+      if (!cardImageUrl) {
+        throw new Error('Failed to extract card image');
+      }
+
+      // Calculate card position in grid
+      const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+      const pageIndex = Math.floor(cardIndex / cardsPerPage);
+      const positionInPage = cardIndex % cardsPerPage;
+      const row = Math.floor(positionInPage / extractionSettings.grid.columns);
+      const col = positionInPage % extractionSettings.grid.columns;
+
+      // Create card data matching pipeline CardData interface
+      const cardData: CardData = {
+        id: `card-${cardIndex}`,
+        x: col * (extractionSettings.cardWidth || 100),
+        y: row * (extractionSettings.cardHeight || 140),
+        width: extractionSettings.cardWidth || 100,
+        height: extractionSettings.cardHeight || 140,
+        rotation: 0,
+        selected: false,
+        extracted: true,
+        sourcePageIndex: pageIndex,
+        extractedImageUrl: cardImageUrl,
+        thumbnailUrl: cardImageUrl // For now, use same image
+      };
+
+      const result: ExtractStepResult = {
+        stepId: this.id,
+        success: true,
+        data: [cardData],
+        cardData,
+        cardImageUrl,
+        errors: [],
+        warnings: [],
+        metadata: {
+          duration: Date.now() - this.lastExecutionTime,
+          cardsProcessed: 1,
+          cacheHit: false
+        }
+      };
+      
+      return result;
+    } catch (error) {
+      return {
+        stepId: this.id,
+        success: false,
+        data: [],
+        errors: [error instanceof Error ? error.message : 'Unknown extraction error'],
+        warnings: [],
+        metadata: {
+          duration: Date.now() - this.lastExecutionTime,
+          cardsProcessed: 0,
+          cacheHit: false
+        }
+      };
     }
   }
 

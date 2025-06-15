@@ -10,7 +10,7 @@ import {
   getAvailableCardIds
 } from '../utils/cardUtils';
 import { DPI_CONSTANTS } from '../constants';
-import { useTransformations } from '../pipeline';
+import { useTransformations, useExtractStep } from '../pipeline';
 import { useOptimizedPreview } from '../pipeline/previewOptimization';
 
 interface ExtractStepProps {
@@ -44,9 +44,9 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const [renderedPageData, setRenderedPageData] = useState<any>(null);
   const [isRendering, setIsRendering] = useState(false);
   const renderTaskRef = useRef<any>(null);
-  const renderingRef = useRef(false);
-    // Use centralized transformations
-  const { extractCardImage, renderPdfPage } = useTransformations();
+  const renderingRef = useRef(false);    // Use centralized transformations
+  const { renderPdfPage } = useTransformations();
+  const { extractCard } = useExtractStep();
     // Memoize activePages to prevent unnecessary re-renders
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 
@@ -207,13 +207,14 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     extractionSettings.gutterWidth,
     globalCardIndex
   ], [currentCard, currentPage, renderedPageData?.url, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, globalCardIndex]);
-
   const cardPreviewRenderer = useCallback(async () => {
     if (!renderedPageData || isRendering || !canvasRef.current) {
       throw new Error('Prerequisites not met for card preview');
     }
-    return await extractCardImage(globalCardIndex);
-  }, [renderedPageData, isRendering, extractCardImage, globalCardIndex]);
+    
+    // Use the pipeline step for extraction instead of direct utility
+    return await extractCard(globalCardIndex, pdfData, pdfMode, pageSettings, extractionSettings);
+  }, [renderedPageData, isRendering, extractCard, globalCardIndex, pdfData, pdfMode, pageSettings, extractionSettings]);
   const {
     result: cardPreviewUrl,
     isLoading: isCardPreviewLoading,
