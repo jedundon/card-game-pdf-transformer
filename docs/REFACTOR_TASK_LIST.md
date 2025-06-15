@@ -218,27 +218,67 @@ Plugin-like system for transformation steps that can be registered, configured, 
 
 ---
 
-## Phase 2: Step-by-Step Migration ✅ COMPLETED
+## Phase 2: Step-by-Step Migration 🔄 REOPENED - PIPELINE CONNECTION INCOMPLETE
 *Estimated Duration: 3-4 sprints*  
-*Status: ✅ **COMPLETED** - All transformation steps successfully migrated to pipeline architecture*
+*Status: 🔄 **REOPENED** - Pipeline infrastructure exists but UI components not connected*
 
-### Task 2.1: Migrate Extract Step ✅ COMPLETED
+**CRITICAL ISSUE IDENTIFIED:**
+Tasks 2.1-2.5 were marked as completed but the **UI components are NOT calling the pipeline step classes**. The pipeline infrastructure exists but is completely disconnected from the UI workflow.
+
+**IMMEDIATE REQUIRED ACTIONS:**
+- [ ] Connect ExtractStep.tsx to ExtractStep.ts pipeline class
+- [ ] Connect ConfigureStep.tsx to ConfigureStep.ts pipeline class  
+- [ ] Connect ImportStep.tsx to ImportStep.ts pipeline class
+- [ ] Connect ExportStep.tsx to ExportStep.ts pipeline class
+- [ ] Integrate PreviewGenerator and PreviewCache into UI components
+- [ ] Verify all transformation logic flows through pipeline, not local component logic
+
+### Task 2.1: Migrate Extract Step 🔄 REOPENED - NEEDS PIPELINE CONNECTION
 **Assignee:** AI Assistant  
 **Priority:** High  
-**Status:** ✅ **COMPLETED** - Extract step successfully migrated to pipeline
+**Status:** 🔄 **REOPENED** - Pipeline step class exists but NOT connected to UI component
 **Files to Modify:**
-- `src/components/ExtractStep.tsx`
-- Create: `src/pipeline/steps/ExtractStep.ts`
+- `src/components/ExtractStep.tsx` - **NEEDS PIPELINE INTEGRATION**
+- Create: `src/pipeline/steps/ExtractStep.ts` - ✅ EXISTS
 
 **Description:**
-Start with Extract step migration to establish the pattern and enable easier validation. This is the most complex step but also the most critical for user experience.
+Update ExtractStep component to actually use the pipeline step class for all extraction operations. The pipeline infrastructure exists but the UI component is not calling it.
+
+**CRITICAL REQUIREMENT:**
+The ExtractStep.tsx component MUST call the ExtractStep.ts pipeline class for all processing operations instead of implementing its own logic.
 
 **Implementation Details:**
-- Create ExtractStep class implementing TransformationStep
-- Move card extraction algorithms to pipeline
-- Implement real-time preview updates through pipeline
-- Add selection state management to pipeline
-- Maintain existing UI behavior exactly
+- **CONNECT** ExtractStep component to use StateManager and pipeline
+- **REPLACE** direct transformation logic with pipeline step calls
+- **REMOVE** duplicate extraction algorithms from UI component
+- **ENSURE** all processing flows through `stateManager.pipeline.executeStep('extract', data)`
+
+**Required Code Changes:**
+```typescript
+// Required in ExtractStep.tsx
+const stateManager = useStateManager();
+
+const handleExtraction = async () => {
+  const result = await stateManager.pipeline.executeStep('extract', {
+    pdfData: props.pdfData,
+    settings: props.extractionSettings
+  });
+  // Use pipeline result instead of local processing
+};
+```
+
+**Migration Steps:**
+1. ✅ Create pipeline ExtractStep class (DONE)
+2. 🔄 **CONNECT** component to use pipeline step for all operations
+3. 🔄 **REMOVE** extraction logic from component
+4. 🔄 **VERIFY** identical results through pipeline
+5. 🔄 **TEST** extraction accuracy and performance
+
+**Verification Requirements:**
+- Code review confirms ExtractStep.tsx calls ExtractStep.ts
+- No direct transformation logic remains in UI component
+- All settings changes flow through StateManager
+- Extraction results identical to current implementation
 
 **Migration Steps:**
 1. Create pipeline ExtractStep class alongside existing component
@@ -262,31 +302,47 @@ Start with Extract step migration to establish the pattern and enable easier val
 - **Property-Based Tests**: Test extraction with various card configurations
 
 **Acceptance Criteria:**
-- [x] Card extraction works through pipeline with identical results
-- [x] Real-time previews maintain performance (< 100ms updates)
-- [x] Selection and calibration tools functional
-- [x] All extraction settings properly applied
-- [x] Preview accuracy matches current implementation
-- [x] No regression in extraction quality
-- [x] **Unit tests for extraction algorithms (95%+ coverage)**
-- [x] **Visual regression test suite for previews**
-- [x] **Performance benchmarks meet or exceed current implementation**
-- [x] **Integration tests for complete extraction workflow**
+- [ ] **CRITICAL:** ExtractStep component calls ExtractStep pipeline step class for all operations
+- [ ] **CRITICAL:** All transformation logic removed from UI component  
+- [ ] Card extraction works through pipeline with identical results
+- [ ] Real-time previews maintain performance (< 100ms updates)
+- [ ] Selection and calibration tools functional
+- [ ] All extraction settings properly applied
+- [ ] Preview accuracy matches current implementation
+- [ ] No regression in extraction quality
+- [ ] **VERIFICATION:** Code review confirms pipeline step integration
+- [ ] **VERIFICATION:** No direct transformation logic remains in component
 
-### Task 2.2: Add Preview System Foundation ✅ COMPLETED
+### Task 2.2: Add Preview System Foundation 🔄 REOPENED - NEEDS UI INTEGRATION
 **Assignee:** AI Assistant  
 **Priority:** High  
-**Status:** ✅ **COMPLETED** - Preview System Foundation implemented successfully
+**Status:** 🔄 **REOPENED** - Preview classes exist but NOT used by UI components
 **Files Created:**
-- `src/pipeline/PreviewGenerator.ts`
-- `src/pipeline/PreviewCache.ts`
-- `src/pipeline/__tests__/PreviewGenerator.test.ts`
-- `src/pipeline/__tests__/PreviewCache.test.ts`
+- `src/pipeline/PreviewGenerator.ts` - ✅ EXISTS
+- `src/pipeline/PreviewCache.ts` - ✅ EXISTS
 **Files Modified:**
-- `src/pipeline/types.ts` (extended PreviewData metadata)
+- `src/pipeline/types.ts` (extended PreviewData metadata) - ✅ DONE
+**Files Needing Integration:**
+- `src/components/ExtractStep.tsx` - **NEEDS PREVIEW SYSTEM INTEGRATION**
+- `src/components/ConfigureStep.tsx` - **NEEDS PREVIEW SYSTEM INTEGRATION**
 
 **Description:**
-Build on the Extract step migration by implementing comprehensive preview generation system with caching.
+Connect the existing preview generation system to UI components. The PreviewGenerator and PreviewCache classes exist but are not being used by the UI.
+
+**CRITICAL REQUIREMENT:**
+UI components MUST use the PreviewGenerator and PreviewCache instead of implementing their own preview logic.
+
+**Required Integrations:**
+```typescript
+// Required in UI components
+const previewGenerator = usePreviewGenerator();
+const previewCache = usePreviewCache();
+
+const generatePreview = async () => {
+  const preview = await previewGenerator.generatePreview(cardData, settings);
+  // Use centralized preview instead of local generation
+};
+```
 
 **Implementation Details:**
 - On-demand preview generation for extract step and future steps
@@ -311,29 +367,40 @@ Build on the Extract step migration by implementing comprehensive preview genera
 - [x] **Memory leak tests pass**
 - [x] **Integration tests with Extract step**
 
-### Task 2.3: Migrate Configure Step ✅ COMPLETED
+### Task 2.3: Migrate Configure Step 🔄 REOPENED - NEEDS PIPELINE CONNECTION
 **Assignee:** AI Assistant  
 **Priority:** High  
-**Status:** ✅ **COMPLETED** - Configure Step successfully migrated to pipeline
+**Status:** 🔄 **REOPENED** - Pipeline step class exists but NOT connected to UI component
 **Files Created:**
-- `src/pipeline/steps/ConfigureStep.ts`
-- `src/pipeline/__tests__/ConfigureStep.test.ts`
+- `src/pipeline/steps/ConfigureStep.ts` - ✅ EXISTS
 **Files Modified:**
-- `src/pipeline/steps/index.ts` (added ConfigureStep registration)
+- `src/pipeline/steps/index.ts` (added ConfigureStep registration) - ✅ DONE
+**Files Needing Integration:**
+- `src/components/ConfigureStep.tsx` - **NEEDS PIPELINE INTEGRATION**
 
 **Description:**
-Migrate the configure/layout step to use the pipeline system, building on lessons learned from Extract step.
+Connect ConfigureStep component to use the ConfigureStep pipeline class for all configuration operations.
 
-**Implementation Details:**
-- Move grid configuration logic to pipeline
-- Implement card dimension calculations in pipeline
-- Add layout previews through pipeline
-- Maintain existing UI controls
-- Ensure configuration feeds correctly into Extract step
+**CRITICAL REQUIREMENT:**
+The ConfigureStep.tsx component MUST call the ConfigureStep.ts pipeline class instead of implementing its own configuration logic.
+
+**Required Integration:**
+```typescript
+// Required in ConfigureStep.tsx
+const stateManager = useStateManager();
+
+const handleConfiguration = async () => {
+  const result = await stateManager.pipeline.executeStep('configure', {
+    settings: props.outputSettings,
+    cardDimensions: props.cardDimensions
+  });
+  // Use pipeline result instead of local processing
+};
+```
 
 **Validation Strategy:**
-- Changes in Configure step should immediately reflect in Extract step previews
-- Grid settings must translate correctly to extraction parameters
+- Changes in Configure step should immediately reflect in Extract step previews through pipeline
+- Grid settings must translate correctly to extraction parameters via StateManager
 - Layout calculations should be identical to current implementation
 
 **Testing Strategy:**
@@ -343,39 +410,51 @@ Migrate the configure/layout step to use the pipeline system, building on lesson
 - **Cross-Step Tests**: Verify Configure changes reflect in Extract previews
 
 **Acceptance Criteria:**
-- [x] Configure step works through pipeline
-- [x] Grid settings properly applied and visible in Extract step
-- [x] Layout previews accurate
-- [x] No regression in functionality
-- [x] Seamless data flow to Extract step
-- [x] **Unit tests for configuration logic (90%+ coverage)**
-- [x] **Integration tests with Extract step validation**
-- [x] **Regression test suite passes 100%**
+- [ ] **CRITICAL:** ConfigureStep component calls ConfigureStep pipeline step class for all operations
+- [ ] **CRITICAL:** All configuration logic removed from UI component
+- [ ] Configure step works through pipeline with identical results
+- [ ] Grid settings properly applied and visible in Extract step through StateManager
+- [ ] Layout previews accurate via pipeline preview system
+- [ ] No regression in functionality
+- [ ] Seamless data flow to Extract step via pipeline
+- [ ] **VERIFICATION:** Code review confirms pipeline step integration
+- [ ] **VERIFICATION:** No direct configuration logic remains in component
 
-### Task 2.4: Migrate Import Step ✅ COMPLETED
+### Task 2.4: Migrate Import Step 🔄 REOPENED - NEEDS PIPELINE CONNECTION
 **Assignee:** AI Assistant  
 **Priority:** High  
-**Status:** ✅ **COMPLETED** - ImportStep migration fully implemented
+**Status:** 🔄 **REOPENED** - Pipeline step class exists but NOT connected to UI component
 **Files to Modify:**
-- `src/components/ImportStep.tsx`
-- Create: `src/pipeline/steps/ImportStep.ts` ✅
-- Create: `src/pipeline/__tests__/ImportStep.test.ts` ✅
-- Create: `src/pipeline/__tests__/ImportStepIntegration.test.ts` ✅
+- `src/components/ImportStep.tsx` - **NEEDS PIPELINE INTEGRATION**
+- Create: `src/pipeline/steps/ImportStep.ts` ✅ EXISTS
+**Files Created:**
+- `src/pipeline/__tests__/ImportStep.test.ts` ✅ EXISTS
+- `src/pipeline/__tests__/ImportStepIntegration.test.ts` ✅ EXISTS
 
 **Description:**
-Migrate import step to complete the core workflow pipeline, ensuring PDF data flows correctly to downstream steps.
+Connect ImportStep component to use the ImportStep pipeline class for all import operations.
 
-**Implementation Details:**
-- ✅ Create ImportStep class implementing TransformationStep
-- ✅ Maintain existing UI behavior exactly
-- ✅ Connect to pipeline state for PDF data
-- ✅ Add preview generation for imported PDF pages
-- ✅ Ensure PDF data properly feeds Configure and Extract steps
+**CRITICAL REQUIREMENT:**
+The ImportStep.tsx component MUST call the ImportStep.ts pipeline class instead of implementing its own import logic.
+
+**Required Integration:**
+```typescript
+// Required in ImportStep.tsx
+const stateManager = useStateManager();
+
+const handleImport = async (file: File) => {
+  const result = await stateManager.pipeline.executeStep('import', {
+    file: file,
+    settings: props.pageSettings
+  });
+  // Use pipeline result instead of local processing
+};
+```
 
 **Validation Strategy:**
-- ✅ Imported PDF should immediately be available in Configure step
-- ✅ Page settings should properly influence Configure and Extract steps
-- ✅ PDF mode changes should cascade correctly through pipeline
+- Imported PDF should immediately be available in Configure step through StateManager
+- Page settings should properly influence Configure and Extract steps via pipeline
+- PDF mode changes should cascade correctly through pipeline state
 
 **Testing Strategy:**
 - ✅ **Unit Tests**: Test PDF loading and page configuration logic (36 tests passing)
@@ -384,40 +463,50 @@ Migrate import step to complete the core workflow pipeline, ensuring PDF data fl
 - ✅ **End-to-End Tests**: Complete workflow from import to extract
 
 **Acceptance Criteria:**
-- ✅ **ImportStep works through pipeline** - Fully implemented and tested
-- ✅ **No change in user experience** - Pipeline maintains existing behavior
-- ✅ **PDF loading and page settings work identically** - Full PDF document and page settings support
-- ✅ **Preview generation functional** - Complete preview system with placeholder support
-- ✅ **Data flows correctly to Configure and Extract steps** - Pipeline state management implemented
-- ✅ **Unit tests for import logic (90%+ coverage)** - 36 comprehensive unit tests covering all functionality
-- ✅ **Integration tests for complete workflow** - 22 integration tests covering pipeline, registry, error handling, performance, and configuration
-- ✅ **File format compatibility tests** - Multiple PDF format and configuration scenarios tested
-- ✅ **End-to-end pipeline flow validation** - Integration tests validate complete pipeline workflow from import through downstream steps
+- [ ] **CRITICAL:** ImportStep component calls ImportStep pipeline step class for all operations
+- [ ] **CRITICAL:** All import logic removed from UI component
+- [ ] ImportStep works through pipeline with identical results
+- [ ] No change in user experience - pipeline maintains existing behavior
+- [ ] PDF loading and page settings work identically through pipeline
+- [ ] Preview generation functional via pipeline preview system
+- [ ] Data flows correctly to Configure and Extract steps via StateManager
+- [ ] **VERIFICATION:** Code review confirms pipeline step integration
+- [ ] **VERIFICATION:** No direct import logic remains in component
 
-### Task 2.5: Migrate Export Step ✅ COMPLETED
+### Task 2.5: Migrate Export Step 🔄 REOPENED - NEEDS PIPELINE CONNECTION
 **Assignee:** AI Assistant  
 **Priority:** Medium  
-**Status:** ✅ **COMPLETED** - Export step fully migrated to pipeline architecture
+**Status:** 🔄 **REOPENED** - Pipeline step class exists but NOT connected to UI component
 **Files Modified:**
-- `src/components/ExportStep.tsx` (reference)
+- `src/components/ExportStep.tsx` - **NEEDS PIPELINE INTEGRATION**
 - ✅ `src/pipeline/steps/ExportStep.ts` (created)
 - ✅ `src/pipeline/types.ts` (added export types)
 - ✅ `src/pipeline/steps/index.ts` (registered ExportStep)
 
 **Description:**
-Final step migration - move export logic to pipeline, completing the end-to-end workflow.
+Connect ExportStep component to use the ExportStep pipeline class for all export operations.
 
-**Implementation Details:**
-- ✅ **Move output generation to pipeline** - ExportStep class implemented with full PDF generation logic
-- ✅ **Add export previews** - generatePreview method creates canvas previews of export output
-- ✅ **Handle various output formats** - PDF export with configurable settings and layout options
-- ✅ **Maintain download functionality** - downloadFile method preserves existing download behavior
-- ✅ **Ensure exported cards match Configure step previews exactly** - Uses same card rendering pipeline
+**CRITICAL REQUIREMENT:**
+The ExportStep.tsx component MUST call the ExportStep.ts pipeline class instead of implementing its own export logic.
+
+**Required Integration:**
+```typescript
+// Required in ExportStep.tsx
+const stateManager = useStateManager();
+
+const handleExport = async () => {
+  const result = await stateManager.pipeline.executeStep('export', {
+    cards: extractedCards,
+    settings: props.outputSettings
+  });
+  // Use pipeline result instead of local processing
+};
+```
 
 **Validation Strategy:**
-- ✅ **Exported cards should be pixel-perfect matches to Configure step previews** - Same rendering engine used
-- ✅ **All output formats should work identically** - PDF generation preserves quality and layout
-- ✅ **Export settings should be properly applied** - OutputSettings and ExportSettings fully integrated
+- Exported cards should be pixel-perfect matches to Configure step previews through pipeline
+- All output formats should work identically via pipeline
+- Export settings should be properly applied through StateManager
 
 **Testing Strategy:**
 - ✅ **Unit Tests**: Test export generation and format handling - 18 comprehensive unit tests implemented
@@ -426,15 +515,15 @@ Final step migration - move export logic to pipeline, completing the end-to-end 
 - ✅ **Quality Tests**: Verify no quality loss in export process - Canvas rendering and PDF generation validated
 
 **Acceptance Criteria:**
-- ✅ **Export generation works through pipeline** - ExportStep.execute() generates PDFs through pipeline
-- ✅ **All output formats supported** - PDF export with front/back/combined options
-- ✅ **Preview shows final output accurately matching Configure step** - generatePreview() creates accurate previews
-- ✅ **Download functionality unchanged** - downloadFile() method preserves existing behavior
-- ✅ **No quality loss in export process** - High-DPI rendering and quality preservation implemented
-- ✅ **Unit tests for export logic (90%+ coverage)** - 18 unit tests covering all core functionality
-- ✅ **Integration tests for complete workflow** - 8 integration tests validating pipeline integration
-- ✅ **Format validation tests for all export types** - PDF generation and output validation tested
-- ✅ **Quality assurance tests pass** - All tests passing with comprehensive coverage
+- [ ] **CRITICAL:** ExportStep component calls ExportStep pipeline step class for all operations
+- [ ] **CRITICAL:** All export logic removed from UI component
+- [ ] Export generation works through pipeline with identical results
+- [ ] All output formats supported via pipeline
+- [ ] Preview shows final output accurately matching Configure step through pipeline
+- [ ] Download functionality unchanged but routed through pipeline
+- [ ] No quality loss in export process via pipeline
+- [ ] **VERIFICATION:** Code review confirms pipeline step integration
+- [ ] **VERIFICATION:** No direct export logic remains in component
 
 ---
 
