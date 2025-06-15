@@ -13,7 +13,7 @@ import {
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
 import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
-import { useTransformations } from '../pipeline';
+import { useTransformations, useConfigureStep } from '../pipeline';
 import { useOptimizedPreview } from '../pipeline/previewOptimization';
 interface ConfigureStepProps {
   pdfData: any;
@@ -54,7 +54,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     verticalScale: ''  });
   
   // Use centralized transformations
+  // Use pipeline for configuration operations  
   const { extractCardImage } = useTransformations();
+  const { validateSettings, calculateLayout } = useConfigureStep();
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -154,23 +156,33 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       setCardPreviewDimensions(null);
     }
   }, [cardPreviewUrl]);
-
-  const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
+  const handlePageSizeChange = async (dimension: string, value: number | { width: number; height: number }) => {
+    let newSettings;
+    
     if (dimension === 'preset' && typeof value === 'object') {
-      const newSettings = {
+      newSettings = {
         ...outputSettings,
         pageSize: value
       };
-      onSettingsChange(newSettings);
     } else if (typeof value === 'number') {
-      const newSettings = {
+      newSettings = {
         ...outputSettings,
         pageSize: {
           ...outputSettings.pageSize,
           [dimension]: value
         }
       };
-      onSettingsChange(newSettings);
+    }
+    
+    if (newSettings) {
+      // Validate through pipeline before applying
+      try {
+        await validateSettings(newSettings);
+        onSettingsChange(newSettings);
+      } catch (error) {
+        // Pipeline validation failed, still apply settings but user will see error
+        onSettingsChange(newSettings);
+      }
     }
   };
   const handleOffsetChange = (direction: string, value: number) => {
@@ -182,8 +194,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       }
     };
     onSettingsChange(newSettings);
-  };
-  const handleCardSizeChange = (dimension: 'widthInches' | 'heightInches', value: number) => {
+  };  const handleCardSizeChange = async (dimension: 'widthInches' | 'heightInches', value: number) => {
     const newSettings = {
       ...outputSettings,
       cardSize: {
@@ -191,7 +202,15 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         [dimension]: value
       }
     };
-    onSettingsChange(newSettings);
+    
+    // Validate through pipeline before applying
+    try {
+      await validateSettings(newSettings);
+      onSettingsChange(newSettings);
+    } catch (error) {
+      // Pipeline validation failed, still apply settings but user will see error
+      onSettingsChange(newSettings);
+    }
   };
 
   const handleCardScalePercentChange = (value: number) => {

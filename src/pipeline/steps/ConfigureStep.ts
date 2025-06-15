@@ -179,6 +179,97 @@ export class ConfigureStep extends BaseStep {
   }
 
   /**
+   * Validate output settings specifically
+   */
+  validateOutputSettings(outputSettings: any): ValidationResult {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+
+    // Validate page size
+    if (outputSettings.pageWidth <= 0) {
+      errors.push({
+        field: 'pageWidth',
+        message: 'Page width must be greater than 0',
+        code: 'INVALID_PAGE_WIDTH'
+      });
+    }
+
+    if (outputSettings.pageHeight <= 0) {
+      errors.push({
+        field: 'pageHeight',
+        message: 'Page height must be greater than 0',
+        code: 'INVALID_PAGE_HEIGHT'
+      });
+    }
+
+    // Validate DPI
+    if (outputSettings.dpi <= 0) {
+      errors.push({
+        field: 'dpi',
+        message: 'DPI must be greater than 0',
+        code: 'INVALID_DPI'
+      });
+    }
+
+    // Validate margins
+    if (outputSettings.margin < 0) {
+      errors.push({
+        field: 'margin',
+        message: 'Margin cannot be negative',
+        code: 'INVALID_MARGIN'
+      });
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings
+    };
+  }
+  /**
+   * Calculate layout dimensions and settings
+   */
+  async calculateLayout(input: ConfigureStepInput & { outputSettings: any }): Promise<{
+    cardDimensions: { widthPx: number; heightPx: number; widthInches: number; heightInches: number };
+    layoutMetrics: { totalCards: number; cardsPerPage: number; pagesNeeded: number };
+  }> {
+    const { pdfMode, pageSettings, outputSettings } = input;
+    
+    try {
+      // Import calculation utilities
+      const { calculateCardDimensions, getActivePages, calculateTotalCards } = await import('../../utils/cardUtils');
+      
+      const activePages = getActivePages(pageSettings);
+      const cardsPerPage = outputSettings.grid?.rows * outputSettings.grid?.columns || 1;
+      const totalCards = calculateTotalCards(pdfMode, activePages, cardsPerPage);
+      
+      // Calculate card dimensions based on output settings
+      const dimensionResult = calculateCardDimensions(outputSettings);
+      
+      // Convert to the expected format
+      const cardDimensions = {
+        widthPx: dimensionResult.width,
+        heightPx: dimensionResult.height,
+        widthInches: dimensionResult.targetCardWidthInches || dimensionResult.scaledCardWidthInches,
+        heightInches: dimensionResult.targetCardHeightInches || dimensionResult.scaledCardHeightInches
+      };
+      
+      const pagesNeeded = Math.ceil(totalCards / cardsPerPage);
+      
+      return {
+        cardDimensions,
+        layoutMetrics: {
+          totalCards,
+          cardsPerPage,
+          pagesNeeded
+        }
+      };
+    } catch (error) {
+      throw new Error(`Layout calculation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Update configuration with new input data
    */
   updateInput(input: ConfigureStepInput): void {

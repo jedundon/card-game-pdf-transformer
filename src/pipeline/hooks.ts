@@ -765,3 +765,58 @@ export function useExtractStep() {
     extractCard
   };
 }
+
+/**
+ * Hook for configuration operations using the pipeline step
+ */
+export function useConfigureStep() {
+  const stateManager = getStateManager();
+  
+  const validateSettings = useCallback(async (outputSettings: any) => {
+    try {
+      // Import and create ConfigureStep instance 
+      const { ConfigureStep } = await import('./steps/ConfigureStep');
+      const configureStep = new ConfigureStep();
+      
+      // Validate settings through the pipeline step
+      const validation = configureStep.validateOutputSettings(outputSettings);
+        if (!validation.valid) {
+        // Add validation errors to state
+        validation.errors.forEach((error: any) => {
+          stateManager.addError(`Configuration error: ${error.message}`);
+        });
+      }
+      
+      return validation;
+    } catch (error) {
+      stateManager.addError(`Failed to validate configuration: ${error}`);
+      throw error;
+    }
+  }, [stateManager]);
+
+  const calculateLayout = useCallback(async (pdfData: any, pdfMode: any, pageSettings: any, outputSettings: any) => {
+    try {
+      // Import and create ConfigureStep instance 
+      const { ConfigureStep } = await import('./steps/ConfigureStep');
+      const configureStep = new ConfigureStep();
+      
+      // Calculate layout through the pipeline step
+      const result = await configureStep.calculateLayout({
+        pdfData,
+        pdfMode,
+        pageSettings,
+        outputSettings
+      });
+      
+      return result;
+    } catch (error) {
+      stateManager.addError(`Failed to calculate layout: ${error}`);
+      throw error;
+    }
+  }, [stateManager]);
+
+  return {
+    validateSettings,
+    calculateLayout
+  };
+}
