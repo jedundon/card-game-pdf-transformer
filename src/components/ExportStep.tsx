@@ -4,12 +4,8 @@ import {
   getRotationForCardType, 
   getActivePages, 
   calculateTotalCards,
-  getAvailableCardIds,
-  getCardInfo,
-  calculateCardDimensions,
-  calculateCardImageDimensions
+  calculateCardDimensions
 } from '../utils/cardUtils';
-import jsPDF from 'jspdf';
 import { useTransformations } from '../pipeline';
 
 interface ExportStepProps {
@@ -32,7 +28,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   onPrevious
 }) => {
   // Use centralized transformations
-  const { extractCardImage } = useTransformations();
+  const { generateExport } = useTransformations();
   
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
   const [exportedFiles, setExportedFiles] = useState<{
@@ -128,185 +124,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     return {
       isValid: errors.length === 0,
       errors
-    };
-  };
-
-  // Generate a PDF with all cards of a specific type
-  const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
-    if (!pdfData) return null;
-
-    try {
-      console.log(`Starting ${cardType} PDF generation...`);
-      
-      // Get all card IDs for this type
-      const cardIds = getAvailableCardIds(cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
-      
-      console.log(`Available ${cardType} card IDs:`, cardIds);
-      
-      if (cardIds.length === 0) {
-        console.log(`No ${cardType} cards found`);
-        return null;
-      }
-
-      // Create new PDF document
-      const doc = new jsPDF({
-        orientation: outputSettings.pageSize.width > outputSettings.pageSize.height ? 'landscape' : 'portrait',
-        unit: 'in',
-        format: [outputSettings.pageSize.width, outputSettings.pageSize.height]
-      });
-
-      let cardCount = 0;
-      
-      // Find the maximum card index for iteration
-      const maxCardIndex = activePages.length * cardsPerPage;
-      
-      console.log(`Processing up to ${maxCardIndex} card indices for ${cardType} cards...`);
-      
-      // Process each card index to find cards of the specified type
-      for (let cardIndex = 0; cardIndex < maxCardIndex; cardIndex++) {
-        const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
-        
-        // Skip cards that don't match the type we're generating
-        if (cardInfo.type.toLowerCase() !== cardType) continue;
-        
-        console.log(`Processing ${cardType} card ${cardInfo.id} at index ${cardIndex}...`);
-          // Extract the card image
-        const cardImageUrl = await extractCardImage(cardIndex);
-        
-        if (!cardImageUrl) {
-          console.warn(`Failed to extract card image for ${cardType} card ${cardInfo.id}`);
-          continue;
-        }
-
-        // Create a new page for each card
-        if (cardCount > 0) {
-          doc.addPage();
-        }        // Calculate card dimensions using new settings
-        const cardDimensions = calculateCardDimensions(outputSettings);        // Calculate card image dimensions based on the sizing mode
-        const sizingMode = outputSettings.cardImageSizingMode || 'actual-size';
-        let cardImageDims;
-        
-        console.log(`Applying sizing mode "${sizingMode}" to ${cardType} card ${cardInfo.id}`);
-        
-        try {
-          cardImageDims = await calculateCardImageDimensions(
-            cardImageUrl,
-            cardDimensions.scaledCardWidthInches,
-            cardDimensions.scaledCardHeightInches,
-            sizingMode
-          );
-          
-          console.log(`Card ${cardInfo.id} image sizing: ${cardImageDims.imageWidth.toFixed(3)}" × ${cardImageDims.imageHeight.toFixed(3)}" → ${cardImageDims.width.toFixed(3)}" × ${cardImageDims.height.toFixed(3)}" (${sizingMode})`);
-        } catch (error) {
-          console.warn(`Failed to calculate image dimensions for ${cardType} card ${cardInfo.id}:`, error);
-          // Fallback to scaled card dimensions
-          cardImageDims = {
-            width: cardDimensions.scaledCardWidthInches,
-            height: cardDimensions.scaledCardHeightInches,
-            imageWidth: cardDimensions.scaledCardWidthInches,
-            imageHeight: cardDimensions.scaledCardHeightInches
-          };
-        }
-
-        // Use the calculated image dimensions
-        const cardWidthInches = cardImageDims.width;
-        const cardHeightInches = cardImageDims.height;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
-        const rotation = getRotationForCardType(outputSettings, cardType);
-        let finalImageUrl = cardImageUrl;
-        let finalWidth = cardWidthInches;
-        let finalHeight = cardHeightInches;
-        
-        if (rotation !== 0) {
-          console.log(`Applying ${rotation}° rotation to ${cardType} card #${cardInfo.id}`);
-          
-          try {
-            // Create a new canvas for rotation
-            const rotationCanvas = document.createElement('canvas');
-            const rotationCtx = rotationCanvas.getContext('2d');
-            
-            if (rotationCtx) {
-              // Load the image
-              const img = new Image();
-              await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
-                img.src = cardImageUrl;
-              });
-              
-              // For 90° or 270° rotations, we need to swap width/height of final dimensions
-              if (rotation === 90 || rotation === 270) {
-                finalWidth = cardHeightInches;
-                finalHeight = cardWidthInches;
-              }
-              
-              // Calculate the canvas size needed for rotation
-              const radians = (rotation * Math.PI) / 180;
-              const cos = Math.abs(Math.cos(radians));
-              const sin = Math.abs(Math.sin(radians));
-              
-              const rotatedCanvasWidth = img.width * cos + img.height * sin;
-              const rotatedCanvasHeight = img.width * sin + img.height * cos;
-              
-              rotationCanvas.width = rotatedCanvasWidth;
-              rotationCanvas.height = rotatedCanvasHeight;
-              
-              // Clear canvas and setup transformation
-              rotationCtx.clearRect(0, 0, rotatedCanvasWidth, rotatedCanvasHeight);
-              rotationCtx.save();
-              
-              // Move to center, rotate, then draw image centered
-              rotationCtx.translate(rotatedCanvasWidth / 2, rotatedCanvasHeight / 2);
-              rotationCtx.rotate(radians);
-              rotationCtx.drawImage(img, -img.width / 2, -img.height / 2);
-              
-              rotationCtx.restore();
-              
-              // Get rotated image as data URL
-              finalImageUrl = rotationCanvas.toDataURL('image/png');
-              
-              console.log(`Rotation applied successfully to ${cardType} card #${cardInfo.id}`);
-            }
-          } catch (error) {
-            console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
-            // Continue with original image if rotation fails
-          }}        // Calculate position
-        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal;
-        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical;
-
-        // Warn if card goes off page (but still allow it in case user intends it)
-        if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
-          console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
-        }
-        if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
-          console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
-        }
-
-        console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
-
-        // Add the card image to PDF
-        doc.addImage(
-          finalImageUrl,
-          'PNG',
-          finalX,
-          finalY,
-          finalWidth,
-          finalHeight
-        );
-
-        cardCount++;
-      }
-
-      console.log(`${cardType} PDF generation completed with ${cardCount} cards`);
-
-      if (cardCount === 0) return null;
-
-      // Return the PDF as a blob
-      return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
-    } catch (error) {
-      console.error(`Error generating ${cardType} PDF:`, error);
-      return null;
-    }
-  };
+    };  };
 
   const handleExport = async () => {
     setExportStatus('processing');
@@ -326,25 +144,21 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       console.log('Total Cards:', totalCards);
       console.log('Active Pages:', activePages.length);
       console.log('Output Settings:', outputSettings);
-      
-      // Generate both PDFs
-      const [frontsPdf, backsPdf] = await Promise.all([
-        generatePDF('front'),
-        generatePDF('back')
-      ]);
-
-      console.log('PDF generation completed:', {
-        frontsPdf: frontsPdf ? 'Generated' : 'No fronts found',
-        backsPdf: backsPdf ? 'Generated' : 'No backs found'
+        // Use pipeline export functionality
+      const exportResults = await generateExport({
+        cardType: 'both', // Generate both fronts and backs
+        outputSettings
       });
 
-      // Create download URLs
-      const frontsUrl = frontsPdf ? URL.createObjectURL(frontsPdf) : null;
-      const backsUrl = backsPdf ? URL.createObjectURL(backsPdf) : null;
+      console.log('PDF generation completed:', {
+        frontsPdf: exportResults.frontsPdf ? 'Generated' : 'No fronts found',
+        backsPdf: exportResults.backsPdf ? 'Generated' : 'No backs found'
+      });
 
+      // Set the exported files URLs from the pipeline results
       setExportedFiles({
-        fronts: frontsUrl,
-        backs: backsUrl
+        fronts: exportResults.frontsUrl || null,
+        backs: exportResults.backsUrl || null
       });
       
       setExportStatus('completed');

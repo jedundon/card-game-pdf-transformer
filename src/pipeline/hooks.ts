@@ -240,7 +240,7 @@ export function usePipelineState() {
 export function useTransformations() {
   const stateManager = getStateManager();
   const { pdfData } = usePdfData();
-  const { pageSettings, extractionSettings, pdfMode } = useSettings();
+  const { pageSettings, extractionSettings, pdfMode, outputSettings } = useSettings();
 
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     try {
@@ -323,11 +323,76 @@ export function useTransformations() {
     } finally {
       stateManager.setLoading(false);
     }
-  }, [stateManager, pdfData, pageSettings]);
+  }, [stateManager, pdfData, pageSettings]);  const generateExport = useCallback(async (options: {
+    cardType?: 'front' | 'back' | 'both';
+    outputSettings?: any;
+    onProgress?: (progress: number) => void;
+  } = {}): Promise<{
+    frontsPdf?: Blob;
+    backsPdf?: Blob;
+    frontsUrl?: string;
+    backsUrl?: string;
+  }> => {
+    try {
+      stateManager.setLoading(true);
+      
+      // Get the ExportStep from the registry
+      const { stepRegistry } = await import('./steps');
+      const exportStepInstance = stepRegistry.getStep('export');
+      
+      if (!exportStepInstance) {
+        throw new Error('Export step not found in registry');
+      }
+      
+      // Cast to ExportStep to access specific methods
+      const exportStep = exportStepInstance as any; // We know this is ExportStep from registry
+        // Build proper WorkflowSettings for the export step
+      const workflowSettings = {
+        inputMode: 'pdf' as const,
+        outputFormat: 'pdf' as const,
+        dpi: 300,
+        quality: 'high' as const,
+        preserveAspectRatio: true,
+        
+        // Current settings from state
+        pdfData,
+        pdfMode,
+        pageSettings,
+        extractionSettings,
+        outputSettings: options.outputSettings || outputSettings
+      };
+      
+      // Execute the export step
+      await exportStep.execute([], workflowSettings);
+      
+      // Get the export results
+      const exportResults = exportStep.getExportResults();
+      const results: { frontsPdf?: Blob; backsPdf?: Blob; frontsUrl?: string; backsUrl?: string; } = {};
+      
+      if (exportResults) {
+        if (options.cardType !== 'back' && exportResults.frontsBlob) {
+          results.frontsPdf = exportResults.frontsBlob;
+          results.frontsUrl = URL.createObjectURL(exportResults.frontsBlob);
+        }
+        
+        if (options.cardType !== 'front' && exportResults.backsBlob) {
+          results.backsPdf = exportResults.backsBlob;
+          results.backsUrl = URL.createObjectURL(exportResults.backsBlob);
+        }
+      }
+        return results;
+    } catch (error) {
+      stateManager.addError(`Export failed: ${error}`);
+      throw error;
+    } finally {
+      stateManager.setLoading(false);
+    }
+  }, [stateManager, pdfData, pdfMode, pageSettings, extractionSettings, outputSettings]);
 
   return {
     extractCardImage,
-    renderPdfPage
+    renderPdfPage,
+    generateExport
   };
 }
 

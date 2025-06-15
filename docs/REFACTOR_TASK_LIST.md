@@ -506,25 +506,29 @@ Clean up old transformation code after successful migration.
 - ✅ Feature flags for rollback if needed
 
 **Files Modified:**
-- `src/pipeline/hooks.ts` (added useTransformations hook)
+- `src/pipeline/hooks.ts` (added useTransformations hook with generateExport method)
 - `src/pipeline/index.ts` (exported useTransformations)
 - `src/components/ExtractStep.tsx` (removed duplicate extractCardImage and PDF rendering)
 - `src/components/ConfigureStep.tsx` (removed duplicate extractCardImage wrapper)
-- `src/components/ExportStep.tsx` (updated to use centralized extractCardImage)
+- ✅ `src/components/ExportStep.tsx` (fully migrated to use centralized pipeline export)
 
 **Key Changes:**
 - **Centralized Transformations Hook**: Created `useTransformations` hook providing:
   - `extractCardImage()` method wrapping cardUtils with error handling
   - `renderPdfPage()` method for centralized PDF rendering with zoom support
+  - ✅ **`generateExport()` method for centralized PDF export generation**
   - Integrated loading states and error management through StateManager
 
 - **Component Cleanup**: 
   - Removed duplicate `extractCardImage` wrapper functions from all components
   - Replaced 50+ lines of PDF rendering code in ExtractStep with centralized call
+  - ✅ **Eliminated 150+ lines of duplicate PDF generation code in ExportStep**
+  - ✅ **Removed legacy jsPDF imports and manual PDF generation logic**
   - Eliminated redundant imports of `extractCardImage as extractCardImageUtil`
   - Simplified component logic while maintaining full functionality
 
 - **Error Handling**: Centralized error and loading state management in transformation hook
+- ✅ **Export Integration**: ExportStep now uses pipeline ExportStep class through generateExport hook
 
 **Testing Results:**
 - All 327 tests pass (no regressions)
