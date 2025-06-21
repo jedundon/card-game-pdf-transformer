@@ -82,13 +82,14 @@ export async function calculateFinalCardRenderDimensions(
       let finalHeightInches = originalImageHeightInches;
       
       switch (sizingMode) {
-        case 'actual-size':
+        case 'actual-size': {
           // Use image at its original extracted size
           finalWidthInches = originalImageWidthInches;
           finalHeightInches = originalImageHeightInches;
           break;
+        }
           
-        case 'fit-to-card':
+        case 'fit-to-card': {
           // Scale to fit entirely within card boundaries, maintaining aspect ratio
           const imageAspectRatio = originalImageWidthInches / originalImageHeightInches;
           const cardAspectRatio = targetCardWidthInches / targetCardHeightInches;
@@ -103,8 +104,9 @@ export async function calculateFinalCardRenderDimensions(
             finalWidthInches = targetCardHeightInches * imageAspectRatio;
           }
           break;
+        }
           
-        case 'fill-card':
+        case 'fill-card': {
           // Scale to fill entire card area, maintaining aspect ratio (may crop)
           const imageAspectRatioFill = originalImageWidthInches / originalImageHeightInches;
           const cardAspectRatioFill = targetCardWidthInches / targetCardHeightInches;
@@ -119,6 +121,7 @@ export async function calculateFinalCardRenderDimensions(
             finalHeightInches = targetCardWidthInches / imageAspectRatioFill;
           }
           break;
+        }
       }
       
       // Apply scale percentage to final dimensions
@@ -296,8 +299,8 @@ export function calculatePreviewScaling(
   positioning: CardPositioning,
   pageWidth: number,
   pageHeight: number,
-  maxPreviewWidth: number = 400,
-  maxPreviewHeight: number = 500
+  maxPreviewWidth = 400,
+  maxPreviewHeight = 500
 ): {
   scale: number;
   previewPageWidth: number;

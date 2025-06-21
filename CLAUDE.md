@@ -38,10 +38,14 @@ This is a React-based PDF transformation tool with a 4-step wizard:
 - **Worker Setup**: PDF.js worker copied to public/ directory for browser compatibility
 - **Card Extraction**: Utility functions in `utils/cardUtils.ts` handle complex card identification logic
 - **DPI Handling**: Different DPI constants for extraction (300) vs screen display (72/96)
+- **Unified Rendering**: Shared `renderUtils.ts` ensures preview and export use identical calculations
 
 ### Component Structure
 - `components/` - Step components and shared utilities
-- `utils/` - Business logic separated from UI (cardUtils.ts, calibrationUtils.ts)
+- `utils/` - Business logic separated from UI
+  - `cardUtils.ts` - Card identification and calculation logic
+  - `renderUtils.ts` - Unified rendering functions for preview and export consistency
+  - `calibrationUtils.ts` - Printer calibration utilities
 - `constants.ts` - Application-wide constants (DPI, preview constraints)
 - `defaults.ts` - Default configuration values
 
