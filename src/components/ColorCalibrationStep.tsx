@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'lucide-react';
 import { 
   getActivePages, 
   calculateTotalCards, 
@@ -18,7 +18,9 @@ import {
 import { 
   applyColorTransformation,
   getDefaultColorTransformation,
-  ColorTransformation
+  ColorTransformation,
+  COLOR_PRESETS,
+  ColorPresetKey
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
@@ -325,6 +327,29 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     onColorSettingsChange(newSettings);
   }, [cardRenderData, cropRegionDimensions, hoverPosition, colorSettings, onColorSettingsChange]);
 
+  // Helper function to update color transformation
+  const updateColorTransformation = useCallback((field: keyof ColorTransformation, value: number) => {
+    const newSettings = {
+      ...colorSettings,
+      finalAdjustments: {
+        ...colorSettings.finalAdjustments,
+        [field]: value
+      }
+    };
+    onColorSettingsChange(newSettings);
+  }, [colorSettings, onColorSettingsChange]);
+
+  // Helper function to apply color preset
+  const applyColorPreset = useCallback((presetKey: ColorPresetKey) => {
+    const preset = COLOR_PRESETS[presetKey];
+    const newSettings = {
+      ...colorSettings,
+      selectedPreset: presetKey,
+      finalAdjustments: { ...preset.transformation }
+    };
+    onColorSettingsChange(newSettings);
+  }, [colorSettings, onColorSettingsChange]);
+
   // Ensure currentCardId is valid for the current view mode
   useEffect(() => {
     if (totalFilteredCards > 0 && !currentCardExists) {
@@ -374,15 +399,38 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </div>
           </div>
 
-          {/* Basic Color Controls */}
+          {/* Color Presets */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Basic Color Controls
+              Color Presets
             </h4>
-            <div className="space-y-4">
+            <div className="space-y-2">
+              {Object.entries(COLOR_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  onClick={() => applyColorPreset(key as ColorPresetKey)}
+                  className={`w-full text-left p-2 rounded-md text-xs transition-colors ${
+                    colorSettings?.selectedPreset === key
+                      ? 'bg-blue-100 border border-blue-300 text-blue-800'
+                      : 'bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="font-medium">{preset.name}</div>
+                  <div className="text-gray-600 mt-1">{preset.description}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Basic Adjustments */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Basic Adjustments
+            </h4>
+            <div className="space-y-3">
               {/* Brightness */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
                   Brightness: {currentColorTransformation.brightness}%
                 </label>
                 <input
@@ -391,23 +439,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   max="100"
                   step="1"
                   value={currentColorTransformation.brightness}
-                  onChange={(e) => {
-                    const newSettings = {
-                      ...colorSettings,
-                      finalAdjustments: {
-                        ...colorSettings.finalAdjustments,
-                        brightness: parseInt(e.target.value)
-                      }
-                    };
-                    onColorSettingsChange(newSettings);
-                  }}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  onChange={(e) => updateColorTransformation('brightness', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
               {/* Contrast */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
                   Contrast: {currentColorTransformation.contrast.toFixed(2)}x
                 </label>
                 <input
@@ -416,23 +455,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   max="2.0"
                   step="0.05"
                   value={currentColorTransformation.contrast}
-                  onChange={(e) => {
-                    const newSettings = {
-                      ...colorSettings,
-                      finalAdjustments: {
-                        ...colorSettings.finalAdjustments,
-                        contrast: parseFloat(e.target.value)
-                      }
-                    };
-                    onColorSettingsChange(newSettings);
-                  }}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  onChange={(e) => updateColorTransformation('contrast', parseFloat(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
               {/* Saturation */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">
                   Saturation: {currentColorTransformation.saturation}%
                 </label>
                 <input
@@ -441,34 +471,254 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   max="100"
                   step="1"
                   value={currentColorTransformation.saturation}
-                  onChange={(e) => {
-                    const newSettings = {
-                      ...colorSettings,
-                      finalAdjustments: {
-                        ...colorSettings.finalAdjustments,
-                        saturation: parseInt(e.target.value)
-                      }
-                    };
-                    onColorSettingsChange(newSettings);
-                  }}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  onChange={(e) => updateColorTransformation('saturation', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
 
-              {/* Reset Button */}
-              <button
-                onClick={() => {
-                  const newSettings = {
-                    ...colorSettings,
-                    finalAdjustments: getDefaultColorTransformation()
-                  };
-                  onColorSettingsChange(newSettings);
-                }}
-                className="w-full mt-3 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
-              >
-                Reset to Default
-              </button>
+              {/* Hue */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Hue: {currentColorTransformation.hue}°
+                </label>
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value={currentColorTransformation.hue}
+                  onChange={(e) => updateColorTransformation('hue', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Gamma */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Gamma: {currentColorTransformation.gamma.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={currentColorTransformation.gamma}
+                  onChange={(e) => updateColorTransformation('gamma', parseFloat(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Vibrance */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Vibrance: {currentColorTransformation.vibrance}%
+                </label>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={currentColorTransformation.vibrance}
+                  onChange={(e) => updateColorTransformation('vibrance', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
             </div>
+          </div>
+
+          {/* Per-Channel RGB Controls */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              RGB Channel Control
+            </h4>
+            <div className="space-y-3">
+              {/* Red Channel */}
+              <div>
+                <label className="block text-xs font-medium text-red-600 mb-1">
+                  Red: {currentColorTransformation.redMultiplier.toFixed(2)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={currentColorTransformation.redMultiplier}
+                  onChange={(e) => updateColorTransformation('redMultiplier', parseFloat(e.target.value))}
+                  className="w-full h-1 bg-red-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Green Channel */}
+              <div>
+                <label className="block text-xs font-medium text-green-600 mb-1">
+                  Green: {currentColorTransformation.greenMultiplier.toFixed(2)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={currentColorTransformation.greenMultiplier}
+                  onChange={(e) => updateColorTransformation('greenMultiplier', parseFloat(e.target.value))}
+                  className="w-full h-1 bg-green-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Blue Channel */}
+              <div>
+                <label className="block text-xs font-medium text-blue-600 mb-1">
+                  Blue: {currentColorTransformation.blueMultiplier.toFixed(2)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.01"
+                  value={currentColorTransformation.blueMultiplier}
+                  onChange={(e) => updateColorTransformation('blueMultiplier', parseFloat(e.target.value))}
+                  className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Shadows/Highlights */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Shadows & Highlights
+            </h4>
+            <div className="space-y-3">
+              {/* Shadows */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Shadows: {currentColorTransformation.shadows > 0 ? '+' : ''}{currentColorTransformation.shadows}
+                </label>
+                <input
+                  type="range"
+                  min="-50"
+                  max="50"
+                  step="1"
+                  value={currentColorTransformation.shadows}
+                  onChange={(e) => updateColorTransformation('shadows', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Highlights */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Highlights: {currentColorTransformation.highlights > 0 ? '+' : ''}{currentColorTransformation.highlights}
+                </label>
+                <input
+                  type="range"
+                  min="-50"
+                  max="50"
+                  step="1"
+                  value={currentColorTransformation.highlights}
+                  onChange={(e) => updateColorTransformation('highlights', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Midtone Balance */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Midtone Balance: {currentColorTransformation.midtoneBalance > 0 ? '+' : ''}{currentColorTransformation.midtoneBalance}%
+                </label>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={currentColorTransformation.midtoneBalance}
+                  onChange={(e) => updateColorTransformation('midtoneBalance', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Levels */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Levels
+            </h4>
+            <div className="space-y-3">
+              {/* Input Black Point */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Input Black: {currentColorTransformation.blackPoint}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="1"
+                  value={currentColorTransformation.blackPoint}
+                  onChange={(e) => updateColorTransformation('blackPoint', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Input White Point */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Input White: {currentColorTransformation.whitePoint}
+                </label>
+                <input
+                  type="range"
+                  min="205"
+                  max="255"
+                  step="1"
+                  value={currentColorTransformation.whitePoint}
+                  onChange={(e) => updateColorTransformation('whitePoint', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Output Black */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Output Black: {currentColorTransformation.outputBlack}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={currentColorTransformation.outputBlack}
+                  onChange={(e) => updateColorTransformation('outputBlack', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Output White */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Output White: {currentColorTransformation.outputWhite}
+                </label>
+                <input
+                  type="range"
+                  min="225"
+                  max="255"
+                  step="1"
+                  value={currentColorTransformation.outputWhite}
+                  onChange={(e) => updateColorTransformation('outputWhite', parseInt(e.target.value))}
+                  className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Reset Controls */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <button
+              onClick={() => applyColorPreset('none')}
+              className="w-full flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
+            >
+              <RotateCcwIcon size={16} className="mr-2" />
+              Reset All Adjustments
+            </button>
           </div>
 
           {/* Crop Region Selection */}
