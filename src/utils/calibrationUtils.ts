@@ -239,9 +239,17 @@ export async function generateColorCalibrationPDF(
       doc.setLineWidth(0.01);
       doc.rect(cardX, cardY, scaledCardWidth, scaledCardHeight);
 
-      // Calculate grid cell dimensions
-      const cellWidth = scaledCardWidth / gridConfig.columns;
-      const cellHeight = scaledCardHeight / gridConfig.rows;
+      // Calculate available space within card for header, grid, and footer
+      const headerHeight = 0.15; // Space reserved for header text within card
+      const labelMargin = 0.1;   // Space reserved for parameter labels within card
+      const footerHeight = 0.1;  // Space reserved for bottom instructions
+      const gridStartY = cardY + headerHeight;
+      const availableGridHeight = scaledCardHeight - headerHeight - labelMargin - footerHeight;
+      const availableGridWidth = scaledCardWidth - labelMargin;
+
+      // Calculate grid cell dimensions within available space
+      const cellWidth = availableGridWidth / gridConfig.columns;
+      const cellHeight = availableGridHeight / gridConfig.rows;
 
       // Generate transformation values for each axis
       const horizontalValues = generateTransformationValues(
@@ -255,26 +263,26 @@ export async function generateColorCalibrationPDF(
         transformations.vertical.max,
         gridConfig.rows
       );
-
-      // Add header text
-      doc.setFontSize(10);
-      doc.setTextColor(0, 0, 0);
-      doc.text('COLOR CALIBRATION TEST GRID', outputSettings.pageSize.width / 2, cardY - 0.3, { align: 'center' });
       
+      // Add header text within card boundaries
       doc.setFontSize(8);
+      doc.setTextColor(0, 0, 0);
+      doc.text('COLOR CALIBRATION TEST', cardX + scaledCardWidth / 2, cardY + 0.08, { align: 'center' });
+      
+      doc.setFontSize(6);
       doc.text(
-        `${transformations.horizontal.type.toUpperCase()} (columns) × ${transformations.vertical.type.toUpperCase()} (rows)`,
-        outputSettings.pageSize.width / 2,
-        cardY - 0.15,
+        `${transformations.horizontal.type.toUpperCase()} × ${transformations.vertical.type.toUpperCase()}`,
+        cardX + scaledCardWidth / 2,
+        cardY + 0.13,
         { align: 'center' }
       );
 
       // Process and place grid cells
       for (let row = 0; row < gridConfig.rows; row++) {
         for (let col = 0; col < gridConfig.columns; col++) {
-          // Calculate cell position
-          const cellX = cardX + col * cellWidth;
-          const cellY = cardY + row * cellHeight;
+          // Calculate cell position within available grid area
+          const cellX = cardX + labelMargin + col * cellWidth;
+          const cellY = gridStartY + row * cellHeight;
 
           // Create transformation for this cell
           const transformation: ColorTransformation = createBaseTransformation();
@@ -305,20 +313,20 @@ export async function generateColorCalibrationPDF(
           doc.setLineWidth(0.005);
           doc.rect(cellX, cellY, cellWidth, cellHeight);
 
-          // Add parameter labels
-          doc.setFontSize(6);
+          // Add parameter labels within margin space
+          doc.setFontSize(5);
           doc.setTextColor(0, 0, 0);
           
-          // Column label (top)
+          // Column label (top margin area)
           if (row === 0) {
             const colLabel = formatTransformationValue(transformations.horizontal.type, horizontalValue);
-            doc.text(colLabel, cellX + cellWidth / 2, cellY - 0.02, { align: 'center' });
+            doc.text(colLabel, cellX + cellWidth / 2, gridStartY - 0.02, { align: 'center' });
           }
           
-          // Row label (left)
+          // Row label (left margin area)
           if (col === 0) {
             const rowLabel = formatTransformationValue(transformations.vertical.type, verticalValue);
-            doc.text(rowLabel, cellX - 0.02, cellY + cellHeight / 2, { 
+            doc.text(rowLabel, cardX + labelMargin - 0.02, cellY + cellHeight / 2, { 
               align: 'right',
               angle: 90 
             });
@@ -326,14 +334,11 @@ export async function generateColorCalibrationPDF(
         }
       }
 
-      // Add grid legend
-      const legendY = cardY + scaledCardHeight + 0.2;
-      doc.setFontSize(7);
-      doc.text('Grid Instructions:', cardX, legendY);
-      doc.text('1. Print this test card using your current settings', cardX, legendY + 0.1);
-      doc.text('2. Compare each cell to your reference card', cardX, legendY + 0.2);
-      doc.text('3. Select the cell that best matches your target colors', cardX, legendY + 0.3);
-      doc.text('4. Apply the selected cell\'s settings to your final card export', cardX, legendY + 0.4);
+      // Add compact instructions at bottom of card (within boundaries)
+      const instructionY = cardY + scaledCardHeight - 0.08;
+      doc.setFontSize(4);
+      doc.setTextColor(100, 100, 100); // Gray text
+      doc.text('Print → Compare → Select best cell → Apply settings', cardX + scaledCardWidth / 2, instructionY, { align: 'center' });
 
       // Return PDF as blob
       resolve(doc.output('blob'));
