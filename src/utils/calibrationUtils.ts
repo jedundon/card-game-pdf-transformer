@@ -47,36 +47,24 @@ export function generateCalibrationPDF(
   const centerX = cardX + cardWidth/2;
   const centerY = cardY + cardHeight/2;
   
-  // Draw crosshair arms
+  // Draw crosshair arms with white center square
   doc.setLineWidth(0.04);
   doc.setDrawColor(0, 0, 0); // Black
   
-  // Horizontal crosshair arm (scaled length each direction from center)
-  doc.line(centerX - scaledCrossLength/2, centerY, centerX + scaledCrossLength/2, centerY);
+  const gapSize = 0.04; // Size of white square in center
   
-  // Vertical crosshair arm (scaled length each direction from center)  
-  doc.line(centerX, centerY - scaledCrossLength/2, centerX, centerY + scaledCrossLength/2);
+  // Horizontal crosshair arm - split into two segments with gap in center
+  doc.line(centerX - scaledCrossLength/2, centerY, centerX - gapSize/2, centerY); // Left segment
+  doc.line(centerX + gapSize/2, centerY, centerX + scaledCrossLength/2, centerY); // Right segment
   
-  // Add prominent end caps for precise measurement
-  const capSize = 0.04;
-  doc.setLineWidth(0.03);
-  // Horizontal caps
-  doc.line(centerX - scaledCrossLength/2, centerY - capSize, centerX - scaledCrossLength/2, centerY + capSize);
-  doc.line(centerX + scaledCrossLength/2, centerY - capSize, centerX + scaledCrossLength/2, centerY + capSize);
-  // Vertical caps
-  doc.line(centerX - capSize, centerY - scaledCrossLength/2, centerX + capSize, centerY - scaledCrossLength/2);
-  doc.line(centerX - capSize, centerY + scaledCrossLength/2, centerX + capSize, centerY + scaledCrossLength/2);
+  // Vertical crosshair arm - split into two segments with gap in center
+  doc.line(centerX, centerY - scaledCrossLength/2, centerX, centerY - gapSize/2); // Top segment
+  doc.line(centerX, centerY + gapSize/2, centerX, centerY + scaledCrossLength/2); // Bottom segment
   
   // Crosshair measurement labels
   doc.setFontSize(10);
   doc.text('1.0"', centerX + scaledCrossLength/2 + 0.05, centerY + 0.05); // Horizontal label
   doc.text('1.0"', centerX + 0.05, centerY - scaledCrossLength/2 - 0.05); // Vertical label
-  
-  // Center point for measurement reference
-  doc.setDrawColor(0, 0, 0); // Black
-  doc.setLineWidth(0.02);
-  const centerDot = 0.03;
-  doc.circle(centerX, centerY, centerDot, 'F');
   
   // 3. Add minimal labeling
   doc.setFontSize(12);
@@ -131,8 +119,8 @@ export function calculateCalibrationSettings(
   const expectedCrosshairLength = 1.0;           // 1.0" crosshair arm
   
   // Calculate offset corrections
-  // If measured distance is larger than expected, card is too far in that direction
-  const horizontalShift = Math.round((expectedRightDistance - measuredRightDistance) * 1000) / 1000;
+  // If measured distance is larger than expected, card is too far in that direction, so we need to move it back
+  const horizontalShift = Math.round((measuredRightDistance - expectedRightDistance) * 1000) / 1000;
   const verticalShift = Math.round((expectedTopDistance - measuredTopDistance) * 1000) / 1000;
   
   // Apply corrections to current settings (round to avoid floating point precision issues)
