@@ -15,6 +15,11 @@ import {
   calculatePreviewScaling,
   processCardImageForRendering
 } from '../utils/renderUtils';
+import { 
+  applyColorTransformation,
+  getDefaultColorTransformation,
+  ColorTransformation
+} from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
 interface ColorCalibrationStepProps {
@@ -50,12 +55,18 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const [currentCardId, setCurrentCardId] = useState(1);
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
+  const [colorTransformedPreviewUrl, setColorTransformedPreviewUrl] = useState<string | null>(null);
   const [cardRenderData, setCardRenderData] = useState<{
     renderDimensions: any;
     positioning: any;
     previewScaling: any;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
+  
+  // Current color transformation settings from finalAdjustments
+  const currentColorTransformation: ColorTransformation = useMemo(() => {
+    return colorSettings?.finalAdjustments || getDefaultColorTransformation();
+  }, [colorSettings?.finalAdjustments]);
 
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -175,6 +186,24 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     outputSettings
   ]);
 
+  // Apply color transformation to processed preview when color settings change
+  useEffect(() => {
+    if (processedPreviewUrl && currentColorTransformation) {
+      const applyColorTransform = async () => {
+        try {
+          const colorTransformedUrl = await applyColorTransformation(processedPreviewUrl, currentColorTransformation);
+          setColorTransformedPreviewUrl(colorTransformedUrl);
+        } catch (error) {
+          console.warn('Failed to apply color transformation:', error);
+          setColorTransformedPreviewUrl(processedPreviewUrl);
+        }
+      };
+      applyColorTransform();
+    } else {
+      setColorTransformedPreviewUrl(processedPreviewUrl);
+    }
+  }, [processedPreviewUrl, currentColorTransformation]);
+
   const handlePreviousCard = () => {
     const currentIndex = availableCardIds.indexOf(currentCardId);
     if (currentIndex > 0) {
@@ -243,16 +272,100 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </div>
           </div>
 
-          {/* Placeholder for color controls */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          {/* Basic Color Controls */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Color Controls (Coming Soon)
+              Basic Color Controls
             </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              <p>• Basic adjustments: Brightness, Contrast, Saturation</p>
-              <p>• Per-channel RGB controls</p>
-              <p>• Shadows/Highlights/Levels</p>
-              <p>• Color transformation presets</p>
+            <div className="space-y-4">
+              {/* Brightness */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Brightness: {currentColorTransformation.brightness}%
+                </label>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={currentColorTransformation.brightness}
+                  onChange={(e) => {
+                    const newSettings = {
+                      ...colorSettings,
+                      finalAdjustments: {
+                        ...colorSettings.finalAdjustments,
+                        brightness: parseInt(e.target.value)
+                      }
+                    };
+                    onColorSettingsChange(newSettings);
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Contrast */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Contrast: {currentColorTransformation.contrast.toFixed(2)}x
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.05"
+                  value={currentColorTransformation.contrast}
+                  onChange={(e) => {
+                    const newSettings = {
+                      ...colorSettings,
+                      finalAdjustments: {
+                        ...colorSettings.finalAdjustments,
+                        contrast: parseFloat(e.target.value)
+                      }
+                    };
+                    onColorSettingsChange(newSettings);
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Saturation */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  Saturation: {currentColorTransformation.saturation}%
+                </label>
+                <input
+                  type="range"
+                  min="-100"
+                  max="100"
+                  step="1"
+                  value={currentColorTransformation.saturation}
+                  onChange={(e) => {
+                    const newSettings = {
+                      ...colorSettings,
+                      finalAdjustments: {
+                        ...colorSettings.finalAdjustments,
+                        saturation: parseInt(e.target.value)
+                      }
+                    };
+                    onColorSettingsChange(newSettings);
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                />
+              </div>
+
+              {/* Reset Button */}
+              <button
+                onClick={() => {
+                  const newSettings = {
+                    ...colorSettings,
+                    finalAdjustments: getDefaultColorTransformation()
+                  };
+                  onColorSettingsChange(newSettings);
+                }}
+                className="w-full mt-3 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
+              >
+                Reset to Default
+              </button>
             </div>
           </div>
 
@@ -355,11 +468,11 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                     marginTop: '-70px'
                   })
                 }}>
-                  {processedPreviewUrl && cardRenderData ? (
+                  {colorTransformedPreviewUrl && cardRenderData ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
-                        backgroundImage: `url(${processedPreviewUrl})`,
+                        backgroundImage: `url(${colorTransformedPreviewUrl})`,
                         backgroundPosition: 'center center',
                         backgroundSize: 'contain',
                         backgroundRepeat: 'no-repeat'
