@@ -62,11 +62,35 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     previewScaling: any;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   
   // Current color transformation settings from finalAdjustments
   const currentColorTransformation: ColorTransformation = useMemo(() => {
     return colorSettings?.finalAdjustments || getDefaultColorTransformation();
   }, [colorSettings?.finalAdjustments]);
+
+  // Calculate crop region dimensions based on grid configuration
+  const cropRegionDimensions = useMemo(() => {
+    if (!cardRenderData) return null;
+    
+    const gridColumns = colorSettings?.gridConfig?.columns || 5;
+    const gridRows = colorSettings?.gridConfig?.rows || 4;
+    
+    // Calculate crop region size in preview pixels
+    const cropWidthPreview = cardRenderData.previewScaling.previewCardWidth / gridColumns;
+    const cropHeightPreview = cardRenderData.previewScaling.previewCardHeight / gridRows;
+    
+    // Calculate crop region size in actual inches
+    const cropWidthInches = cardRenderData.renderDimensions.cardWidthInches / gridColumns;
+    const cropHeightInches = cardRenderData.renderDimensions.cardHeightInches / gridRows;
+    
+    return {
+      widthPreview: cropWidthPreview,
+      heightPreview: cropHeightPreview,
+      widthInches: cropWidthInches,
+      heightInches: cropHeightInches
+    };
+  }, [cardRenderData, colorSettings?.gridConfig]);
 
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -223,6 +247,84 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     setViewMode(mode);
   };
 
+  // Handle mouse move over card for crop region preview
+  const handleCardMouseMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRenderData || !cropRegionDimensions) return;
+    
+    const rect = event.currentTarget.getBoundingClientRect();
+    const relativeX = event.clientX - rect.left;
+    const relativeY = event.clientY - rect.top;
+    
+    // Convert to card-relative coordinates
+    const cardRect = {
+      left: cardRenderData.previewScaling.previewX,
+      top: cardRenderData.previewScaling.previewY,
+      width: cardRenderData.previewScaling.previewCardWidth,
+      height: cardRenderData.previewScaling.previewCardHeight
+    };
+    
+    // Check if mouse is over the card
+    if (relativeX >= cardRect.left && relativeX <= cardRect.left + cardRect.width &&
+        relativeY >= cardRect.top && relativeY <= cardRect.top + cardRect.height) {
+      
+      // Calculate constrained center position for crop region
+      const minX = cardRect.left + cropRegionDimensions.widthPreview / 2;
+      const maxX = cardRect.left + cardRect.width - cropRegionDimensions.widthPreview / 2;
+      const minY = cardRect.top + cropRegionDimensions.heightPreview / 2;
+      const maxY = cardRect.top + cardRect.height - cropRegionDimensions.heightPreview / 2;
+      
+      const constrainedX = Math.max(minX, Math.min(maxX, relativeX));
+      const constrainedY = Math.max(minY, Math.min(maxY, relativeY));
+      
+      setHoverPosition({ x: constrainedX, y: constrainedY });
+    } else {
+      setHoverPosition(null);
+    }
+  }, [cardRenderData, cropRegionDimensions]);
+
+  // Handle mouse leave card area
+  const handleCardMouseLeave = useCallback(() => {
+    setHoverPosition(null);
+  }, []);
+
+  // Handle click to select crop region center
+  const handleCardClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRenderData || !cropRegionDimensions || !hoverPosition) return;
+    
+    // Convert hover position to card-relative coordinates (0-1 normalized)
+    const cardRect = {
+      left: cardRenderData.previewScaling.previewX,
+      top: cardRenderData.previewScaling.previewY,
+      width: cardRenderData.previewScaling.previewCardWidth,
+      height: cardRenderData.previewScaling.previewCardHeight
+    };
+    
+    const normalizedX = (hoverPosition.x - cardRect.left) / cardRect.width;
+    const normalizedY = (hoverPosition.y - cardRect.top) / cardRect.height;
+    
+    // Convert to actual card coordinates in inches
+    const centerXInches = normalizedX * cardRenderData.renderDimensions.cardWidthInches;
+    const centerYInches = normalizedY * cardRenderData.renderDimensions.cardHeightInches;
+    
+    // Update color settings with selected region
+    const newSettings = {
+      ...colorSettings,
+      selectedRegion: {
+        centerX: centerXInches,
+        centerY: centerYInches,
+        width: cropRegionDimensions.widthInches,
+        height: cropRegionDimensions.heightInches,
+        // Store preview coordinates for display
+        previewCenterX: hoverPosition.x,
+        previewCenterY: hoverPosition.y,
+        previewWidth: cropRegionDimensions.widthPreview,
+        previewHeight: cropRegionDimensions.heightPreview
+      }
+    };
+    
+    onColorSettingsChange(newSettings);
+  }, [cardRenderData, cropRegionDimensions, hoverPosition, colorSettings, onColorSettingsChange]);
+
   // Ensure currentCardId is valid for the current view mode
   useEffect(() => {
     if (totalFilteredCards > 0 && !currentCardExists) {
@@ -369,16 +471,47 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </div>
           </div>
 
-          {/* Placeholder for grid configuration */}
+          {/* Crop Region Selection */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Crop Region Selection
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>
+                <span className="font-medium">Grid size:</span>{' '}
+                {colorSettings?.gridConfig?.columns || 5}×{colorSettings?.gridConfig?.rows || 4}
+              </p>
+              {cropRegionDimensions && (
+                <p>
+                  <span className="font-medium">Crop size:</span>{' '}
+                  {cropRegionDimensions.widthInches.toFixed(3)}" × {cropRegionDimensions.heightInches.toFixed(3)}"
+                </p>
+              )}
+              {colorSettings?.selectedRegion ? (
+                <div>
+                  <p className="text-green-700 font-medium">✓ Region selected</p>
+                  <p>
+                    <span className="font-medium">Center:</span>{' '}
+                    ({colorSettings.selectedRegion.centerX.toFixed(3)}", {colorSettings.selectedRegion.centerY.toFixed(3)}")
+                  </p>
+                </div>
+              ) : (
+                <p className="text-orange-700">
+                  🎯 Hover over card and click to select crop region
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Test Grid Configuration (Coming Soon) */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               Test Grid Configuration (Coming Soon)
             </h4>
             <div className="text-sm text-gray-600 space-y-2">
-              <p>• Grid size: 5×4 (configurable)</p>
               <p>• Column transformations: Brightness ±20%</p>
               <p>• Row transformations: Contrast ±30%</p>
-              <p>• Click card to select test region</p>
+              <p>• Grid generation and PDF export</p>
             </div>
           </div>
         </div>
@@ -443,15 +576,21 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             
             {/* Card Preview Area */}
             <div className="p-4 bg-gray-100">
-              <div className="relative mx-auto bg-white shadow" style={{
-                ...(cardRenderData ? {
-                  width: `${cardRenderData.previewScaling.previewPageWidth}px`,
-                  height: `${cardRenderData.previewScaling.previewPageHeight}px`
-                } : {
-                  width: '400px',
-                  height: '300px'
-                })
-              }}>
+              <div 
+                className="relative mx-auto bg-white shadow cursor-crosshair" 
+                style={{
+                  ...(cardRenderData ? {
+                    width: `${cardRenderData.previewScaling.previewPageWidth}px`,
+                    height: `${cardRenderData.previewScaling.previewPageHeight}px`
+                  } : {
+                    width: '400px',
+                    height: '300px'
+                  })
+                }}
+                onMouseMove={handleCardMouseMove}
+                onMouseLeave={handleCardMouseLeave}
+                onClick={handleCardClick}
+              >
                 {/* Card positioned on the page */}
                 <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
                   ...(cardRenderData ? {
@@ -497,6 +636,44 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   <div className="absolute top-1/2 left-0 w-full h-px bg-blue-300 opacity-50"></div>
                   <div className="absolute left-1/2 top-0 w-px h-full bg-blue-300 opacity-50"></div>
                 </div>
+
+                {/* Crop Region Hover Preview */}
+                {hoverPosition && cropRegionDimensions && (
+                  <div 
+                    className="absolute border-2 border-orange-400 bg-orange-200 bg-opacity-30 pointer-events-none"
+                    style={{
+                      left: `${hoverPosition.x - cropRegionDimensions.widthPreview / 2}px`,
+                      top: `${hoverPosition.y - cropRegionDimensions.heightPreview / 2}px`,
+                      width: `${cropRegionDimensions.widthPreview}px`,
+                      height: `${cropRegionDimensions.heightPreview}px`
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs text-orange-800 bg-white bg-opacity-90 px-1 rounded">
+                        Click to select
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Crop Region */}
+                {colorSettings?.selectedRegion && (
+                  <div 
+                    className="absolute border-2 border-green-500 bg-green-200 bg-opacity-30 pointer-events-none"
+                    style={{
+                      left: `${colorSettings.selectedRegion.previewCenterX - colorSettings.selectedRegion.previewWidth / 2}px`,
+                      top: `${colorSettings.selectedRegion.previewCenterY - colorSettings.selectedRegion.previewHeight / 2}px`,
+                      width: `${colorSettings.selectedRegion.previewWidth}px`,
+                      height: `${colorSettings.selectedRegion.previewHeight}px`
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs text-green-800 bg-white bg-opacity-90 px-1 rounded">
+                        Selected region
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
