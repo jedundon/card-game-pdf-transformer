@@ -1,0 +1,439 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon } from 'lucide-react';
+import { 
+  getActivePages, 
+  calculateTotalCards, 
+  getCardInfo, 
+  extractCardImage as extractCardImageUtil,
+  getAvailableCardIds,
+  getRotationForCardType,
+  countCardsByType
+} from '../utils/cardUtils';
+import { 
+  calculateFinalCardRenderDimensions,
+  calculateCardPositioning,
+  calculatePreviewScaling,
+  processCardImageForRendering
+} from '../utils/renderUtils';
+import { PREVIEW_CONSTRAINTS } from '../constants';
+
+interface ColorCalibrationStepProps {
+  pdfData: any;
+  pdfMode: any;
+  extractionSettings: any;
+  outputSettings: any;
+  pageSettings: any;
+  cardDimensions: {
+    widthPx: number;
+    heightPx: number;
+    widthInches: number;
+    heightInches: number;
+  } | null;
+  colorSettings: any;
+  onColorSettingsChange: (settings: any) => void;
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
+  pdfData,
+  pdfMode,
+  extractionSettings,
+  outputSettings,
+  pageSettings,
+  cardDimensions,
+  colorSettings,
+  onColorSettingsChange,
+  onPrevious,
+  onNext
+}) => {
+  const [currentCardId, setCurrentCardId] = useState(1);
+  const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
+  const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
+  const [cardRenderData, setCardRenderData] = useState<{
+    renderDimensions: any;
+    positioning: any;
+    previewScaling: any;
+  } | null>(null);
+  const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
+
+  // Calculate total cards from extraction settings and active pages
+  const activePages = useMemo(() => 
+    getActivePages(pageSettings), 
+    [pageSettings]
+  );
+  
+  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+
+  // Calculate total unique cards based on PDF mode and card type
+  const totalCards = useMemo(() => 
+    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
+    [pdfMode, activePages, cardsPerPage]
+  );
+
+  // Calculate card front/back identification based on PDF mode
+  const getCardInfoCallback = useCallback((cardIndex: number) => 
+    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage), 
+    [activePages, extractionSettings, pdfMode, cardsPerPage]
+  );
+
+  // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode
+  const availableCardIds = useMemo(() => 
+    getAvailableCardIds(viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings), 
+    [viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]
+  );
+
+  const totalFilteredCards = availableCardIds.length;
+
+  // Get the position of current card ID in the available cards list
+  const currentCardPosition = useMemo(() => {
+    return availableCardIds.indexOf(currentCardId) + 1; // 1-based position
+  }, [availableCardIds, currentCardId]);
+
+  // Check if current card ID exists in available cards
+  const currentCardExists = useMemo(() => {
+    return availableCardIds.includes(currentCardId);
+  }, [availableCardIds, currentCardId]);
+
+  // Find the card index for the current card ID in the filtered view
+  const currentCardIndex = useMemo(() => {
+    if (!currentCardExists) return null;
+    
+    // Find the first card index that matches the current card ID and view mode
+    const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+      ? activePages.length * cardsPerPage 
+      : totalCards;
+    
+    for (let i = 0; i < maxIndex; i++) {
+      const cardInfo = getCardInfoCallback(i);
+      if (cardInfo.id === currentCardId && cardInfo.type.toLowerCase() === viewMode) {
+        return i;
+      }
+    }
+    
+    return null;
+  }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
+
+  // Extract card image for preview using utility function
+  const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
+    return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+  }, [pdfData, pdfMode, activePages, pageSettings, extractionSettings]);
+
+  // Update card preview when current card changes
+  useEffect(() => {
+    if (totalFilteredCards > 0 && currentCardExists && currentCardIndex !== null) {
+      const updatePreview = async () => {
+        const cardUrl = await extractCardImage(currentCardIndex);
+        setCardPreviewUrl(cardUrl);
+        
+        if (cardUrl) {
+          try {
+            // Use unified rendering functions to calculate preview data
+            const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, outputSettings);
+            const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+            const previewScaling = calculatePreviewScaling(
+              renderDimensions,
+              positioning,
+              outputSettings.pageSize.width,
+              outputSettings.pageSize.height,
+              PREVIEW_CONSTRAINTS.MAX_WIDTH,
+              PREVIEW_CONSTRAINTS.MAX_HEIGHT
+            );
+            
+            setCardRenderData({
+              renderDimensions,
+              positioning,
+              previewScaling
+            });
+            
+            // Process the image for preview (with clipping and rotation)
+            const processedImage = await processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
+            setProcessedPreviewUrl(processedImage.imageUrl);
+          } catch (error) {
+            console.warn('Failed to calculate render data for preview:', error);
+            setCardRenderData(null);
+            setProcessedPreviewUrl(null);
+          }
+        } else {
+          setCardRenderData(null);
+          setProcessedPreviewUrl(null);
+        }
+      };
+      updatePreview();
+    } else {
+      setCardPreviewUrl(null);
+      setCardRenderData(null);
+      setProcessedPreviewUrl(null);
+    }
+  }, [
+    currentCardId,
+    viewMode,
+    extractCardImage, 
+    totalFilteredCards,
+    currentCardExists,
+    currentCardIndex,
+    outputSettings
+  ]);
+
+  const handlePreviousCard = () => {
+    const currentIndex = availableCardIds.indexOf(currentCardId);
+    if (currentIndex > 0) {
+      setCurrentCardId(availableCardIds[currentIndex - 1]);
+    }
+  };
+  
+  const handleNextCard = () => {
+    const currentIndex = availableCardIds.indexOf(currentCardId);
+    if (currentIndex < availableCardIds.length - 1) {
+      setCurrentCardId(availableCardIds[currentIndex + 1]);
+    }
+  };
+
+  // Handle view mode toggle - maintain current card ID when switching between front/back
+  const handleViewModeToggle = (mode: 'front' | 'back') => {
+    setViewMode(mode);
+  };
+
+  // Ensure currentCardId is valid for the current view mode
+  useEffect(() => {
+    if (totalFilteredCards > 0 && !currentCardExists) {
+      // Current card ID doesn't exist in current mode, fallback to first available card
+      setCurrentCardId(availableCardIds[0]);
+    }
+  }, [currentCardExists, totalFilteredCards, availableCardIds]);
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-xl font-semibold text-gray-800">Color Calibration</h2>
+      
+      {!pdfData && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800">
+            Please load a PDF file in the Import step to continue.
+          </p>
+        </div>
+      )}
+      
+      {pdfData && totalCards === 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <p className="text-yellow-800">
+            No cards available. Please configure extraction settings in the previous steps.
+          </p>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Panel: Color Controls */}
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
+              <PaletteIcon size={20} className="mr-2" />
+              Color Transformation
+            </h3>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-800 mb-2">
+                Color Calibration Workflow
+              </h4>
+              <div className="text-sm text-blue-700 space-y-1">
+                <p>1. Adjust color settings and see real-time preview on the right</p>
+                <p>2. Select a region for calibration testing</p>
+                <p>3. Generate test grid PDF for physical printer comparison</p>
+                <p>4. Apply optimal settings from test results</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Placeholder for color controls */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Color Controls (Coming Soon)
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>• Basic adjustments: Brightness, Contrast, Saturation</p>
+              <p>• Per-channel RGB controls</p>
+              <p>• Shadows/Highlights/Levels</p>
+              <p>• Color transformation presets</p>
+            </div>
+          </div>
+
+          {/* Placeholder for grid configuration */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Test Grid Configuration (Coming Soon)
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>• Grid size: 5×4 (configurable)</p>
+              <p>• Column transformations: Brightness ±20%</p>
+              <p>• Row transformations: Contrast ±30%</p>
+              <p>• Click card to select test region</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel: Live Preview (copied from ConfigureStep) */}
+        <div className="space-y-4">
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 p-3 border-b border-gray-200">
+              {/* Combined Controls Row */}
+              <div className="relative flex items-center">
+                {/* View Mode Toggle - Left */}
+                <div className="flex bg-gray-200 rounded-lg p-1">
+                  <button
+                    onClick={() => handleViewModeToggle('front')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'front'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Fronts
+                  </button>
+                  <button
+                    onClick={() => handleViewModeToggle('back')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'back'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Backs
+                  </button>
+                </div>
+                
+                {/* Card Navigation - Perfectly Centered */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
+                  <button 
+                    onClick={handlePreviousCard} 
+                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === 0} 
+                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ChevronLeftIcon size={16} />
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    {totalFilteredCards > 0 && currentCardExists ? `${viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} ${currentCardPosition} of ${totalFilteredCards}` : `No ${viewMode} cards`}
+                  </span>
+                  <button 
+                    onClick={handleNextCard} 
+                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === availableCardIds.length - 1} 
+                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ChevronRightIcon size={16} />
+                  </button>
+                </div>
+                
+                {/* Card ID - Right */}
+                <div className="ml-auto text-sm text-gray-500">
+                  {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Card Preview Area */}
+            <div className="p-4 bg-gray-100">
+              <div className="relative mx-auto bg-white shadow" style={{
+                ...(cardRenderData ? {
+                  width: `${cardRenderData.previewScaling.previewPageWidth}px`,
+                  height: `${cardRenderData.previewScaling.previewPageHeight}px`
+                } : {
+                  width: '400px',
+                  height: '300px'
+                })
+              }}>
+                {/* Card positioned on the page */}
+                <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
+                  ...(cardRenderData ? {
+                    width: `${cardRenderData.previewScaling.previewCardWidth}px`,
+                    height: `${cardRenderData.previewScaling.previewCardHeight}px`,
+                    left: `${cardRenderData.previewScaling.previewX}px`,
+                    top: `${cardRenderData.previewScaling.previewY}px`
+                  } : {
+                    width: '100px',
+                    height: '140px',
+                    left: '50%',
+                    top: '50%',
+                    marginLeft: '-50px',
+                    marginTop: '-70px'
+                  })
+                }}>
+                  {processedPreviewUrl && cardRenderData ? (
+                    <div 
+                      className="w-full h-full bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${processedPreviewUrl})`,
+                        backgroundPosition: 'center center',
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat'
+                      }}
+                    />
+                  ) : cardPreviewUrl ? (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+                      Loading dimensions...
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
+                      Card ID {currentCardId}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Page boundary indicators */}
+                <div className="absolute inset-0 border border-dashed border-gray-400 pointer-events-none"></div>
+                
+                {/* Center guides */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute top-1/2 left-0 w-full h-px bg-blue-300 opacity-50"></div>
+                  <div className="absolute left-1/2 top-0 w-px h-full bg-blue-300 opacity-50"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Information Display */}
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Current Settings
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              {cardDimensions && (
+                <p>
+                  <span className="font-medium">Card image:</span>{' '}
+                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
+                </p>
+              )}
+              <p>
+                <span className="font-medium">Total cards:</span>{' '}
+                {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
+              </p>
+              <p>
+                <span className="font-medium">Front cards:</span>{' '}
+                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
+              </p>
+              <p>
+                <span className="font-medium">Back cards:</span>{' '}
+                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="flex justify-between mt-6">
+        <button 
+          onClick={onPrevious} 
+          className="flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
+        >
+          <ChevronLeftIcon size={16} className="mr-2" />
+          Previous Step
+        </button>
+        <button 
+          onClick={onNext} 
+          className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+        >
+          Next Step
+          <ChevronRightIcon size={16} className="ml-2" />
+        </button>
+      </div>
+    </div>
+  );
+};

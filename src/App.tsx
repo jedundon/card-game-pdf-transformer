@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ImportStep } from './components/ImportStep';
 import { ExtractStep } from './components/ExtractStep';
 import { ConfigureStep } from './components/ConfigureStep';
+import { ColorCalibrationStep } from './components/ColorCalibrationStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
 import { SettingsManager } from './components/SettingsManager';
@@ -36,6 +37,35 @@ export function App() {
       ...DEFAULT_SETTINGS.outputSettings,
       rotation: defaultRotation
     };
+  });
+
+  // Initialize color calibration settings
+  const [colorSettings, setColorSettings] = useState({
+    selectedRegion: null,
+    gridConfig: { columns: 5, rows: 4 },
+    transformations: {
+      horizontal: { type: 'brightness', min: -20, max: 20 },
+      vertical: { type: 'contrast', min: -30, max: 30 }
+    },
+    selectedPreset: null,
+    finalAdjustments: {
+      brightness: 0,
+      contrast: 0,
+      saturation: 0,
+      hue: 0,
+      gamma: 1.0,
+      vibrance: 0,
+      redMultiplier: 1.0,
+      greenMultiplier: 1.0,
+      blueMultiplier: 1.0,
+      shadows: 0,
+      highlights: 0,
+      midtoneBalance: 0,
+      blackPoint: 0,
+      whitePoint: 255,
+      outputBlack: 0,
+      outputWhite: 255
+    }
   });
 
   // Handle PDF mode changes and update grid and rotation defaults
@@ -89,8 +119,11 @@ export function App() {
     title: 'Configure Layout',
     component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
   }, {
+    title: 'Color Calibration',
+    component: <ColorCalibrationStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} colorSettings={colorSettings} onColorSettingsChange={settings => setColorSettings(settings)} onPrevious={() => setCurrentStep(2)} onNext={() => setCurrentStep(4)} />
+  }, {
     title: 'Export',
-    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(2)} />
+    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(3)} />
   }];
 
   return <div className="flex flex-col w-full min-h-screen bg-gray-50">
