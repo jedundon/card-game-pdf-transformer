@@ -1,15 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { 
-  getRotationForCardType, 
   getActivePages, 
   calculateTotalCards,
   getAvailableCardIds,
   getCardInfo,
   extractCardImage as extractCardImageUtil,
   calculateCardDimensions,
-  calculateCardImageDimensions
+  getRotationForCardType
 } from '../utils/cardUtils';
+import { 
+  calculateFinalCardRenderDimensions,
+  calculateCardPositioning,
+  processCardImageForRendering
+} from '../utils/renderUtils';
 import jsPDF from 'jspdf';
 
 interface ExportStepProps {
@@ -179,119 +183,50 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         // Create a new page for each card
         if (cardCount > 0) {
           doc.addPage();
-        }        // Calculate card dimensions using new settings
-        const cardDimensions = calculateCardDimensions(outputSettings);        // Calculate card image dimensions based on the sizing mode
-        const sizingMode = outputSettings.cardImageSizingMode || 'actual-size';
-        let cardImageDims;
-        
-        console.log(`Applying sizing mode "${sizingMode}" to ${cardType} card ${cardInfo.id}`);
+        }
+
+        console.log(`Processing ${cardType} card ${cardInfo.id} with unified render utils...`);
         
         try {
-          cardImageDims = await calculateCardImageDimensions(
-            cardImageUrl,
-            cardDimensions.scaledCardWidthInches,
-            cardDimensions.scaledCardHeightInches,
-            sizingMode
+          // Use unified rendering functions for consistent behavior
+          const renderDimensions = await calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
+          const positioning = calculateCardPositioning(renderDimensions, outputSettings, cardType);
+          const processedImage = await processCardImageForRendering(cardImageUrl, positioning.rotation);
+          
+          console.log(`Card ${cardInfo.id} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
+          
+          const finalImageUrl = processedImage.imageUrl;
+          const finalX = positioning.x;
+          const finalY = positioning.y;
+          const finalWidth = positioning.width;
+          const finalHeight = positioning.height;
+
+          // Warn if card goes off page (but still allow it in case user intends it)
+          if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
+            console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
+          }
+          if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
+            console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
+          }
+
+          console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
+
+          // Add the card image to PDF
+          doc.addImage(
+            finalImageUrl,
+            'PNG',
+            finalX,
+            finalY,
+            finalWidth,
+            finalHeight
           );
-          
-          console.log(`Card ${cardInfo.id} image sizing: ${cardImageDims.imageWidth.toFixed(3)}" × ${cardImageDims.imageHeight.toFixed(3)}" → ${cardImageDims.width.toFixed(3)}" × ${cardImageDims.height.toFixed(3)}" (${sizingMode})`);
+
+          cardCount++;
         } catch (error) {
-          console.warn(`Failed to calculate image dimensions for ${cardType} card ${cardInfo.id}:`, error);
-          // Fallback to scaled card dimensions
-          cardImageDims = {
-            width: cardDimensions.scaledCardWidthInches,
-            height: cardDimensions.scaledCardHeightInches,
-            imageWidth: cardDimensions.scaledCardWidthInches,
-            imageHeight: cardDimensions.scaledCardHeightInches
-          };
+          console.warn(`Failed to process ${cardType} card ${cardInfo.id} with unified render utils:`, error);
+          // Skip this card if processing fails
+          continue;
         }
-
-        // Use the calculated image dimensions
-        const cardWidthInches = cardImageDims.width;
-        const cardHeightInches = cardImageDims.height;// Apply rotation if needed by rotating the image on a canvas before adding to PDF
-        const rotation = getRotationForCardType(outputSettings, cardType);
-        let finalImageUrl = cardImageUrl;
-        let finalWidth = cardWidthInches;
-        let finalHeight = cardHeightInches;
-        
-        if (rotation !== 0) {
-          console.log(`Applying ${rotation}° rotation to ${cardType} card #${cardInfo.id}`);
-          
-          try {
-            // Create a new canvas for rotation
-            const rotationCanvas = document.createElement('canvas');
-            const rotationCtx = rotationCanvas.getContext('2d');
-            
-            if (rotationCtx) {
-              // Load the image
-              const img = new Image();
-              await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = reject;
-                img.src = cardImageUrl;
-              });
-              
-              // For 90° or 270° rotations, we need to swap width/height of final dimensions
-              if (rotation === 90 || rotation === 270) {
-                finalWidth = cardHeightInches;
-                finalHeight = cardWidthInches;
-              }
-              
-              // Calculate the canvas size needed for rotation
-              const radians = (rotation * Math.PI) / 180;
-              const cos = Math.abs(Math.cos(radians));
-              const sin = Math.abs(Math.sin(radians));
-              
-              const rotatedCanvasWidth = img.width * cos + img.height * sin;
-              const rotatedCanvasHeight = img.width * sin + img.height * cos;
-              
-              rotationCanvas.width = rotatedCanvasWidth;
-              rotationCanvas.height = rotatedCanvasHeight;
-              
-              // Clear canvas and setup transformation
-              rotationCtx.clearRect(0, 0, rotatedCanvasWidth, rotatedCanvasHeight);
-              rotationCtx.save();
-              
-              // Move to center, rotate, then draw image centered
-              rotationCtx.translate(rotatedCanvasWidth / 2, rotatedCanvasHeight / 2);
-              rotationCtx.rotate(radians);
-              rotationCtx.drawImage(img, -img.width / 2, -img.height / 2);
-              
-              rotationCtx.restore();
-              
-              // Get rotated image as data URL
-              finalImageUrl = rotationCanvas.toDataURL('image/png');
-              
-              console.log(`Rotation applied successfully to ${cardType} card #${cardInfo.id}`);
-            }
-          } catch (error) {
-            console.warn(`Failed to apply rotation to ${cardType} card #${cardInfo.id}:`, error);
-            // Continue with original image if rotation fails
-          }}        // Calculate position
-        const finalX = (outputSettings.pageSize.width - finalWidth) / 2 + outputSettings.offset.horizontal;
-        const finalY = (outputSettings.pageSize.height - finalHeight) / 2 + outputSettings.offset.vertical;
-
-        // Warn if card goes off page (but still allow it in case user intends it)
-        if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
-          console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
-        }
-        if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
-          console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
-        }
-
-        console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
-
-        // Add the card image to PDF
-        doc.addImage(
-          finalImageUrl,
-          'PNG',
-          finalX,
-          finalY,
-          finalWidth,
-          finalHeight
-        );
-
-        cardCount++;
       }
 
       console.log(`${cardType} PDF generation completed with ${cardCount} cards`);
