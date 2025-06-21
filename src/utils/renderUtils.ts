@@ -292,7 +292,7 @@ function getRotationForCardType(outputSettings: any, cardType: 'front' | 'back')
  * Converts render dimensions to screen pixels for preview display
  */
 export function calculatePreviewScaling(
-  renderDimensions: CardRenderDimensions,
+  _renderDimensions: CardRenderDimensions,
   positioning: CardPositioning,
   pageWidth: number,
   pageHeight: number,

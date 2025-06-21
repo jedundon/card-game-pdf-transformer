@@ -8,9 +8,13 @@ import {
   getAvailableCardIds,
   getRotationForCardType,
   countCardsByType,
-  calculatePreviewScale,
   calculateCardDimensions
 } from '../utils/cardUtils';
+import { 
+  calculateFinalCardRenderDimensions,
+  calculateCardPositioning,
+  calculatePreviewScaling
+} from '../utils/renderUtils';
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
 import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
@@ -43,7 +47,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 }) => {
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
-  const [cardPreviewDimensions, setCardPreviewDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [cardRenderData, setCardRenderData] = useState<{
+    renderDimensions: any;
+    positioning: any;
+    previewScaling: any;
+  } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
   const [calibrationMeasurements, setCalibrationMeasurements] = useState({
@@ -123,24 +131,37 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         const cardUrl = await extractCardImage(currentCardIndex);
         setCardPreviewUrl(cardUrl);
         
-        // Load image dimensions
         if (cardUrl) {
-          const img = new Image();
-          img.onload = () => {
-            setCardPreviewDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-          };
-          img.onerror = () => {
-            setCardPreviewDimensions(null);
-          };
-          img.src = cardUrl;
+          try {
+            // Use unified rendering functions to calculate preview data
+            const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, outputSettings);
+            const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+            const previewScaling = calculatePreviewScaling(
+              renderDimensions,
+              positioning,
+              outputSettings.pageSize.width,
+              outputSettings.pageSize.height,
+              PREVIEW_CONSTRAINTS.MAX_WIDTH,
+              PREVIEW_CONSTRAINTS.MAX_HEIGHT
+            );
+            
+            setCardRenderData({
+              renderDimensions,
+              positioning,
+              previewScaling
+            });
+          } catch (error) {
+            console.warn('Failed to calculate render data for preview:', error);
+            setCardRenderData(null);
+          }
         } else {
-          setCardPreviewDimensions(null);
+          setCardRenderData(null);
         }
       };
       updatePreview();
     } else {
       setCardPreviewUrl(null);
-      setCardPreviewDimensions(null);
+      setCardRenderData(null);
     }
   }, [
     currentCardId,
@@ -148,7 +169,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     extractCardImage, 
     totalFilteredCards,
     currentCardExists,
-    currentCardIndex
+    currentCardIndex,
+    outputSettings // Add outputSettings as dependency so preview updates when settings change
   ]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
@@ -864,138 +886,50 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
             </div>
             <div className="p-4 bg-gray-100">
               <div className="relative mx-auto bg-white shadow" style={{
-              ...(() => {
-                const { previewWidth, previewHeight } = calculatePreviewScale(
-                  outputSettings.pageSize.width,
-                  outputSettings.pageSize.height,
-                  PREVIEW_CONSTRAINTS.MAX_WIDTH,
-                  PREVIEW_CONSTRAINTS.MAX_HEIGHT
-                );
-                
-                return { width: `${previewWidth}px`, height: `${previewHeight}px` };
-              })()
-            }}>
+                ...(cardRenderData ? {
+                  width: `${cardRenderData.previewScaling.previewPageWidth}px`,
+                  height: `${cardRenderData.previewScaling.previewPageHeight}px`
+                } : {
+                  width: '400px',
+                  height: '300px'
+                })
+              }}>
                 {/* Card positioned on the page */}
                 <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
-                ...(() => {
-                  // Calculate the same scale factor used for the page preview
-                  const { scale } = calculatePreviewScale(
-                    outputSettings.pageSize.width,
-                    outputSettings.pageSize.height,
-                    PREVIEW_CONSTRAINTS.MAX_WIDTH,
-                    PREVIEW_CONSTRAINTS.MAX_HEIGHT
-                  );
-                  
-                  // Calculate card dimensions using new settings
-                  const cardDimensions = calculateCardDimensions(outputSettings);
-                  
-                  // Convert to preview scale for display
-                  const cardWidth = cardDimensions.width * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                  const cardHeight = cardDimensions.height * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                  
-                  // Calculate offsets including page offset
-                  const pageOffsetX = outputSettings.offset.horizontal * DPI_CONSTANTS.SCREEN_DPI * scale;
-                  const pageOffsetY = outputSettings.offset.vertical * DPI_CONSTANTS.SCREEN_DPI * scale;
-                  
-                  return {
-                    width: `${cardWidth}px`,
-                    height: `${cardHeight}px`,
-                    top: '50%',
+                  ...(cardRenderData ? {
+                    width: `${cardRenderData.previewScaling.previewCardWidth}px`,
+                    height: `${cardRenderData.previewScaling.previewCardHeight}px`,
+                    left: `${cardRenderData.previewScaling.previewX}px`,
+                    top: `${cardRenderData.previewScaling.previewY}px`,
+                    transform: `rotate(${cardRenderData.positioning.rotation}deg)`,
+                    transformOrigin: 'center center'
+                  } : {
+                    width: '100px',
+                    height: '140px',
                     left: '50%',
-                    marginLeft: `calc(-${cardWidth / 2}px + ${pageOffsetX}px)`,
-                    marginTop: `calc(-${cardHeight / 2}px + ${pageOffsetY}px)`,
-                    transform: `rotate(${getRotationForCardType(outputSettings, viewMode)}deg)`
-                  };
-                })()
-              }}>
-                  {cardPreviewUrl && cardPreviewDimensions ? (
+                    top: '50%',
+                    marginLeft: '-50px',
+                    marginTop: '-70px'
+                  })
+                }}>
+                  {cardPreviewUrl && cardRenderData ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
-                        ...(() => {
-                          // Calculate scale for background sizing
-                          const { scale } = calculatePreviewScale(
-                            outputSettings.pageSize.width,
-                            outputSettings.pageSize.height,
-                            PREVIEW_CONSTRAINTS.MAX_WIDTH,
-                            PREVIEW_CONSTRAINTS.MAX_HEIGHT
-                          );
+                        backgroundImage: `url(${cardPreviewUrl})`,
+                        backgroundPosition: 'center center',
+                        backgroundSize: (() => {
+                          // Use the render dimensions calculated by unified functions
+                          const renderDims = cardRenderData.renderDimensions;
+                          const previewScale = cardRenderData.previewScaling.scale;
                           
-                          // Get card dimensions and sizing mode
-                          const cardDimensions = calculateCardDimensions(outputSettings);
-                          const sizingMode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
+                          // Convert final render dimensions to preview pixels
+                          const previewImageWidth = renderDims.finalWidthInches * DPI_CONSTANTS.SCREEN_DPI * previewScale;
+                          const previewImageHeight = renderDims.finalHeightInches * DPI_CONSTANTS.SCREEN_DPI * previewScale;
                           
-                          // Get card target dimensions in pixels
-                          const targetCardWidthPx = cardDimensions.scaledCardWidthInches * DPI_CONSTANTS.EXTRACTION_DPI;
-                          const targetCardHeightPx = cardDimensions.scaledCardHeightInches * DPI_CONSTANTS.EXTRACTION_DPI;
-                          
-                          let imageWidthPx = targetCardWidthPx;
-                          let imageHeightPx = targetCardHeightPx;
-                          
-                          // Calculate proper dimensions based on sizing mode using loaded dimensions
-                          const imageAspectRatio = cardPreviewDimensions.width / cardPreviewDimensions.height;
-                          const cardAspectRatio = targetCardWidthPx / targetCardHeightPx;
-                          
-                          switch (sizingMode) {
-                            case 'actual-size':
-                              // Use image at actual extracted size
-                              imageWidthPx = cardPreviewDimensions.width;
-                              imageHeightPx = cardPreviewDimensions.height;
-                              break;
-                              
-                            case 'fit-to-card':
-                              // Scale to fit within card boundaries
-                              if (imageAspectRatio > cardAspectRatio) {
-                                imageWidthPx = targetCardWidthPx;
-                                imageHeightPx = targetCardWidthPx / imageAspectRatio;
-                              } else {
-                                imageHeightPx = targetCardHeightPx;
-                                imageWidthPx = targetCardHeightPx * imageAspectRatio;
-                              }
-                              break;
-                              
-                            case 'fill-card':
-                              // Scale to fill entire card area
-                              if (imageAspectRatio > cardAspectRatio) {
-                                imageHeightPx = targetCardHeightPx;
-                                imageWidthPx = targetCardHeightPx * imageAspectRatio;
-                              } else {
-                                imageWidthPx = targetCardWidthPx;
-                                imageHeightPx = targetCardWidthPx / imageAspectRatio;
-                              }
-                              break;
-                          }
-                          
-                          // Convert to screen pixels for display
-                          const screenImageWidth = imageWidthPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          const screenImageHeight = imageHeightPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          
-                          // Calculate card display dimensions for centering
-                          const cardDisplayWidth = targetCardWidthPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          const cardDisplayHeight = targetCardHeightPx * scale / DPI_CONSTANTS.EXTRACTION_DPI * DPI_CONSTANTS.SCREEN_DPI;
-                          
-                          // Center the image within the card area
-                          // For backgroundPosition, we need to position the image so it's centered within the container
-                          // If image is larger than container: negative offset to crop edges
-                          // If image is smaller than container: positive offset (but we'll use 'center' for simplicity)
-                          
-                          let backgroundSize = `${screenImageWidth}px ${screenImageHeight}px`;
-                          let backgroundPosition = 'center center';
-                          
-                          // Only use manual positioning if we need to crop (image larger than container)
-                          if (screenImageWidth > cardDisplayWidth || screenImageHeight > cardDisplayHeight) {
-                            const offsetX = (screenImageWidth - cardDisplayWidth) / 2;
-                            const offsetY = (screenImageHeight - cardDisplayHeight) / 2;
-                            backgroundPosition = `-${offsetX}px -${offsetY}px`;
-                          }
-                          
-                          return {
-                            backgroundImage: `url(${cardPreviewUrl})`,
-                            backgroundPosition: backgroundPosition,
-                            backgroundSize: backgroundSize,
-                            backgroundRepeat: 'no-repeat'
-                          };
-                        })()
+                          return `${previewImageWidth}px ${previewImageHeight}px`;
+                        })(),
+                        backgroundRepeat: 'no-repeat'
                       }}
                     />
                   ) : cardPreviewUrl ? (
