@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { ColorTransformation, applyColorTransformation } from './colorUtils';
 
 /**
  * Generates a calibration PDF for printer offset and scale testing
@@ -188,3 +189,237 @@ export function calculateCalibrationSettings(
  * - All shifts = 0", scale = 100%
  * - Result: No adjustments needed ✓
  */
+
+/**
+ * Generate color calibration test PDF with transformation grid
+ * 
+ * @param cropImageUrl - Data URL of the cropped card region
+ * @param gridConfig - Grid configuration (columns, rows)
+ * @param transformations - Column and row transformation configurations
+ * @param outputSettings - Card positioning and layout settings
+ * @param selectedRegion - Crop region information
+ * @returns Promise resolving to PDF Blob
+ */
+export async function generateColorCalibrationPDF(
+  cropImageUrl: string,
+  gridConfig: { columns: number; rows: number },
+  transformations: {
+    horizontal: { type: string; min: number; max: number };
+    vertical: { type: string; min: number; max: number };
+  },
+  outputSettings: any,
+  selectedRegion: any
+): Promise<Blob> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Create PDF with output page dimensions
+      const doc = new jsPDF({
+        unit: 'in',
+        format: [outputSettings.pageSize.width, outputSettings.pageSize.height],
+        compress: true
+      });
+
+      // Calculate card positioning (same as Configure Layout)
+      const cardWidthInches = outputSettings.cardSize?.widthInches || 2.5;
+      const cardHeightInches = outputSettings.cardSize?.heightInches || 3.5;
+      const scalePercent = outputSettings.cardScalePercent || 100;
+      const horizontalOffset = outputSettings.offset.horizontal || 0;
+      const verticalOffset = outputSettings.offset.vertical || 0;
+
+      // Apply scale percentage
+      const scaledCardWidth = cardWidthInches * (scalePercent / 100);
+      const scaledCardHeight = cardHeightInches * (scalePercent / 100);
+
+      // Center card on page with offsets
+      const cardX = (outputSettings.pageSize.width - scaledCardWidth) / 2 + horizontalOffset;
+      const cardY = (outputSettings.pageSize.height - scaledCardHeight) / 2 + verticalOffset;
+
+      // Draw card outline
+      doc.setDrawColor(200, 200, 200);
+      doc.setLineWidth(0.01);
+      doc.rect(cardX, cardY, scaledCardWidth, scaledCardHeight);
+
+      // Calculate grid cell dimensions
+      const cellWidth = scaledCardWidth / gridConfig.columns;
+      const cellHeight = scaledCardHeight / gridConfig.rows;
+
+      // Generate transformation values for each axis
+      const horizontalValues = generateTransformationValues(
+        transformations.horizontal.min,
+        transformations.horizontal.max,
+        gridConfig.columns
+      );
+
+      const verticalValues = generateTransformationValues(
+        transformations.vertical.min,
+        transformations.vertical.max,
+        gridConfig.rows
+      );
+
+      // Add header text
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('COLOR CALIBRATION TEST GRID', outputSettings.pageSize.width / 2, cardY - 0.3, { align: 'center' });
+      
+      doc.setFontSize(8);
+      doc.text(
+        `${transformations.horizontal.type.toUpperCase()} (columns) × ${transformations.vertical.type.toUpperCase()} (rows)`,
+        outputSettings.pageSize.width / 2,
+        cardY - 0.15,
+        { align: 'center' }
+      );
+
+      // Process and place grid cells
+      for (let row = 0; row < gridConfig.rows; row++) {
+        for (let col = 0; col < gridConfig.columns; col++) {
+          // Calculate cell position
+          const cellX = cardX + col * cellWidth;
+          const cellY = cardY + row * cellHeight;
+
+          // Create transformation for this cell
+          const transformation: ColorTransformation = createBaseTransformation();
+          
+          // Apply horizontal transformation (column-based)
+          const horizontalValue = horizontalValues[col];
+          applyTransformationValue(transformation, transformations.horizontal.type, horizontalValue);
+          
+          // Apply vertical transformation (row-based)
+          const verticalValue = verticalValues[row];
+          applyTransformationValue(transformation, transformations.vertical.type, verticalValue);
+
+          // Apply color transformation to crop image
+          const transformedImageUrl = await applyColorTransformation(cropImageUrl, transformation);
+          
+          // Add transformed image to PDF
+          doc.addImage(
+            transformedImageUrl,
+            'PNG',
+            cellX,
+            cellY,
+            cellWidth,
+            cellHeight
+          );
+
+          // Add cell border
+          doc.setDrawColor(150, 150, 150);
+          doc.setLineWidth(0.005);
+          doc.rect(cellX, cellY, cellWidth, cellHeight);
+
+          // Add parameter labels
+          doc.setFontSize(6);
+          doc.setTextColor(0, 0, 0);
+          
+          // Column label (top)
+          if (row === 0) {
+            const colLabel = formatTransformationValue(transformations.horizontal.type, horizontalValue);
+            doc.text(colLabel, cellX + cellWidth / 2, cellY - 0.02, { align: 'center' });
+          }
+          
+          // Row label (left)
+          if (col === 0) {
+            const rowLabel = formatTransformationValue(transformations.vertical.type, verticalValue);
+            doc.text(rowLabel, cellX - 0.02, cellY + cellHeight / 2, { 
+              align: 'right',
+              angle: 90 
+            });
+          }
+        }
+      }
+
+      // Add grid legend
+      const legendY = cardY + scaledCardHeight + 0.2;
+      doc.setFontSize(7);
+      doc.text('Grid Instructions:', cardX, legendY);
+      doc.text('1. Print this test card using your current settings', cardX, legendY + 0.1);
+      doc.text('2. Compare each cell to your reference card', cardX, legendY + 0.2);
+      doc.text('3. Select the cell that best matches your target colors', cardX, legendY + 0.3);
+      doc.text('4. Apply the selected cell\'s settings to your final card export', cardX, legendY + 0.4);
+
+      // Return PDF as blob
+      resolve(doc.output('blob'));
+    } catch (error) {
+      console.error('Failed to generate color calibration PDF:', error);
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Generate evenly spaced transformation values between min and max
+ */
+function generateTransformationValues(min: number, max: number, count: number): number[] {
+  if (count === 1) return [(min + max) / 2];
+  
+  const values: number[] = [];
+  const step = (max - min) / (count - 1);
+  
+  for (let i = 0; i < count; i++) {
+    values.push(min + i * step);
+  }
+  
+  return values;
+}
+
+/**
+ * Create base transformation with default values
+ */
+function createBaseTransformation(): ColorTransformation {
+  return {
+    brightness: 0,
+    contrast: 1.0,
+    saturation: 0,
+    hue: 0,
+    gamma: 1.0,
+    vibrance: 0,
+    redMultiplier: 1.0,
+    greenMultiplier: 1.0,
+    blueMultiplier: 1.0,
+    shadows: 0,
+    highlights: 0,
+    midtoneBalance: 0,
+    blackPoint: 0,
+    whitePoint: 255,
+    outputBlack: 0,
+    outputWhite: 255
+  };
+}
+
+/**
+ * Apply a transformation value to a specific field
+ */
+function applyTransformationValue(
+  transformation: ColorTransformation,
+  type: string,
+  value: number
+): void {
+  (transformation as any)[type] = value;
+}
+
+/**
+ * Format transformation value for display labels
+ */
+function formatTransformationValue(type: string, value: number): string {
+  switch (type) {
+    case 'brightness':
+    case 'saturation':
+    case 'hue':
+    case 'vibrance':
+    case 'shadows':
+    case 'highlights':
+    case 'midtoneBalance':
+      return `${value >= 0 ? '+' : ''}${Math.round(value)}`;
+    case 'contrast':
+    case 'gamma':
+    case 'redMultiplier':
+    case 'greenMultiplier':
+    case 'blueMultiplier':
+      return `${value.toFixed(2)}x`;
+    case 'blackPoint':
+    case 'whitePoint':
+    case 'outputBlack':
+    case 'outputWhite':
+      return `${Math.round(value)}`;
+    default:
+      return `${value.toFixed(1)}`;
+  }
+}

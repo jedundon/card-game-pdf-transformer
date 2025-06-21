@@ -15,6 +15,7 @@ import {
   calculatePreviewScaling,
   processCardImageForRendering
 } from '../utils/renderUtils';
+import { generateColorCalibrationPDF } from '../utils/calibrationUtils';
 import { 
   applyColorTransformation,
   getDefaultColorTransformation,
@@ -349,6 +350,104 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     };
     onColorSettingsChange(newSettings);
   }, [colorSettings, onColorSettingsChange]);
+
+  // Extract crop region from card image
+  const extractCropRegion = useCallback(async (): Promise<string | null> => {
+    if (!cardPreviewUrl || !colorSettings?.selectedRegion || !cardRenderData) {
+      return null;
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          
+          // Calculate crop region in image coordinates
+          const imageWidth = img.naturalWidth;
+          const imageHeight = img.naturalHeight;
+          
+          // Convert from card inches to image pixels
+          const cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
+          const cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
+          const cropXPx = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - cropWidthPx / 2;
+          const cropYPx = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - cropHeightPx / 2;
+          
+          // Set canvas size to crop dimensions
+          canvas.width = cropWidthPx;
+          canvas.height = cropHeightPx;
+          
+          // Draw cropped region
+          ctx.drawImage(
+            img,
+            Math.max(0, cropXPx),
+            Math.max(0, cropYPx),
+            Math.min(cropWidthPx, imageWidth - cropXPx),
+            Math.min(cropHeightPx, imageHeight - cropYPx),
+            0,
+            0,
+            cropWidthPx,
+            cropHeightPx
+          );
+          
+          // Return cropped image as data URL
+          resolve(canvas.toDataURL('image/png'));
+        } catch (error) {
+          console.warn('Failed to extract crop region:', error);
+          resolve(null);
+        }
+      };
+      
+      img.onerror = () => resolve(null);
+      img.src = cardPreviewUrl;
+    });
+  }, [cardPreviewUrl, colorSettings?.selectedRegion, cardRenderData]);
+
+  // Generate color calibration test grid PDF
+  const handleGenerateTestGrid = useCallback(async () => {
+    if (!colorSettings?.selectedRegion || !colorSettings?.gridConfig || !colorSettings?.transformations) {
+      console.warn('Missing required settings for test grid generation');
+      return;
+    }
+
+    try {
+      // Extract crop region from card image
+      const cropImageUrl = await extractCropRegion();
+      if (!cropImageUrl) {
+        alert('Failed to extract crop region from card image');
+        return;
+      }
+
+      // Generate color calibration PDF
+      const pdfBlob = await generateColorCalibrationPDF(
+        cropImageUrl,
+        colorSettings.gridConfig,
+        colorSettings.transformations,
+        outputSettings,
+        colorSettings.selectedRegion
+      );
+
+      // Download PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'color_calibration_test_grid.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to generate test grid PDF:', error);
+      alert('Failed to generate test grid PDF. Please try again.');
+    }
+  }, [colorSettings, outputSettings, extractCropRegion]);
 
   // Ensure currentCardId is valid for the current view mode
   useEffect(() => {
@@ -976,6 +1075,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             {/* Generate Test Grid Button */}
             <button
               disabled={!colorSettings?.selectedRegion}
+              onClick={handleGenerateTestGrid}
               className={`w-full mt-4 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                 colorSettings?.selectedRegion
                   ? 'bg-orange-600 text-white hover:bg-orange-700'
@@ -983,7 +1083,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               }`}
             >
               {colorSettings?.selectedRegion 
-                ? 'Generate Test Grid PDF (Coming Soon)' 
+                ? 'Generate Test Grid PDF' 
                 : 'Select crop region first'
               }
             </button>
