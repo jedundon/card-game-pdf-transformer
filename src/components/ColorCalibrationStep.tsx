@@ -753,16 +753,240 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </div>
           </div>
 
-          {/* Test Grid Configuration (Coming Soon) */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          {/* Test Grid Configuration */}
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Test Grid Configuration (Coming Soon)
+              Test Grid Configuration
             </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              <p>• Column transformations: Brightness ±20%</p>
-              <p>• Row transformations: Contrast ±30%</p>
-              <p>• Grid generation and PDF export</p>
+            
+            {/* Grid Size Selection */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Grid Size (Columns × Rows)
+              </label>
+              <select
+                value={`${colorSettings?.gridConfig?.columns || 5}x${colorSettings?.gridConfig?.rows || 4}`}
+                onChange={(e) => {
+                  const [cols, rows] = e.target.value.split('x').map(Number);
+                  const newSettings = {
+                    ...colorSettings,
+                    gridConfig: {
+                      ...colorSettings.gridConfig,
+                      columns: cols,
+                      rows: rows
+                    }
+                  };
+                  onColorSettingsChange(newSettings);
+                }}
+                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+              >
+                <option value="3x3">3×3 (9 variations)</option>
+                <option value="4x3">4×3 (12 variations)</option>
+                <option value="5x3">5×3 (15 variations)</option>
+                <option value="5x4">5×4 (20 variations)</option>
+                <option value="6x4">6×4 (24 variations)</option>
+                <option value="7x4">7×4 (28 variations)</option>
+                <option value="7x5">7×5 (35 variations)</option>
+              </select>
             </div>
+
+            {/* Column Transformation Type */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Column Transformation
+              </label>
+              <select
+                value={colorSettings?.transformations?.horizontal?.type || 'brightness'}
+                onChange={(e) => {
+                  const newSettings = {
+                    ...colorSettings,
+                    transformations: {
+                      ...colorSettings.transformations,
+                      horizontal: {
+                        ...colorSettings.transformations.horizontal,
+                        type: e.target.value
+                      }
+                    }
+                  };
+                  onColorSettingsChange(newSettings);
+                }}
+                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+              >
+                <option value="brightness">Brightness</option>
+                <option value="contrast">Contrast</option>
+                <option value="saturation">Saturation</option>
+                <option value="hue">Hue</option>
+                <option value="gamma">Gamma</option>
+                <option value="vibrance">Vibrance</option>
+                <option value="redMultiplier">Red Channel</option>
+                <option value="greenMultiplier">Green Channel</option>
+                <option value="blueMultiplier">Blue Channel</option>
+              </select>
+              
+              {/* Column Range Controls */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Min</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={colorSettings?.transformations?.horizontal?.min || -20}
+                    onChange={(e) => {
+                      const newSettings = {
+                        ...colorSettings,
+                        transformations: {
+                          ...colorSettings.transformations,
+                          horizontal: {
+                            ...colorSettings.transformations.horizontal,
+                            min: parseFloat(e.target.value)
+                          }
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={colorSettings?.transformations?.horizontal?.max || 20}
+                    onChange={(e) => {
+                      const newSettings = {
+                        ...colorSettings,
+                        transformations: {
+                          ...colorSettings.transformations,
+                          horizontal: {
+                            ...colorSettings.transformations.horizontal,
+                            max: parseFloat(e.target.value)
+                          }
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Row Transformation Type */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Row Transformation
+              </label>
+              <select
+                value={colorSettings?.transformations?.vertical?.type || 'contrast'}
+                onChange={(e) => {
+                  const newSettings = {
+                    ...colorSettings,
+                    transformations: {
+                      ...colorSettings.transformations,
+                      vertical: {
+                        ...colorSettings.transformations.vertical,
+                        type: e.target.value
+                      }
+                    }
+                  };
+                  onColorSettingsChange(newSettings);
+                }}
+                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
+              >
+                <option value="brightness">Brightness</option>
+                <option value="contrast">Contrast</option>
+                <option value="saturation">Saturation</option>
+                <option value="hue">Hue</option>
+                <option value="gamma">Gamma</option>
+                <option value="vibrance">Vibrance</option>
+                <option value="redMultiplier">Red Channel</option>
+                <option value="greenMultiplier">Green Channel</option>
+                <option value="blueMultiplier">Blue Channel</option>
+              </select>
+              
+              {/* Row Range Controls */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Min</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={colorSettings?.transformations?.vertical?.min || -30}
+                    onChange={(e) => {
+                      const newSettings = {
+                        ...colorSettings,
+                        transformations: {
+                          ...colorSettings.transformations,
+                          vertical: {
+                            ...colorSettings.transformations.vertical,
+                            min: parseFloat(e.target.value)
+                          }
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Max</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={colorSettings?.transformations?.vertical?.max || 30}
+                    onChange={(e) => {
+                      const newSettings = {
+                        ...colorSettings,
+                        transformations: {
+                          ...colorSettings.transformations,
+                          vertical: {
+                            ...colorSettings.transformations.vertical,
+                            max: parseFloat(e.target.value)
+                          }
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Grid Summary */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <h5 className="text-xs font-medium text-blue-800 mb-2">Grid Summary</h5>
+              <div className="text-xs text-blue-700 space-y-1">
+                <p>
+                  <span className="font-medium">Size:</span>{' '}
+                  {colorSettings?.gridConfig?.columns || 5}×{colorSettings?.gridConfig?.rows || 4} = {((colorSettings?.gridConfig?.columns || 5) * (colorSettings?.gridConfig?.rows || 4))} variations
+                </p>
+                <p>
+                  <span className="font-medium">Columns:</span>{' '}
+                  {colorSettings?.transformations?.horizontal?.type || 'brightness'} ({colorSettings?.transformations?.horizontal?.min || -20} to {colorSettings?.transformations?.horizontal?.max || 20})
+                </p>
+                <p>
+                  <span className="font-medium">Rows:</span>{' '}
+                  {colorSettings?.transformations?.vertical?.type || 'contrast'} ({colorSettings?.transformations?.vertical?.min || -30} to {colorSettings?.transformations?.vertical?.max || 30})
+                </p>
+              </div>
+            </div>
+
+            {/* Generate Test Grid Button */}
+            <button
+              disabled={!colorSettings?.selectedRegion}
+              className={`w-full mt-4 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                colorSettings?.selectedRegion
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {colorSettings?.selectedRegion 
+                ? 'Generate Test Grid PDF (Coming Soon)' 
+                : 'Select crop region first'
+              }
+            </button>
           </div>
         </div>
 
