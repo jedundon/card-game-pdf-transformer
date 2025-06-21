@@ -40,11 +40,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const [currentCard, setCurrentCard] = useState(0);
   const [zoom, setZoom] = useState(1.0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const cardPreviewContainerRef = useRef<HTMLDivElement>(null);
   const [renderedPageData, setRenderedPageData] = useState<any>(null);
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
     // Memoize activePages to prevent unnecessary re-renders
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 
@@ -344,6 +346,38 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
   const handleZoomReset = () => {
     setZoom(1.0);
+  };
+
+  // Handle mouse hover on card preview for alignment assistance
+  const handleCardPreviewMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const img = container.querySelector('img');
+    if (!img) return;
+    
+    // Get mouse position relative to the container
+    const containerRect = container.getBoundingClientRect();
+    const mouseX = e.clientX - containerRect.left;
+    const mouseY = e.clientY - containerRect.top;
+    
+    // Get image position and dimensions within the container
+    const imgRect = img.getBoundingClientRect();
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
+    
+    // Calculate mouse position relative to the image
+    const relativeX = mouseX - imgLeft;
+    const relativeY = mouseY - imgTop;
+    
+    // Only set hover position if mouse is within the image bounds
+    if (relativeX >= 0 && relativeX <= img.offsetWidth && relativeY >= 0 && relativeY <= img.offsetHeight) {
+      setHoverPosition({ x: relativeX, y: relativeY });
+    } else {
+      setHoverPosition(null);
+    }
+  };
+
+  const handleCardPreviewMouseLeave = () => {
+    setHoverPosition(null);
   };  // --- Helper: Centralize overlay scale factor ---
   const getOverlayScaleFactor = useCallback(() => {
     if (!canvasRef.current || !renderedPageData) return 1;
@@ -815,7 +849,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               </button>
             </div>
             
-            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center relative">
+            <div 
+              ref={cardPreviewContainerRef}
+              className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center relative card-preview-container"
+              onMouseMove={handleCardPreviewMouseMove}
+              onMouseLeave={handleCardPreviewMouseLeave}
+            >
               {cardPreviewUrl ? (
                 <div className="relative inline-block">
                   <img 
@@ -872,6 +911,85 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                         transform: 'translate(-50%, -50%)' 
                       }}
                     />
+                    
+                    {/* Hover rectangle overlay for alignment assistance */}
+                    {hoverPosition && (() => {
+                      // Get the container and image elements using the ref
+                      const container = cardPreviewContainerRef.current;
+                      const img = container?.querySelector('img');
+                      if (!img || !container) return null;
+                      
+                      // Calculate center point of the image
+                      const centerX = img.offsetWidth / 2;
+                      const centerY = img.offsetHeight / 2;
+                      
+                      // Calculate distances from center to hover position
+                      const deltaX = Math.abs(hoverPosition.x - centerX);
+                      const deltaY = Math.abs(hoverPosition.y - centerY);
+                      
+                      // Create mirrored rectangle that spans all four quadrants
+                      const rectLeft = centerX - deltaX;
+                      const rectTop = centerY - deltaY;
+                      const rectWidth = deltaX * 2;
+                      const rectHeight = deltaY * 2;
+                      
+                      return (
+                        <div className="absolute inset-0 pointer-events-none">
+                          {/* Mirrored hover rectangle with properly dashed borders */}
+                          {/* Top border - horizontal line with vertical dashes */}
+                          <div 
+                            className="absolute h-0.5 opacity-70"
+                            style={{
+                              left: `${rectLeft}px`,
+                              top: `${rectTop}px`,
+                              width: `${rectWidth}px`,
+                              background: 'repeating-linear-gradient(90deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 12px)'
+                            }}
+                          />
+                          {/* Bottom border - horizontal line with vertical dashes */}
+                          <div 
+                            className="absolute h-0.5 opacity-70"
+                            style={{
+                              left: `${rectLeft}px`,
+                              top: `${rectTop + rectHeight}px`,
+                              width: `${rectWidth}px`,
+                              background: 'repeating-linear-gradient(90deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 12px)'
+                            }}
+                          />
+                          {/* Left border - vertical line with horizontal dashes */}
+                          <div 
+                            className="absolute w-0.5 opacity-70"
+                            style={{
+                              left: `${rectLeft}px`,
+                              top: `${rectTop}px`,
+                              height: `${rectHeight}px`,
+                              background: 'repeating-linear-gradient(0deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 12px)'
+                            }}
+                          />
+                          {/* Right border - vertical line with horizontal dashes */}
+                          <div 
+                            className="absolute w-0.5 opacity-70"
+                            style={{
+                              left: `${rectLeft + rectWidth}px`,
+                              top: `${rectTop}px`,
+                              height: `${rectHeight}px`,
+                              background: 'repeating-linear-gradient(0deg, #3b82f6 0, #3b82f6 6px, transparent 6px, transparent 12px)'
+                            }}
+                          />
+                          {/* Distance indicators */}
+                          <div 
+                            className="absolute bg-blue-600 text-white text-xs px-1 py-0.5 rounded shadow-lg z-10"
+                            style={{
+                              left: `${hoverPosition.x + 8}px`,
+                              top: `${hoverPosition.y - 24}px`,
+                              fontSize: '10px'
+                            }}
+                          >
+                            {Math.round(deltaX)}×{Math.round(deltaY)}px from center
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ) : (
@@ -953,6 +1071,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </div>
             <p className="text-xs text-gray-500 mt-2">
               Use the red crosshairs in the preview above to align with your card's center.
+              Hover over the card preview to see a mirrored measurement rectangle for checking symmetrical alignment and margins.
             </p>
           </div>
 
