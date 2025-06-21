@@ -193,11 +193,16 @@ export function calculateCalibrationSettings(
 /**
  * Generate color calibration test PDF with transformation grid
  * 
+ * Each grid cell starts with the user's current color settings as baseline,
+ * then applies the specific horizontal/vertical transformations for that cell position.
+ * This allows users to test variations around their current settings.
+ * 
  * @param cropImageUrl - Data URL of the cropped card region
  * @param gridConfig - Grid configuration (columns, rows)
  * @param transformations - Column and row transformation configurations
  * @param outputSettings - Card positioning and layout settings
  * @param selectedRegion - Crop region information
+ * @param userColorSettings - User's current color adjustments to use as baseline
  * @returns Promise resolving to PDF Blob
  */
 export async function generateColorCalibrationPDF(
@@ -208,7 +213,8 @@ export async function generateColorCalibrationPDF(
     vertical: { type: string; min: number; max: number };
   },
   outputSettings: any,
-  _selectedRegion: any
+  _selectedRegion: any,
+  userColorSettings?: ColorTransformation
 ): Promise<Blob> {
   return new Promise(async (resolve, reject) => {
     try {
@@ -284,8 +290,10 @@ export async function generateColorCalibrationPDF(
           const cellX = cardX + labelMargin + col * cellWidth;
           const cellY = gridStartY + row * cellHeight;
 
-          // Create transformation for this cell
-          const transformation: ColorTransformation = createBaseTransformation();
+          // Create transformation for this cell - start with user's current settings
+          const transformation: ColorTransformation = userColorSettings 
+            ? { ...userColorSettings }
+            : createBaseTransformation();
           
           // Apply horizontal transformation (column-based)
           const horizontalValue = horizontalValues[col];

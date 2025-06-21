@@ -459,13 +459,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         return;
       }
 
-      // Generate color calibration PDF
+      // Generate color calibration PDF with user's current settings as baseline
       const pdfBlob = await generateColorCalibrationPDF(
         cropImageUrl,
         colorSettings.gridConfig,
         colorSettings.transformations,
         outputSettings,
-        colorSettings.selectedRegion
+        colorSettings.selectedRegion,
+        currentColorTransformation
       );
 
       // Download PDF
@@ -526,8 +527,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               <div className="text-sm text-blue-700 space-y-1">
                 <p>1. Adjust color settings and see real-time preview on the right</p>
                 <p>2. Select a region for calibration testing</p>
-                <p>3. Generate test grid PDF for physical printer comparison</p>
-                <p>4. Apply optimal settings from test results</p>
+                <p>3. Configure grid axes (your current settings become the baseline)</p>
+                <p>4. Generate test grid PDF for physical printer comparison</p>
+                <p>5. Apply optimal settings from test results</p>
+              </div>
+              <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+                <span className="font-medium">💡 Tip:</span> The test grid uses your current color adjustments as the starting point, 
+                then varies the selected parameters around those values. This lets you iteratively refine your settings.
               </div>
             </div>
           </div>
@@ -1124,6 +1130,61 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                         <span className="font-medium">Rows:</span>{' '}
                         {verticalType} ({verticalMin} to {verticalMax}{verticalRange.unit})
                       </p>
+                      <p className="font-medium text-green-700 mt-2">
+                        ✓ Grid uses your current color settings as baseline
+                      </p>
+                      {(() => {
+                        // Check if user's grid axes overlap with current non-neutral settings
+                        const horizontalType = colorSettings?.transformations?.horizontal?.type || 'brightness';
+                        const verticalType = colorSettings?.transformations?.vertical?.type || 'contrast';
+                        
+                        // Check if horizontal axis parameter has non-neutral user setting
+                        const horizontalUserValue = (currentColorTransformation as any)[horizontalType];
+                        let horizontalIsNeutral = false;
+                        if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(horizontalType)) {
+                          horizontalIsNeutral = horizontalUserValue === 0;
+                        } else if (['contrast', 'gamma', 'redMultiplier', 'greenMultiplier', 'blueMultiplier'].includes(horizontalType)) {
+                          horizontalIsNeutral = horizontalUserValue === 1.0;
+                        } else if (horizontalType === 'blackPoint' || horizontalType === 'outputBlack') {
+                          horizontalIsNeutral = horizontalUserValue === 0;
+                        } else if (horizontalType === 'whitePoint' || horizontalType === 'outputWhite') {
+                          horizontalIsNeutral = horizontalUserValue === 255;
+                        }
+                        
+                        // Check if vertical axis parameter has non-neutral user setting
+                        const verticalUserValue = (currentColorTransformation as any)[verticalType];
+                        let verticalIsNeutral = false;
+                        if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(verticalType)) {
+                          verticalIsNeutral = verticalUserValue === 0;
+                        } else if (['contrast', 'gamma', 'redMultiplier', 'greenMultiplier', 'blueMultiplier'].includes(verticalType)) {
+                          verticalIsNeutral = verticalUserValue === 1.0;
+                        } else if (verticalType === 'blackPoint' || verticalType === 'outputBlack') {
+                          verticalIsNeutral = verticalUserValue === 0;
+                        } else if (verticalType === 'whitePoint' || verticalType === 'outputWhite') {
+                          verticalIsNeutral = verticalUserValue === 255;
+                        }
+                        
+                        if (!horizontalIsNeutral && !verticalIsNeutral && horizontalType !== verticalType) {
+                          return (
+                            <p className="text-xs text-amber-700 mt-1">
+                              ⚠️ Grid will override your current {horizontalType} and {verticalType} settings
+                            </p>
+                          );
+                        } else if (!horizontalIsNeutral && horizontalType !== verticalType) {
+                          return (
+                            <p className="text-xs text-amber-700 mt-1">
+                              ⚠️ Grid will override your current {horizontalType} setting
+                            </p>
+                          );
+                        } else if (!verticalIsNeutral && horizontalType !== verticalType) {
+                          return (
+                            <p className="text-xs text-amber-700 mt-1">
+                              ⚠️ Grid will override your current {verticalType} setting
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                     </>
                   );
                 })()}
