@@ -57,12 +57,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
   const [calibrationMeasurements, setCalibrationMeasurements] = useState({
-    leftMargin: '',
-    rightMargin: '',
-    topMargin: '',
-    bottomMargin: '',
-    horizontalScale: '',
-    verticalScale: ''
+    rightDistance: '',
+    topDistance: '',
+    crosshairLength: ''
   });
   
   // Calculate total cards from extraction settings and active pages
@@ -303,7 +300,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       outputSettings.pageSize.height,
       horizontalOffset,
       verticalOffset,
-      rotation
+      rotation,
+      scalePercent
     );
     
     // Create a download link and click it programmatically
@@ -321,34 +319,31 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   const handleApplyCalibration = useCallback(() => {
     const measurements = calibrationMeasurements;
     
-    if (!measurements.leftMargin || !measurements.rightMargin || 
-        !measurements.topMargin || !measurements.bottomMargin || 
-        !measurements.horizontalScale || !measurements.verticalScale) {
-      alert('Please enter all measurements before applying calibration.');
+    if (!measurements.rightDistance || !measurements.topDistance || !measurements.crosshairLength) {
+      alert('Please enter all 3 measurements before applying calibration.');
       return;
     }
 
     // Validate that all measurements are valid numbers
-    const leftMargin = parseFloat(measurements.leftMargin);
-    const rightMargin = parseFloat(measurements.rightMargin);
-    const topMargin = parseFloat(measurements.topMargin);
-    const bottomMargin = parseFloat(measurements.bottomMargin);
-    const horizontalScale = parseFloat(measurements.horizontalScale);
-    const verticalScale = parseFloat(measurements.verticalScale);
+    const rightDistance = parseFloat(measurements.rightDistance);
+    const topDistance = parseFloat(measurements.topDistance);
+    const crosshairLength = parseFloat(measurements.crosshairLength);
     
-    if (isNaN(leftMargin) || isNaN(rightMargin) || isNaN(topMargin) || 
-        isNaN(bottomMargin) || isNaN(horizontalScale) || isNaN(verticalScale)) {
+    if (isNaN(rightDistance) || isNaN(topDistance) || isNaN(crosshairLength)) {
       alert('Please enter valid numeric measurements.');
       return;
     }
 
+    // Get current card dimensions for calculation
+    const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+    const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
+
     const settings = calculateCalibrationSettings(
-      leftMargin,
-      rightMargin,
-      topMargin,
-      bottomMargin,
-      horizontalScale,
-      verticalScale,
+      rightDistance,
+      topDistance,
+      crosshairLength,
+      cardWidthInches,
+      cardHeightInches,
       outputSettings.offset.horizontal || 0,
       outputSettings.offset.vertical || 0,
       outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent
@@ -400,14 +395,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     
     // Clear measurements
     setCalibrationMeasurements({
-      leftMargin: '',
-      rightMargin: '',
-      topMargin: '',
-      bottomMargin: '',
-      horizontalScale: '',
-      verticalScale: ''
+      rightDistance: '',
+      topDistance: '',
+      crosshairLength: ''
     });
-  }, [calibrationMeasurements, handleOffsetChange, handleCardScalePercentChange, outputSettings.offset, outputSettings.cardScalePercent]);
+  }, [calibrationMeasurements, outputSettings, onSettingsChange]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({
@@ -1050,110 +1042,67 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               Calibration Measurements
             </h3>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">Measurement Guide</h4>
+              <h4 className="text-sm font-medium text-blue-800 mb-2">Simple 3-Measurement Guide</h4>
               <p className="text-sm text-blue-700 mb-2">
-                Measure with a ruler from the <strong>edge of the printed card</strong> to the <strong>reference lines</strong> inside the card:
+                Measure with a ruler from the <strong>center dot</strong> to the <strong>card edges</strong> and the <strong>crosshair end</strong>:
               </p>
               <div className="text-xs text-blue-600 space-y-1">
-                <p>• <strong>Perfect alignment:</strong> All margins = 0.5"</p>
-                <p>• <strong>Card too far left:</strong> Left margin &lt; 0.5", Right margin &gt; 0.5"</p>
-                <p>• <strong>Card too far right:</strong> Left margin &gt; 0.5", Right margin &lt; 0.5"</p>
-                <p>• <strong>Scale bars:</strong> Measure the crosshair lines at center (expect 1.0")</p>
+                <p>• <strong>Right edge:</strong> Distance from center dot to right edge of card</p>
+                <p>• <strong>Top edge:</strong> Distance from center dot to top edge of card</p>
+                <p>• <strong>Crosshair length:</strong> Length of crosshair arm (from center to end)</p>
               </div>
             </div>
             
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Left Margin (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={calibrationMeasurements.leftMargin}
-                    onChange={(e) => handleCalibrationMeasurementChange('leftMargin', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Distance from left card edge to reference line (expect ~0.5")</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Right Margin (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={calibrationMeasurements.rightMargin}
-                    onChange={(e) => handleCalibrationMeasurementChange('rightMargin', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Distance from right card edge to reference line (expect ~0.5")</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Distance to Right Edge (inches)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={calibrationMeasurements.rightDistance}
+                  onChange={(e) => handleCalibrationMeasurementChange('rightDistance', e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="1.25"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Distance from center dot to right edge of card (expect ~{(outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2}")
+                </p>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Top Margin (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={calibrationMeasurements.topMargin}
-                    onChange={(e) => handleCalibrationMeasurementChange('topMargin', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Distance from top card edge to reference line (expect ~0.5")</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Bottom Margin (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={calibrationMeasurements.bottomMargin}
-                    onChange={(e) => handleCalibrationMeasurementChange('bottomMargin', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Distance from bottom card edge to reference line (expect ~0.5")</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Distance to Top Edge (inches)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={calibrationMeasurements.topDistance}
+                  onChange={(e) => handleCalibrationMeasurementChange('topDistance', e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="1.75"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Distance from center dot to top edge of card (expect ~{(outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2}")
+                </p>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Horizontal Scale Bar (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={calibrationMeasurements.horizontalScale}
-                    onChange={(e) => handleCalibrationMeasurementChange('horizontalScale', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="1.000"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the horizontal crosshair (expect ~1.0")</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Vertical Scale Bar (inches)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={calibrationMeasurements.verticalScale}
-                    onChange={(e) => handleCalibrationMeasurementChange('verticalScale', e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    placeholder="1.000"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Actual printed length of the vertical crosshair (expect ~1.0")</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Crosshair Arm Length (inches)
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={calibrationMeasurements.crosshairLength}
+                  onChange={(e) => handleCalibrationMeasurementChange('crosshairLength', e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  placeholder="1.000"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Actual printed length of crosshair arm from center to end (expect ~1.0")
+                </p>
               </div>
             </div>
             
