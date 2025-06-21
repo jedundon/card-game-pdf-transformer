@@ -208,7 +208,7 @@ export async function generateColorCalibrationPDF(
     vertical: { type: string; min: number; max: number };
   },
   outputSettings: any,
-  selectedRegion: any
+  _selectedRegion: any
 ): Promise<Blob> {
   return new Promise(async (resolve, reject) => {
     try {

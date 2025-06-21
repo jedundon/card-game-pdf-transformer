@@ -45,12 +45,12 @@ export function App() {
     gridConfig: { columns: 5, rows: 4 },
     transformations: {
       horizontal: { type: 'brightness', min: -20, max: 20 },
-      vertical: { type: 'contrast', min: -30, max: 30 }
+      vertical: { type: 'contrast', min: 0.8, max: 1.3 }
     },
     selectedPreset: null,
     finalAdjustments: {
       brightness: 0,
-      contrast: 0,
+      contrast: 1.0,
       saturation: 0,
       hue: 0,
       gamma: 1.0,

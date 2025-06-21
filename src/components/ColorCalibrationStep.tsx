@@ -6,7 +6,6 @@ import {
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
   getAvailableCardIds,
-  getRotationForCardType,
   countCardsByType
 } from '../utils/cardUtils';
 import { 
@@ -21,7 +20,8 @@ import {
   getDefaultColorTransformation,
   ColorTransformation,
   COLOR_PRESETS,
-  ColorPresetKey
+  ColorPresetKey,
+  getTransformationRange
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
@@ -291,7 +291,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   }, []);
 
   // Handle click to select crop region center
-  const handleCardClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+  const handleCardClick = useCallback((_event: React.MouseEvent<HTMLDivElement>) => {
     if (!cardRenderData || !cropRegionDimensions || !hoverPosition) return;
     
     // Convert hover position to card-relative coordinates (0-1 normalized)
@@ -347,6 +347,40 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       ...colorSettings,
       selectedPreset: presetKey,
       finalAdjustments: { ...preset.transformation }
+    };
+    onColorSettingsChange(newSettings);
+  }, [colorSettings, onColorSettingsChange]);
+
+  // Helper function to update horizontal transformation type and auto-adjust range
+  const updateHorizontalTransformationType = useCallback((type: string) => {
+    const range = getTransformationRange(type);
+    const newSettings = {
+      ...colorSettings,
+      transformations: {
+        ...colorSettings.transformations,
+        horizontal: {
+          type,
+          min: range.defaultMin,
+          max: range.defaultMax
+        }
+      }
+    };
+    onColorSettingsChange(newSettings);
+  }, [colorSettings, onColorSettingsChange]);
+
+  // Helper function to update vertical transformation type and auto-adjust range
+  const updateVerticalTransformationType = useCallback((type: string) => {
+    const range = getTransformationRange(type);
+    const newSettings = {
+      ...colorSettings,
+      transformations: {
+        ...colorSettings.transformations,
+        vertical: {
+          type,
+          min: range.defaultMin,
+          max: range.defaultMax
+        }
+      }
     };
     onColorSettingsChange(newSettings);
   }, [colorSettings, onColorSettingsChange]);
@@ -896,19 +930,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               </label>
               <select
                 value={colorSettings?.transformations?.horizontal?.type || 'brightness'}
-                onChange={(e) => {
-                  const newSettings = {
-                    ...colorSettings,
-                    transformations: {
-                      ...colorSettings.transformations,
-                      horizontal: {
-                        ...colorSettings.transformations.horizontal,
-                        type: e.target.value
-                      }
-                    }
-                  };
-                  onColorSettingsChange(newSettings);
-                }}
+                onChange={(e) => updateHorizontalTransformationType(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
               >
                 <option value="brightness">Brightness</option>
@@ -924,50 +946,66 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               
               {/* Column Range Controls */}
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Min</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={colorSettings?.transformations?.horizontal?.min || -20}
-                    onChange={(e) => {
-                      const newSettings = {
-                        ...colorSettings,
-                        transformations: {
-                          ...colorSettings.transformations,
-                          horizontal: {
-                            ...colorSettings.transformations.horizontal,
-                            min: parseFloat(e.target.value)
-                          }
-                        }
-                      };
-                      onColorSettingsChange(newSettings);
-                    }}
-                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Max</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={colorSettings?.transformations?.horizontal?.max || 20}
-                    onChange={(e) => {
-                      const newSettings = {
-                        ...colorSettings,
-                        transformations: {
-                          ...colorSettings.transformations,
-                          horizontal: {
-                            ...colorSettings.transformations.horizontal,
-                            max: parseFloat(e.target.value)
-                          }
-                        }
-                      };
-                      onColorSettingsChange(newSettings);
-                    }}
-                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
-                  />
-                </div>
+                {(() => {
+                  const horizontalType = colorSettings?.transformations?.horizontal?.type || 'brightness';
+                  const range = getTransformationRange(horizontalType);
+                  return (
+                    <>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Min {range.unit && `(${range.unit})`}
+                        </label>
+                        <input
+                          type="number"
+                          step={range.step}
+                          min={range.min}
+                          max={range.max}
+                          value={colorSettings?.transformations?.horizontal?.min ?? range.defaultMin}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...colorSettings,
+                              transformations: {
+                                ...colorSettings.transformations,
+                                horizontal: {
+                                  ...colorSettings.transformations.horizontal,
+                                  min: parseFloat(e.target.value)
+                                }
+                              }
+                            };
+                            onColorSettingsChange(newSettings);
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Max {range.unit && `(${range.unit})`}
+                        </label>
+                        <input
+                          type="number"
+                          step={range.step}
+                          min={range.min}
+                          max={range.max}
+                          value={colorSettings?.transformations?.horizontal?.max ?? range.defaultMax}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...colorSettings,
+                              transformations: {
+                                ...colorSettings.transformations,
+                                horizontal: {
+                                  ...colorSettings.transformations.horizontal,
+                                  max: parseFloat(e.target.value)
+                                }
+                              }
+                            };
+                            onColorSettingsChange(newSettings);
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -978,19 +1016,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               </label>
               <select
                 value={colorSettings?.transformations?.vertical?.type || 'contrast'}
-                onChange={(e) => {
-                  const newSettings = {
-                    ...colorSettings,
-                    transformations: {
-                      ...colorSettings.transformations,
-                      vertical: {
-                        ...colorSettings.transformations.vertical,
-                        type: e.target.value
-                      }
-                    }
-                  };
-                  onColorSettingsChange(newSettings);
-                }}
+                onChange={(e) => updateVerticalTransformationType(e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
               >
                 <option value="brightness">Brightness</option>
@@ -1006,50 +1032,66 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               
               {/* Row Range Controls */}
               <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Min</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={colorSettings?.transformations?.vertical?.min || -30}
-                    onChange={(e) => {
-                      const newSettings = {
-                        ...colorSettings,
-                        transformations: {
-                          ...colorSettings.transformations,
-                          vertical: {
-                            ...colorSettings.transformations.vertical,
-                            min: parseFloat(e.target.value)
-                          }
-                        }
-                      };
-                      onColorSettingsChange(newSettings);
-                    }}
-                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-1">Max</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={colorSettings?.transformations?.vertical?.max || 30}
-                    onChange={(e) => {
-                      const newSettings = {
-                        ...colorSettings,
-                        transformations: {
-                          ...colorSettings.transformations,
-                          vertical: {
-                            ...colorSettings.transformations.vertical,
-                            max: parseFloat(e.target.value)
-                          }
-                        }
-                      };
-                      onColorSettingsChange(newSettings);
-                    }}
-                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
-                  />
-                </div>
+                {(() => {
+                  const verticalType = colorSettings?.transformations?.vertical?.type || 'contrast';
+                  const range = getTransformationRange(verticalType);
+                  return (
+                    <>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Min {range.unit && `(${range.unit})`}
+                        </label>
+                        <input
+                          type="number"
+                          step={range.step}
+                          min={range.min}
+                          max={range.max}
+                          value={colorSettings?.transformations?.vertical?.min ?? range.defaultMin}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...colorSettings,
+                              transformations: {
+                                ...colorSettings.transformations,
+                                vertical: {
+                                  ...colorSettings.transformations.vertical,
+                                  min: parseFloat(e.target.value)
+                                }
+                              }
+                            };
+                            onColorSettingsChange(newSettings);
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">
+                          Max {range.unit && `(${range.unit})`}
+                        </label>
+                        <input
+                          type="number"
+                          step={range.step}
+                          min={range.min}
+                          max={range.max}
+                          value={colorSettings?.transformations?.vertical?.max ?? range.defaultMax}
+                          onChange={(e) => {
+                            const newSettings = {
+                              ...colorSettings,
+                              transformations: {
+                                ...colorSettings.transformations,
+                                vertical: {
+                                  ...colorSettings.transformations.vertical,
+                                  max: parseFloat(e.target.value)
+                                }
+                              }
+                            };
+                            onColorSettingsChange(newSettings);
+                          }}
+                          className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                        />
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1061,14 +1103,30 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   <span className="font-medium">Size:</span>{' '}
                   {colorSettings?.gridConfig?.columns || 5}×{colorSettings?.gridConfig?.rows || 4} = {((colorSettings?.gridConfig?.columns || 5) * (colorSettings?.gridConfig?.rows || 4))} variations
                 </p>
-                <p>
-                  <span className="font-medium">Columns:</span>{' '}
-                  {colorSettings?.transformations?.horizontal?.type || 'brightness'} ({colorSettings?.transformations?.horizontal?.min || -20} to {colorSettings?.transformations?.horizontal?.max || 20})
-                </p>
-                <p>
-                  <span className="font-medium">Rows:</span>{' '}
-                  {colorSettings?.transformations?.vertical?.type || 'contrast'} ({colorSettings?.transformations?.vertical?.min || -30} to {colorSettings?.transformations?.vertical?.max || 30})
-                </p>
+                {(() => {
+                  const horizontalType = colorSettings?.transformations?.horizontal?.type || 'brightness';
+                  const horizontalRange = getTransformationRange(horizontalType);
+                  const horizontalMin = colorSettings?.transformations?.horizontal?.min ?? horizontalRange.defaultMin;
+                  const horizontalMax = colorSettings?.transformations?.horizontal?.max ?? horizontalRange.defaultMax;
+                  
+                  const verticalType = colorSettings?.transformations?.vertical?.type || 'contrast';
+                  const verticalRange = getTransformationRange(verticalType);
+                  const verticalMin = colorSettings?.transformations?.vertical?.min ?? verticalRange.defaultMin;
+                  const verticalMax = colorSettings?.transformations?.vertical?.max ?? verticalRange.defaultMax;
+                  
+                  return (
+                    <>
+                      <p>
+                        <span className="font-medium">Columns:</span>{' '}
+                        {horizontalType} ({horizontalMin} to {horizontalMax}{horizontalRange.unit})
+                      </p>
+                      <p>
+                        <span className="font-medium">Rows:</span>{' '}
+                        {verticalType} ({verticalMin} to {verticalMax}{verticalRange.unit})
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 

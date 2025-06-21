@@ -42,7 +42,7 @@ export async function applyColorTransformation(
   imageUrl: string,
   transformation: ColorTransformation
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     const img = new Image();
     
     img.onload = () => {
@@ -401,3 +401,162 @@ export const COLOR_PRESETS = {
 } as const;
 
 export type ColorPresetKey = keyof typeof COLOR_PRESETS;
+
+/**
+ * Get appropriate transformation ranges for each color parameter type
+ * Returns sensible min/max values and defaults for grid calibration
+ */
+export function getTransformationRange(type: string): {
+  min: number;
+  max: number;
+  defaultMin: number;
+  defaultMax: number;
+  step: number;
+  unit: string;
+} {
+  switch (type) {
+    case 'brightness':
+      return {
+        min: -100,
+        max: 100,
+        defaultMin: -20,
+        defaultMax: 20,
+        step: 1,
+        unit: '%'
+      };
+    
+    case 'contrast':
+      return {
+        min: 0.5,
+        max: 2.0,
+        defaultMin: 0.8,
+        defaultMax: 1.3,
+        step: 0.05,
+        unit: 'x'
+      };
+    
+    case 'saturation':
+      return {
+        min: -100,
+        max: 100,
+        defaultMin: -30,
+        defaultMax: 30,
+        step: 1,
+        unit: '%'
+      };
+    
+    case 'hue':
+      return {
+        min: -180,
+        max: 180,
+        defaultMin: -20,
+        defaultMax: 20,
+        step: 1,
+        unit: '°'
+      };
+    
+    case 'gamma':
+      return {
+        min: 0.5,
+        max: 2.0,
+        defaultMin: 0.8,
+        defaultMax: 1.2,
+        step: 0.05,
+        unit: ''
+      };
+    
+    case 'vibrance':
+      return {
+        min: -100,
+        max: 100,
+        defaultMin: -25,
+        defaultMax: 25,
+        step: 1,
+        unit: '%'
+      };
+    
+    case 'redMultiplier':
+    case 'greenMultiplier':
+    case 'blueMultiplier':
+      return {
+        min: 0.5,
+        max: 1.5,
+        defaultMin: 0.9,
+        defaultMax: 1.1,
+        step: 0.05,
+        unit: 'x'
+      };
+    
+    case 'shadows':
+    case 'highlights':
+      return {
+        min: -50,
+        max: 50,
+        defaultMin: -15,
+        defaultMax: 15,
+        step: 1,
+        unit: ''
+      };
+    
+    case 'midtoneBalance':
+      return {
+        min: -100,
+        max: 100,
+        defaultMin: -20,
+        defaultMax: 20,
+        step: 1,
+        unit: ''
+      };
+    
+    case 'blackPoint':
+      return {
+        min: 0,
+        max: 50,
+        defaultMin: 0,
+        defaultMax: 15,
+        step: 1,
+        unit: ''
+      };
+    
+    case 'whitePoint':
+      return {
+        min: 205,
+        max: 255,
+        defaultMin: 235,
+        defaultMax: 255,
+        step: 1,
+        unit: ''
+      };
+    
+    case 'outputBlack':
+      return {
+        min: 0,
+        max: 30,
+        defaultMin: 0,
+        defaultMax: 10,
+        step: 1,
+        unit: ''
+      };
+    
+    case 'outputWhite':
+      return {
+        min: 225,
+        max: 255,
+        defaultMin: 245,
+        defaultMax: 255,
+        step: 1,
+        unit: ''
+      };
+    
+    default:
+      // Fallback for unknown types
+      return {
+        min: -50,
+        max: 50,
+        defaultMin: -10,
+        defaultMax: 10,
+        step: 1,
+        unit: ''
+      };
+  }
+}
