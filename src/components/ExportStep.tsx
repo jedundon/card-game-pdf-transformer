@@ -191,7 +191,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           // Use unified rendering functions for consistent behavior
           const renderDimensions = await calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
           const positioning = calculateCardPositioning(renderDimensions, outputSettings, cardType);
-          const processedImage = await processCardImageForRendering(cardImageUrl, positioning.rotation);
+          const processedImage = await processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
           
           console.log(`Card ${cardInfo.id} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
           

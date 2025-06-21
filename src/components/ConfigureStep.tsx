@@ -13,10 +13,11 @@ import {
 import { 
   calculateFinalCardRenderDimensions,
   calculateCardPositioning,
-  calculatePreviewScaling
+  calculatePreviewScaling,
+  processCardImageForRendering
 } from '../utils/renderUtils';
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
-import { DPI_CONSTANTS, PREVIEW_CONSTRAINTS } from '../constants';
+import { PREVIEW_CONSTRAINTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
 interface ConfigureStepProps {
   pdfData: any;
@@ -47,6 +48,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 }) => {
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
+  const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
   const [cardRenderData, setCardRenderData] = useState<{
     renderDimensions: any;
     positioning: any;
@@ -150,18 +152,25 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               positioning,
               previewScaling
             });
+            
+            // Process the image for preview (with clipping and rotation)
+            const processedImage = await processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
+            setProcessedPreviewUrl(processedImage.imageUrl);
           } catch (error) {
             console.warn('Failed to calculate render data for preview:', error);
             setCardRenderData(null);
+            setProcessedPreviewUrl(null);
           }
         } else {
           setCardRenderData(null);
+          setProcessedPreviewUrl(null);
         }
       };
       updatePreview();
     } else {
       setCardPreviewUrl(null);
       setCardRenderData(null);
+      setProcessedPreviewUrl(null);
     }
   }, [
     currentCardId,
@@ -912,23 +921,13 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     marginTop: '-70px'
                   })
                 }}>
-                  {cardPreviewUrl && cardRenderData ? (
+                  {processedPreviewUrl && cardRenderData ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
-                        backgroundImage: `url(${cardPreviewUrl})`,
+                        backgroundImage: `url(${processedPreviewUrl})`,
                         backgroundPosition: 'center center',
-                        backgroundSize: (() => {
-                          // Use the render dimensions calculated by unified functions
-                          const renderDims = cardRenderData.renderDimensions;
-                          const previewScale = cardRenderData.previewScaling.scale;
-                          
-                          // Convert final render dimensions to preview pixels
-                          const previewImageWidth = renderDims.finalWidthInches * DPI_CONSTANTS.SCREEN_DPI * previewScale;
-                          const previewImageHeight = renderDims.finalHeightInches * DPI_CONSTANTS.SCREEN_DPI * previewScale;
-                          
-                          return `${previewImageWidth}px ${previewImageHeight}px`;
-                        })(),
+                        backgroundSize: 'contain',
                         backgroundRepeat: 'no-repeat'
                       }}
                     />
