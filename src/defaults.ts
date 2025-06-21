@@ -53,7 +53,13 @@ export const DEFAULT_SETTINGS = {
       rows: 2,
       columns: 3
     },
-    gutterWidth: 0
+    gutterWidth: 0,
+    cardCrop: {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0
+    }
   },  outputSettings: {
     pageSize: {
       width: 3.5,
@@ -117,6 +123,12 @@ export type WorkflowSettings = {
       columns: number;
     };
     gutterWidth: number;
+    cardCrop: {
+      top: number;
+      right: number;
+      bottom: number;
+      left: number;
+    };
   };  outputSettings: {
     pageSize: {
       width: number;

@@ -26,6 +26,12 @@ interface ExtractionSettings {
     bottom: number;
   };
   gutterWidth?: number;
+  cardCrop?: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  };
 }
 
 interface CardInfo {
@@ -354,7 +360,38 @@ export async function extractCardImage(
       sourceX, sourceY, sourceWidth, sourceHeight,
       0, 0, cardCanvas.width, cardCanvas.height
     );
-    
+
+    // Apply individual card cropping if specified
+    if (extractionSettings.cardCrop && 
+        (extractionSettings.cardCrop.top > 0 || extractionSettings.cardCrop.right > 0 || 
+         extractionSettings.cardCrop.bottom > 0 || extractionSettings.cardCrop.left > 0)) {
+      
+      const cardCrop = extractionSettings.cardCrop;
+      const croppedCardWidth = Math.max(1, cardCanvas.width - cardCrop.left - cardCrop.right);
+      const croppedCardHeight = Math.max(1, cardCanvas.height - cardCrop.top - cardCrop.bottom);
+      
+      // Only apply cropping if the result would be a valid size
+      if (croppedCardWidth > 0 && croppedCardHeight > 0) {
+        // Create a new canvas for the cropped card
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = croppedCardWidth;
+        croppedCanvas.height = croppedCardHeight;
+        const croppedContext = croppedCanvas.getContext('2d');
+        
+        if (croppedContext) {
+          // Extract the cropped area from the original card
+          croppedContext.drawImage(
+            cardCanvas,
+            cardCrop.left, cardCrop.top, croppedCardWidth, croppedCardHeight,
+            0, 0, croppedCardWidth, croppedCardHeight
+          );
+          
+          const dataUrl = croppedCanvas.toDataURL('image/png');
+          return dataUrl;
+        }
+      }
+    }
+
     const dataUrl = cardCanvas.toDataURL('image/png');
     return dataUrl;
   } catch (error) {

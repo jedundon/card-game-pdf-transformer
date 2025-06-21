@@ -275,7 +275,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } else {
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
-    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractCardImage, globalCardIndex]);
+    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractionSettings.cardCrop, extractCardImage, globalCardIndex]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -302,6 +302,21 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       ...extractionSettings,
       gutterWidth: value
     };
+    onSettingsChange(newSettings);
+  };
+
+  const handleCardCropChange = (edge: string, value: number) => {
+    // Ensure value is a valid number, default to 0 if NaN
+    const validValue = isNaN(value) ? 0 : value;
+    
+    const newSettings = {
+      ...extractionSettings,
+      cardCrop: {
+        ...(extractionSettings.cardCrop || { top: 0, right: 0, bottom: 0, left: 0 }),
+        [edge]: validValue
+      }
+    };
+    
     onSettingsChange(newSettings);
   };
   const handlePreviousPage = () => {
@@ -548,7 +563,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </h3>
             <p className="text-sm text-gray-600 mb-3">
               Specify margins to crop from each edge (values in 300 DPI pixels for precise control)
-            </p>            <div className="grid grid-cols-2 gap-4">
+            </p>
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Top Margin
@@ -574,7 +590,27 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 <input type="number" value={extractionSettings.crop.left} onChange={e => handleCropChange('left', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
               </div>
             </div>
-          </div>          <div>
+          </div>
+
+          {/* Total crop indicator - immediately after page crop settings */}
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+            <div className="flex items-center">
+              <MoveIcon size={16} className="text-gray-600 mr-2" />
+              <span className="text-sm text-gray-600">
+                Total crop applied:{' '}
+                {extractionSettings.crop.top + extractionSettings.crop.right + extractionSettings.crop.bottom + extractionSettings.crop.left}
+                px (300 DPI)
+                {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
+                  <>
+                    {' + '}
+                    {extractionSettings.gutterWidth}px gutter
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+
+          <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3">
               Card Grid
             </h3>
@@ -594,54 +630,45 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </div>
           </div>
 
+          {/* Cards per page indicator - immediately after grid settings */}
+          <div className="flex items-center p-3 bg-gray-50 rounded-md">
+            <LayoutGridIcon size={16} className="text-gray-600 mr-2" />
+            <span className="text-sm text-gray-600">
+              {extractionSettings.grid.rows * extractionSettings.grid.columns}{' '}
+              cards per page
+            </span>
+          </div>
+
           {/* Gutter Width Control - only show for gutter-fold mode */}
           {pdfMode.type === 'gutter-fold' && (
-            <div>
-              <h3 className="text-lg font-medium text-gray-800 mb-3">
-                Gutter Settings
-              </h3>
-              <p className="text-sm text-gray-600 mb-3">
-                Specify the width of the gutter area between front and back cards (in 300 DPI pixels)
-              </p>
+            <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Gutter Width (px at 300 DPI)
-                </label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  value={extractionSettings.gutterWidth || 0} 
-                  onChange={e => handleGutterWidthChange(parseInt(e.target.value))} 
-                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                />
+                <h3 className="text-lg font-medium text-gray-800 mb-3">
+                  Gutter Settings
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Specify the width of the gutter area between front and back cards (in 300 DPI pixels)
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gutter Width (px at 300 DPI)
+                  </label>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    value={extractionSettings.gutterWidth || 0} 
+                    onChange={e => handleGutterWidthChange(parseInt(e.target.value))} 
+                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  This area will be cropped out from the center of the page between front and back cards
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                This area will be cropped out from the center of the page between front and back cards
-              </p>
-            </div>
-          )}          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-            <div className="flex items-center">
-              <LayoutGridIcon size={16} className="text-gray-600 mr-2" />
-              <span className="text-sm text-gray-600">
-                {extractionSettings.grid.rows * extractionSettings.grid.columns}{' '}
-                cards per page
-              </span>
-            </div>
-            <div className="flex items-center">
-              <MoveIcon size={16} className="text-gray-600 mr-2" />
-              <span className="text-sm text-gray-600">
-                Total crop applied:{' '}
-                {extractionSettings.crop.top + extractionSettings.crop.right + extractionSettings.crop.bottom + extractionSettings.crop.left}
-                px (300 DPI)
-                {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
-                  <>
-                    {' + '}
-                    {extractionSettings.gutterWidth}px gutter
-                  </>
-                )}
-              </span>
-            </div>
-          </div>          {/* Card dimensions display */}
+            </>
+          )}
+
+          {/* Card dimensions display */}
           {cardDimensions && (
             <div className="p-3 bg-gray-50 rounded-md">
               <div className="flex items-center">
@@ -668,6 +695,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </p>
           </div>
         </div>
+        
         <div className="space-y-4">
           <div className="border border-gray-200 rounded-lg overflow-hidden">            <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
               <div className="flex items-center space-x-2">
@@ -787,12 +815,65 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               </button>
             </div>
             
-            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center">{cardPreviewUrl ? (
-                <img 
-                  src={cardPreviewUrl} 
-                  alt={`${cardType} ${cardId}`}
-                  className="max-w-full max-h-full object-contain"
-                />
+            <div className="bg-gray-100 border border-gray-300 rounded p-4 min-h-[200px] flex items-center justify-center relative">
+              {cardPreviewUrl ? (
+                <div className="relative inline-block">
+                  <img 
+                    src={cardPreviewUrl} 
+                    alt={`${cardType} ${cardId}`}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                  {/* Center crosshairs overlay */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Horizontal dashed line */}
+                    <div 
+                      className="absolute left-0 right-0 h-0.5 opacity-90"
+                      style={{ 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        background: 'repeating-linear-gradient(to right, #ef4444 0, #ef4444 6px, transparent 6px, transparent 12px)'
+                      }}
+                    />
+                    {/* Horizontal dashed line white outline */}
+                    <div 
+                      className="absolute left-0 right-0 h-1 opacity-60"
+                      style={{ 
+                        top: '50%', 
+                        transform: 'translateY(-50%)',
+                        background: 'repeating-linear-gradient(to right, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
+                        zIndex: -1
+                      }}
+                    />
+                    {/* Vertical dashed line */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-0.5 opacity-90"
+                      style={{ 
+                        left: '50%', 
+                        transform: 'translateX(-50%)',
+                        background: 'repeating-linear-gradient(to bottom, #ef4444 0, #ef4444 6px, transparent 6px, transparent 12px)'
+                      }}
+                    />
+                    {/* Vertical dashed line white outline */}
+                    <div 
+                      className="absolute top-0 bottom-0 w-1 opacity-60"
+                      style={{ 
+                        left: '50%', 
+                        transform: 'translateX(-50%)',
+                        background: 'repeating-linear-gradient(to bottom, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
+                        zIndex: -1
+                      }}
+                    />
+                    {/* Center dot */}
+                    <div 
+                      className="absolute w-3 h-3 bg-red-500 rounded-full opacity-90 border-2 border-white shadow-sm"
+                      style={{ 
+                        top: '50%', 
+                        left: '50%', 
+                        transform: 'translate(-50%, -50%)' 
+                      }}
+                    />
+                  </div>
+                </div>
               ) : (
                 <div className="flex items-center justify-center text-gray-400">
                   {isRendering ? 'Rendering...' : `Card ${currentCard + 1} Preview`}
@@ -800,6 +881,97 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               )}
             </div>
           </div>
+
+          {/* Individual Card Crop Settings - next to preview */}
+          <div className="border border-gray-200 rounded-lg p-4">
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-sm font-medium text-gray-700">
+                Individual Card Crop Settings
+              </h4>
+              <button
+                onClick={() => {
+                  const newSettings = {
+                    ...extractionSettings,
+                    cardCrop: { top: 0, right: 0, bottom: 0, left: 0 }
+                  };
+                  onSettingsChange(newSettings);
+                }}
+                className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600"
+                title="Reset all card crop values to 0"
+              >
+                Reset Crop
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mb-3">
+              Fine-tune cropping for individual cards after grid extraction (values in 300 DPI pixels)
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Card Top Crop
+                </label>
+                <input 
+                  type="number" 
+                  value={extractionSettings.cardCrop?.top || 0} 
+                  onChange={e => handleCardCropChange('top', parseInt(e.target.value) || 0)} 
+                  className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Card Right Crop
+                </label>
+                <input 
+                  type="number" 
+                  value={extractionSettings.cardCrop?.right || 0} 
+                  onChange={e => handleCardCropChange('right', parseInt(e.target.value) || 0)} 
+                  className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Card Bottom Crop
+                </label>
+                <input 
+                  type="number" 
+                  value={extractionSettings.cardCrop?.bottom || 0} 
+                  onChange={e => handleCardCropChange('bottom', parseInt(e.target.value) || 0)} 
+                  className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Card Left Crop
+                </label>
+                <input 
+                  type="number" 
+                  value={extractionSettings.cardCrop?.left || 0} 
+                  onChange={e => handleCardCropChange('left', parseInt(e.target.value) || 0)} 
+                  className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm" 
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Use the red crosshairs in the preview above to align with your card's center.
+            </p>
+          </div>
+
+          {/* Card crop indicator - immediately after card crop settings */}
+          {extractionSettings.cardCrop && (
+            (extractionSettings.cardCrop.top > 0 || extractionSettings.cardCrop.right > 0 || 
+             extractionSettings.cardCrop.bottom > 0 || extractionSettings.cardCrop.left > 0)
+          ) && (
+            <div className="p-3 bg-orange-50 rounded-md">
+              <div className="flex items-center">
+                <span className="text-sm font-medium text-orange-800">
+                  Individual card cropping active
+                </span>
+              </div>
+              <p className="text-xs text-orange-600 mt-1">
+                {(extractionSettings.cardCrop.top || 0) + (extractionSettings.cardCrop.right || 0) + (extractionSettings.cardCrop.bottom || 0) + (extractionSettings.cardCrop.left || 0)} px total crop applied to each card.
+              </p>
+            </div>
+          )}
         </div>
       </div>
       <div className="flex justify-between mt-6">
