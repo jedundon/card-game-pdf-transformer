@@ -909,9 +909,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     width: `${cardRenderData.previewScaling.previewCardWidth}px`,
                     height: `${cardRenderData.previewScaling.previewCardHeight}px`,
                     left: `${cardRenderData.previewScaling.previewX}px`,
-                    top: `${cardRenderData.previewScaling.previewY}px`,
-                    transform: `rotate(${cardRenderData.positioning.rotation}deg)`,
-                    transformOrigin: 'center center'
+                    top: `${cardRenderData.previewScaling.previewY}px`
+                    // Note: No CSS rotation needed - processedPreviewUrl already contains rotated image
                   } : {
                     width: '100px',
                     height: '140px',
