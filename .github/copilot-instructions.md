@@ -3,8 +3,10 @@
 # GitHub Copilot Instructions
 
 ## How to use GitHub Copilot in this repository
-Whenever running the dev server, always run the `dev` script. For example, this command: `cd "c:\Users\James\workspace\pnp card utility v3"; npm run dev`
 
-When running the dev server, never offer to open the Simple Browser inside VS Code. I will always use my own browser.
+Before creating new labels, always check existing labels with `gh label list` and review both the label names AND descriptions to find similar or equivalent labels. Look for labels that serve the same purpose even if they have different names (e.g., "ui-ux" vs "user-interface" vs "frontend"). Only create new labels if no existing label adequately covers the concept.
 
-I am developing on Windows so take that into account when issuing terminal commands. 
+When creating GitHub issues with `gh issue create`, you can tell if the issue was successfully created by looking at the last line of the command output:
+- **Success**: The command returns a GitHub URL (e.g., "https://github.com/owner/repo/issues/14")
+- **Failure**: The command returns an error message or exits with a non-zero code
+- Don't rely on `gh issue list` to check if creation succeeded - use the create command output directly
