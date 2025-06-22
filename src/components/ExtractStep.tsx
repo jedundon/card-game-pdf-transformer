@@ -738,20 +738,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               </div>
             </>
           )}
-
-
-          {/* 300 DPI indicator */}
-          <div className="p-3 bg-blue-50 rounded-md">
-            <div className="flex items-center">
-              <span className="text-sm font-medium text-blue-800">
-                Card extraction quality: 300 DPI
-              </span>
-            </div>
-            <p className="text-xs text-blue-600 mt-1">
-              Cards will be extracted at high resolution for optimal print quality.
-              Crop settings are specified directly in 300 DPI pixels for precise control.
-            </p>
-          </div>
         </div>
         
         <div className="space-y-4">
