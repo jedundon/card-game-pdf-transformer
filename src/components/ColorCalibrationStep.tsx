@@ -827,7 +827,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               Basic Adjustments
             </h4>
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {/* Brightness */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -937,7 +937,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               RGB Channel Control
             </h4>
-            <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-3">
               {/* Red Channel */}
               <div>
                 <label className="block text-xs font-medium text-red-600 mb-1">
@@ -996,7 +996,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               Shadows & Highlights
             </h4>
-            <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-x-3 gap-y-3">
               {/* Shadows */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -1055,7 +1055,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <h4 className="text-sm font-medium text-gray-700 mb-3">
               Levels
             </h4>
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {/* Input Black Point */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
