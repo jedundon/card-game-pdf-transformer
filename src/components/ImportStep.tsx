@@ -39,6 +39,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [pageCount, setPageCount] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [dragError, setDragError] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadingError, setLoadingError] = useState<string>('');
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -85,28 +87,97 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   
   // File processing helper function (shared between drag/drop and file input)
   const processFile = async (file: File) => {
+    // Reset all state
     setFileName(file.name);
-    setPageCount(0); // Reset page count
-    setDragError(''); // Clear any previous errors
-    onPageSettingsChange([]); // Reset page settings
+    setPageCount(0);
+    setDragError('');
+    setLoadingError('');
+    setIsLoading(true);
+    onPageSettingsChange([]);
     
     try {
-      // Read the file as ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer();
-      // Load PDF using pdfjs-dist
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
+      // Validate file size (limit to 100MB)
+      const maxSize = 100 * 1024 * 1024; // 100MB
+      if (file.size > maxSize) {
+        throw new Error('File is too large. Please select a PDF file smaller than 100MB.');
+      }
+
+      // Read the file as ArrayBuffer with timeout
+      const arrayBuffer = await Promise.race([
+        file.arrayBuffer(),
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('File reading timed out. Please try a smaller file.')), 30000)
+        )
+      ]);
+
+      // Load PDF using pdfjs-dist with timeout
+      const loadingTask = pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        // Disable workers for better error handling
+        useWorkerFetch: false,
+        // Set memory limits
+        maxImageSize: 50 * 1024 * 1024 // 50MB max image size
+      });
+
+      const pdf = await Promise.race([
+        loadingTask.promise,
+        new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('PDF loading timed out. The file may be corrupted or too complex.')), 45000)
+        )
+      ]);
+
+      // Validate PDF
+      if (!pdf || pdf.numPages === 0) {
+        throw new Error('Invalid PDF file. The file appears to be empty or corrupted.');
+      }
+
+      if (pdf.numPages > 1000) {
+        throw new Error('PDF has too many pages. Please select a PDF with fewer than 1000 pages.');
+      }
+
+      // Success - update state
       setPageCount(pdf.numPages);
-      onFileSelect(pdf, file.name, file); // Pass the PDF.js document object, filename, and File object up
+      onFileSelect(pdf, file.name, file);
+      
       // Initialize page settings with default values
       const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
         skip: false,
         type: i % 2 === 0 ? 'front' : 'back' // Default alternating front/back for duplex
       }));
       onPageSettingsChange(initialPageSettings);
+      
+      console.log(`Successfully loaded PDF: ${file.name} (${pdf.numPages} pages)`);
     } catch (error) {
       console.error('Error processing PDF file:', error);
-      setDragError('Failed to process PDF file. Please try a different file.');
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'Failed to process PDF file. Please try a different file.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('timeout') || error.message.includes('timed out')) {
+          errorMessage = 'PDF loading timed out. The file may be too large or complex. Please try a smaller or simpler PDF file.';
+        } else if (error.message.includes('too large')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('Invalid PDF') || error.message.includes('corrupted')) {
+          errorMessage = 'The PDF file appears to be corrupted or invalid. Please try a different PDF file.';
+        } else if (error.message.includes('password') || error.message.includes('encrypted')) {
+          errorMessage = 'Password-protected or encrypted PDF files are not supported. Please use an unprotected PDF file.';
+        } else if (error.message.includes('too many pages')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('memory') || error.message.includes('out of memory')) {
+          errorMessage = 'Not enough memory to process this PDF. Please try a smaller file or refresh the page.';
+        }
+      }
+      
+      setLoadingError(errorMessage);
+      setDragError(errorMessage);
+      
+      // Reset file state on error
+      setFileName('');
+      setPageCount(0);
+      onFileSelect(null, '', undefined);
+    } finally {
+      setIsLoading(false);
     }
   };
   
@@ -178,27 +249,32 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     e.stopPropagation();
     setIsDragOver(false);
     
-    const files = Array.from(e.dataTransfer.files);
-    
-    if (files.length === 0) {
-      setDragError('No files were dropped');
-      return;
+    try {
+      const files = Array.from(e.dataTransfer.files);
+      
+      if (files.length === 0) {
+        setDragError('No files were dropped');
+        return;
+      }
+      
+      if (files.length > 1) {
+        setDragError('Please drop only one PDF file at a time');
+        return;
+      }
+      
+      const file = files[0];
+      
+      if (!isValidPdfFile(file)) {
+        setDragError('Only PDF files are supported. Please drop a valid PDF file.');
+        return;
+      }
+      
+      // Process the dropped PDF file
+      await processFile(file);
+    } catch (error) {
+      console.error('Error handling file drop:', error);
+      setDragError('Failed to process dropped file. Please try again.');
     }
-    
-    if (files.length > 1) {
-      setDragError('Please drop only one PDF file at a time');
-      return;
-    }
-    
-    const file = files[0];
-    
-    if (!isValidPdfFile(file)) {
-      setDragError('Only PDF files are supported. Please drop a valid PDF file.');
-      return;
-    }
-    
-    // Process the dropped PDF file
-    await processFile(file);
   };
   
   return <div className="space-y-6">
@@ -240,49 +316,112 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       
       <div 
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          isDragOver 
-            ? 'border-blue-400 bg-blue-50' 
-            : dragError 
-              ? 'border-red-400 bg-red-50' 
-              : 'border-gray-300 bg-white'
+          isLoading
+            ? 'border-yellow-400 bg-yellow-50'
+            : isDragOver 
+              ? 'border-blue-400 bg-blue-50' 
+              : (dragError || loadingError)
+                ? 'border-red-400 bg-red-50' 
+                : 'border-gray-300 bg-white'
         }`}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDragEnter={!isLoading ? handleDragEnter : undefined}
+        onDragOver={!isLoading ? handleDragOver : undefined}
+        onDragLeave={!isLoading ? handleDragLeave : undefined}
+        onDrop={!isLoading ? handleDrop : undefined}
       >
-        <input type="file" accept=".pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <button 
-          onClick={() => fileInputRef.current?.click()} 
-          className={`flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full transition-colors ${
-            isDragOver 
+        <input 
+          type="file" 
+          accept=".pdf" 
+          className="hidden" 
+          ref={fileInputRef} 
+          onChange={handleFileChange}
+          disabled={isLoading}
+        />
+        
+        {/* Loading spinner or upload icon */}
+        <div className={`flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full transition-colors ${
+          isLoading
+            ? 'bg-yellow-100 text-yellow-700'
+            : isDragOver 
               ? 'bg-blue-100 text-blue-700' 
-              : dragError 
+              : (dragError || loadingError)
                 ? 'bg-red-100 text-red-600' 
                 : 'bg-blue-50 text-blue-600'
-          }`}
+        }`}>
+          {isLoading ? (
+            <div className="animate-spin w-6 h-6 border-2 border-yellow-600 border-t-transparent rounded-full"></div>
+          ) : (
+            <UploadIcon size={24} />
+          )}
+        </div>
+
+        <button 
+          onClick={() => !isLoading && fileInputRef.current?.click()} 
+          disabled={isLoading}
+          className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline"
         >
-          <UploadIcon size={24} />
+          {isLoading ? 'Processing...' : 'Click to browse files'}
         </button>
-        <p className={`mb-2 ${isDragOver ? 'text-blue-700' : dragError ? 'text-red-600' : 'text-gray-600'}`}>
-          {isDragOver 
-            ? 'Drop your PDF file here' 
-            : fileName 
-              ? `Successfully loaded: ${fileName} (${pageCount} pages)`
-              : lastImportedFileInfo 
-                ? `Drag & drop or click to upload a PDF file (last: ${lastImportedFileInfo.name})` 
-                : 'Drag & drop your PDF file here or click to browse'
+
+        <p className={`mb-2 ${
+          isLoading 
+            ? 'text-yellow-700' 
+            : isDragOver 
+              ? 'text-blue-700' 
+              : (dragError || loadingError)
+                ? 'text-red-600' 
+                : 'text-gray-600'
+        }`}>
+          {isLoading
+            ? `Processing ${fileName}...`
+            : isDragOver 
+              ? 'Drop your PDF file here' 
+              : fileName && !dragError && !loadingError
+                ? `Successfully loaded: ${fileName} (${pageCount} pages)`
+                : lastImportedFileInfo 
+                  ? `Drag & drop or click to upload a PDF file (last: ${lastImportedFileInfo.name})` 
+                  : 'Drag & drop your PDF file here or click to browse'
           }
         </p>
-        {dragError && (
-          <p className="text-red-600 text-sm mt-2 font-medium">
-            {dragError}
-          </p>
+
+        {/* Error messages */}
+        {(dragError || loadingError) && (
+          <div className="mt-3 p-3 bg-red-100 border border-red-200 rounded-md">
+            <p className="text-red-800 text-sm font-medium mb-2">
+              {dragError || loadingError}
+            </p>
+            {loadingError && (
+              <button
+                onClick={() => {
+                  setLoadingError('');
+                  setDragError('');
+                  setFileName('');
+                  setPageCount(0);
+                }}
+                className="text-red-600 hover:text-red-800 text-xs underline"
+              >
+                Try a different file
+              </button>
+            )}
+          </div>
         )}
-        {fileName && !dragError && (
-          <p className="text-green-600 text-sm">
-            Successfully loaded: {fileName} ({pageCount} pages)
-          </p>
+
+        {/* Success message */}
+        {fileName && !dragError && !loadingError && !isLoading && (
+          <div className="mt-3 p-3 bg-green-100 border border-green-200 rounded-md">
+            <p className="text-green-800 text-sm font-medium">
+              Successfully loaded: {fileName} ({pageCount} pages)
+            </p>
+          </div>
+        )}
+
+        {/* Loading message */}
+        {isLoading && (
+          <div className="mt-3 p-3 bg-yellow-100 border border-yellow-200 rounded-md">
+            <p className="text-yellow-800 text-sm">
+              Loading and processing your PDF file. This may take a moment for large files...
+            </p>
+          </div>
         )}
       </div>
       

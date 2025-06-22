@@ -217,48 +217,134 @@ export async function extractCardImage(
   pageSettings: PageSettings[],
   extractionSettings: ExtractionSettings
 ): Promise<string | null> {
-  if (!pdfData || !activePages.length) {
+  // Validate inputs
+  if (!pdfData) {
+    console.error('Card extraction failed: No PDF data provided');
+    return null;
+  }
+  
+  if (!activePages || activePages.length === 0) {
+    console.error('Card extraction failed: No active pages available');
+    return null;
+  }
+  
+  if (!extractionSettings || !extractionSettings.grid) {
+    console.error('Card extraction failed: Invalid extraction settings');
+    return null;
+  }
+  
+  if (cardIndex < 0) {
+    console.error(`Card extraction failed: Invalid card index ${cardIndex}`);
     return null;
   }
 
   try {
     const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
     
+    if (cardsPerPage <= 0) {
+      throw new Error('Invalid grid configuration: cards per page must be greater than 0');
+    }
+    
     // Calculate which page and card position this cardIndex represents
     const pageIndex = Math.floor(cardIndex / cardsPerPage);
     const cardOnPage = cardIndex % cardsPerPage;
 
     if (pageIndex >= activePages.length) {
+      console.warn(`Card extraction failed: Page index ${pageIndex} exceeds active pages (${activePages.length})`);
       return null;
     }
 
     // Get the actual page number from active pages
     const actualPageNumber = getActualPageNumber(pageIndex, pageSettings);
+    
+    if (actualPageNumber <= 0) {
+      throw new Error(`Invalid page number calculated: ${actualPageNumber}`);
+    }
 
-    const page = await pdfData.getPage(actualPageNumber);
-      // Calculate scale for extraction DPI (PDF.js uses 72 DPI as base)
+    // Get PDF page with timeout and validation
+    let page: any;
+    try {
+      const pagePromise = pdfData.getPage(actualPageNumber);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`PDF page ${actualPageNumber} loading timed out`)), 15000)
+      );
+      
+      page = await Promise.race([pagePromise, timeoutPromise]);
+      
+      if (!page) {
+        throw new Error(`Failed to load PDF page ${actualPageNumber}`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('timed out')) {
+        throw error;
+      }
+      throw new Error(`Failed to access PDF page ${actualPageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    // Calculate scale for extraction DPI (PDF.js uses 72 DPI as base)
     const highResScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
     
-    const viewport = page.getViewport({ scale: highResScale });
-    
-    // Create a high-resolution canvas
-    const highResCanvas = document.createElement('canvas');
-    highResCanvas.width = viewport.width;
-    highResCanvas.height = viewport.height;
-    const highResContext = highResCanvas.getContext('2d');
-    
-    if (!highResContext) {
-      console.error('Card extraction failed: could not get high-res canvas context');
-      return null;
+    if (highResScale <= 0) {
+      throw new Error('Invalid DPI configuration: scale must be greater than 0');
     }
     
-    // Render the page at high resolution
-    const renderContext = {
-      canvasContext: highResContext,
-      viewport: viewport
-    };
+    // Get viewport with error handling
+    let viewport: any;
+    try {
+      viewport = page.getViewport({ scale: highResScale });
+      
+      if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+        throw new Error(`Invalid viewport dimensions: ${viewport?.width} x ${viewport?.height}`);
+      }
+      
+      // Check for reasonable viewport size (prevent memory issues)
+      const maxDimension = 50000; // 50k pixels max
+      if (viewport.width > maxDimension || viewport.height > maxDimension) {
+        throw new Error(`Viewport too large: ${viewport.width} x ${viewport.height}. Maximum allowed: ${maxDimension} x ${maxDimension}`);
+      }
+    } catch (error) {
+      throw new Error(`Failed to get page viewport: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
     
-    await page.render(renderContext).promise;
+    // Create a high-resolution canvas with validation
+    let highResCanvas: HTMLCanvasElement;
+    let highResContext: CanvasRenderingContext2D;
+    
+    try {
+      highResCanvas = document.createElement('canvas');
+      
+      if (!highResCanvas) {
+        throw new Error('Failed to create canvas element');
+      }
+      
+      highResCanvas.width = viewport.width;
+      highResCanvas.height = viewport.height;
+      
+      const context = highResCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Failed to get 2D rendering context from canvas');
+      }
+      
+      highResContext = context;
+    } catch (error) {
+      throw new Error(`Canvas creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+    // Render the page at high resolution with timeout
+    try {
+      const renderContext = {
+        canvasContext: highResContext,
+        viewport: viewport
+      };
+      
+      const renderPromise = page.render(renderContext).promise;
+      const renderTimeout = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error(`Page rendering timed out for page ${actualPageNumber}`)), 30000)
+      );
+      
+      await Promise.race([renderPromise, renderTimeout]);
+    } catch (error) {
+      throw new Error(`Page rendering failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
       // Calculate card dimensions after cropping at high resolution
     // Crop settings are in extraction DPI pixels, so they can be used directly
     const croppedWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
@@ -337,8 +423,7 @@ export async function extractCardImage(
     
     // Validate card dimensions
     if (cardWidth <= 0 || cardHeight <= 0) {
-      console.error('Card extraction failed: invalid card dimensions at high resolution');
-      return null;
+      throw new Error(`Invalid card dimensions calculated: ${cardWidth} x ${cardHeight}`);
     }
     
     // Ensure extraction coordinates are within canvas bounds
@@ -347,23 +432,40 @@ export async function extractCardImage(
     const sourceWidth = Math.max(1, Math.min(Math.floor(cardWidth), viewport.width - sourceX));
     const sourceHeight = Math.max(1, Math.min(Math.floor(cardHeight), viewport.height - sourceY));
     
-    // Create a new canvas for the extracted card
-    const cardCanvas = document.createElement('canvas');
-    cardCanvas.width = Math.max(1, sourceWidth);
-    cardCanvas.height = Math.max(1, sourceHeight);
-    const cardContext = cardCanvas.getContext('2d');
+    // Validate extraction bounds
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      throw new Error(`Invalid extraction dimensions: ${sourceWidth} x ${sourceHeight} at position (${sourceX}, ${sourceY})`);
+    }
     
-    if (!cardContext) {
-      console.error('Card extraction failed: could not get card canvas context');
-      return null;
+    // Create a new canvas for the extracted card
+    let cardCanvas: HTMLCanvasElement;
+    let cardContext: CanvasRenderingContext2D;
+    
+    try {
+      cardCanvas = document.createElement('canvas');
+      cardCanvas.width = Math.max(1, sourceWidth);
+      cardCanvas.height = Math.max(1, sourceHeight);
+      
+      const context = cardCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Failed to get 2D rendering context for card canvas');
+      }
+      
+      cardContext = context;
+    } catch (error) {
+      throw new Error(`Card canvas creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
     
     // Extract the card area from the high-resolution canvas
-    cardContext.drawImage(
-      highResCanvas,
-      sourceX, sourceY, sourceWidth, sourceHeight,
-      0, 0, cardCanvas.width, cardCanvas.height
-    );
+    try {
+      cardContext.drawImage(
+        highResCanvas,
+        sourceX, sourceY, sourceWidth, sourceHeight,
+        0, 0, cardCanvas.width, cardCanvas.height
+      );
+    } catch (error) {
+      throw new Error(`Card image extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 
     // Apply individual card cropping if specified
     let finalCanvas = cardCanvas;
@@ -440,10 +542,39 @@ export async function extractCardImage(
       }
     }
 
-    const dataUrl = finalCanvas.toDataURL('image/png');
-    return dataUrl;
+    // Generate data URL with error handling
+    try {
+      const dataUrl = finalCanvas.toDataURL('image/png');
+      
+      if (!dataUrl || dataUrl === 'data:,') {
+        throw new Error('Failed to generate valid image data URL');
+      }
+      
+      // Check if the data URL is reasonably sized (not empty but not too large)
+      if (dataUrl.length < 100) {
+        throw new Error('Generated image data URL is too small, likely invalid');
+      }
+      
+      const maxSize = 50 * 1024 * 1024; // 50MB limit
+      if (dataUrl.length > maxSize) {
+        throw new Error(`Generated image data URL is too large (${Math.round(dataUrl.length / 1024 / 1024)}MB), exceeds ${Math.round(maxSize / 1024 / 1024)}MB limit`);
+      }
+      
+      return dataUrl;
+    } catch (error) {
+      throw new Error(`Data URL generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
   } catch (error) {
-    console.error('Error in high-DPI card extraction:', error);
+    console.error(`Card extraction failed for card ${cardIndex}:`, error);
+    
+    // Provide more specific error context (calculate pageIndex and cardOnPage for context)
+    const cardsPerPageForContext = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const pageIndexForContext = Math.floor(cardIndex / cardsPerPageForContext);
+    const cardOnPageForContext = cardIndex % cardsPerPageForContext;
+    
+    console.error(`Card extraction context: cardIndex=${cardIndex}, pageIndex=${pageIndexForContext}, cardOnPage=${cardOnPageForContext}, pdfMode=${pdfMode.type}`);
+    
     return null;
   }
 }

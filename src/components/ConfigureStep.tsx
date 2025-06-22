@@ -49,6 +49,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string>('');
   const [cardRenderData, setCardRenderData] = useState<{
     renderDimensions: any;
     positioning: any;
@@ -125,50 +127,116 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   // Update card preview when current card changes
   useEffect(() => {
-    if (totalFilteredCards > 0 && currentCardExists && currentCardIndex !== null) {
-      const updatePreview = async () => {
-        const cardUrl = await extractCardImage(currentCardIndex);
+    let isCancelled = false;
+    
+    const updatePreview = async () => {
+      if (totalFilteredCards === 0 || !currentCardExists || currentCardIndex === null) {
+        setCardPreviewUrl(null);
+        setCardRenderData(null);
+        setProcessedPreviewUrl(null);
+        setPreviewError('');
+        setPreviewLoading(false);
+        return;
+      }
+
+      setPreviewLoading(true);
+      setPreviewError('');
+      
+      try {
+        // Extract card image with timeout
+        const extractPromise = extractCardImage(currentCardIndex);
+        const timeoutPromise = new Promise<null>((_, reject) => 
+          setTimeout(() => reject(new Error('Card extraction timed out')), 15000)
+        );
+        
+        const cardUrl = await Promise.race([extractPromise, timeoutPromise]);
+        
+        if (isCancelled) return;
+        
         setCardPreviewUrl(cardUrl);
         
-        if (cardUrl) {
-          try {
-            // Use unified rendering functions to calculate preview data
-            const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, outputSettings);
-            const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
-            const previewScaling = calculatePreviewScaling(
-              renderDimensions,
-              positioning,
-              outputSettings.pageSize.width,
-              outputSettings.pageSize.height,
-              PREVIEW_CONSTRAINTS.MAX_WIDTH,
-              PREVIEW_CONSTRAINTS.MAX_HEIGHT
-            );
-            
-            setCardRenderData({
-              renderDimensions,
-              positioning,
-              previewScaling
-            });
-            
-            // Process the image for preview (with clipping and rotation)
-            const processedImage = await processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
-            setProcessedPreviewUrl(processedImage.imageUrl);
-          } catch (error) {
-            console.warn('Failed to calculate render data for preview:', error);
-            setCardRenderData(null);
-            setProcessedPreviewUrl(null);
-          }
-        } else {
-          setCardRenderData(null);
-          setProcessedPreviewUrl(null);
+        if (!cardUrl) {
+          throw new Error(`Failed to extract card image for card ${currentCardId}`);
         }
-      };
-      updatePreview();
-    } else {
-      setCardPreviewUrl(null);
-      setCardRenderData(null);
-      setProcessedPreviewUrl(null);
-    }
+
+        // Calculate render dimensions with timeout
+        const renderPromise = calculateFinalCardRenderDimensions(cardUrl, outputSettings);
+        const renderTimeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Render calculation timed out')), 10000)
+        );
+        
+        const renderDimensions = await Promise.race([renderPromise, renderTimeoutPromise]);
+        
+        if (isCancelled) return;
+        
+        // Calculate positioning
+        const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+        const previewScaling = calculatePreviewScaling(
+          renderDimensions,
+          positioning,
+          outputSettings.pageSize.width,
+          outputSettings.pageSize.height,
+          PREVIEW_CONSTRAINTS.MAX_WIDTH,
+          PREVIEW_CONSTRAINTS.MAX_HEIGHT
+        );
+        
+        if (isCancelled) return;
+        
+        setCardRenderData({
+          renderDimensions,
+          positioning,
+          previewScaling
+        });
+        
+        // Process the image for preview with timeout
+        const processPromise = processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
+        const processTimeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Image processing timed out')), 10000)
+        );
+        
+        const processedImage = await Promise.race([processPromise, processTimeoutPromise]);
+        
+        if (isCancelled) return;
+        
+        setProcessedPreviewUrl(processedImage.imageUrl);
+        
+      } catch (error) {
+        if (isCancelled) return;
+        
+        console.error('Failed to update card preview:', error);
+        
+        // Provide specific error messages
+        let errorMessage = 'Failed to load card preview';
+        
+        if (error instanceof Error) {
+          if (error.message.includes('timed out')) {
+            errorMessage = 'Preview generation timed out. The card may be too complex to process.';
+          } else if (error.message.includes('Failed to extract')) {
+            errorMessage = 'Could not extract card image. Please check your extraction settings.';
+          } else if (error.message.includes('memory') || error.message.includes('out of memory')) {
+            errorMessage = 'Not enough memory to process this card. Try refreshing the page.';
+          } else if (error.message.includes('dimensions') || error.message.includes('invalid')) {
+            errorMessage = 'Invalid card dimensions. Please check your output settings.';
+          }
+        }
+        
+        setPreviewError(errorMessage);
+        setCardPreviewUrl(null);
+        setCardRenderData(null);
+        setProcessedPreviewUrl(null);
+      } finally {
+        if (!isCancelled) {
+          setPreviewLoading(false);
+        }
+      }
+    };
+
+    updatePreview();
+    
+    // Cleanup function to cancel in-flight operations
+    return () => {
+      isCancelled = true;
+    };
   }, [
     currentCardId,
     viewMode,
@@ -912,7 +980,30 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     marginTop: '-70px'
                   })
                 }}>
-                  {processedPreviewUrl && cardRenderData ? (
+                  {previewLoading ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 text-sm">
+                      <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full mb-2"></div>
+                      <span>Loading preview...</span>
+                    </div>
+                  ) : previewError ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                      <div className="text-red-500 text-center">
+                        <div className="mb-2">⚠️</div>
+                        <div className="text-xs mb-2 font-medium">Preview Error</div>
+                        <div className="text-xs text-red-600 mb-3">{previewError}</div>
+                        <button
+                          onClick={() => {
+                            setPreviewError('');
+                            // Force re-render by updating a dependency
+                            setCurrentCardId(prev => prev);
+                          }}
+                          className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  ) : processedPreviewUrl && cardRenderData ? (
                     <div 
                       className="w-full h-full bg-cover bg-center"
                       style={{
@@ -924,11 +1015,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                     />
                   ) : cardPreviewUrl ? (
                     <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Loading dimensions...
+                      Processing preview...
                     </div>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Card ID {currentCardId}
+                      {totalFilteredCards > 0 ? `Card ID ${currentCardId}` : 'No cards available'}
                     </div>
                   )}
                 </div>

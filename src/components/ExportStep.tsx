@@ -43,7 +43,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   currentPdfFileName,
   onPrevious
 }) => {
-  const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed'>('idle');
+  const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
+  const [exportError, setExportError] = useState<string>('');
+  const [exportProgress, setExportProgress] = useState<string>('');
   const [exportedFiles, setExportedFiles] = useState<{
     fronts: string | null;
     backs: string | null;
@@ -166,10 +168,13 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
   // Generate a PDF with all cards of a specific type
   const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
-    if (!pdfData) return null;
+    if (!pdfData) {
+      throw new Error('No PDF data available for export');
+    }
 
     try {
       console.log(`Starting ${cardType} PDF generation...`);
+      setExportProgress(`Preparing ${cardType} cards...`);
       
       // Get all card IDs for this type (already sorted numerically)
       const cardIds = getAvailableCardIds(cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
@@ -181,51 +186,79 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         return null;
       }
 
-      // Create new PDF document
-      const doc = new jsPDF({
-        orientation: outputSettings.pageSize.width > outputSettings.pageSize.height ? 'landscape' : 'portrait',
-        unit: 'in',
-        format: [outputSettings.pageSize.width, outputSettings.pageSize.height]
-      });
+      // Validate jsPDF creation
+      let doc: jsPDF;
+      try {
+        doc = new jsPDF({
+          orientation: outputSettings.pageSize.width > outputSettings.pageSize.height ? 'landscape' : 'portrait',
+          unit: 'in',
+          format: [outputSettings.pageSize.width, outputSettings.pageSize.height]
+        });
+      } catch (error) {
+        throw new Error(`Failed to create PDF document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
 
       let cardCount = 0;
       let colorTransformationCount = 0;
+      let failedCards: number[] = [];
       
       console.log(`Processing ${cardIds.length} ${cardType} cards in numerical order...`);
       console.log(`Color adjustments ${hasColorAdjustments ? 'will be applied' : 'are disabled (all settings are neutral)'} for ${cardType} cards`);
       
       // Process each card ID in sorted order
-      for (const cardId of cardIds) {
-        // Find the card index for this card ID and type
-        const cardIndex = findCardIndexByIDAndType(cardId, cardType);
-        
-        if (cardIndex === null) {
-          console.warn(`Could not find card index for ${cardType} card ID ${cardId}`);
-          continue;
-        }
-        
-        console.log(`Processing ${cardType} card ${cardId} at index ${cardIndex}...`);
-        
-        // Extract the card image
-        const cardImageUrl = await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
-        
-        if (!cardImageUrl) {
-          console.warn(`Failed to extract card image for ${cardType} card ${cardId}`);
-          continue;
-        }
-
-        // Create a new page for each card
-        if (cardCount > 0) {
-          doc.addPage();
-        }
-
-        console.log(`Processing ${cardType} card ${cardId} with unified render utils...`);
+      for (let i = 0; i < cardIds.length; i++) {
+        const cardId = cardIds[i];
         
         try {
-          // Use unified rendering functions for consistent behavior
-          const renderDimensions = await calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
+          setExportProgress(`Processing ${cardType} card ${cardId} (${i + 1}/${cardIds.length})...`);
+          
+          // Find the card index for this card ID and type
+          const cardIndex = findCardIndexByIDAndType(cardId, cardType);
+          
+          if (cardIndex === null) {
+            console.warn(`Could not find card index for ${cardType} card ID ${cardId}`);
+            failedCards.push(cardId);
+            continue;
+          }
+          
+          console.log(`Processing ${cardType} card ${cardId} at index ${cardIndex}...`);
+          
+          // Extract the card image with timeout
+          const extractPromise = extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+          const extractTimeout = new Promise<null>((_, reject) => 
+            setTimeout(() => reject(new Error(`Card ${cardId} extraction timed out`)), 30000)
+          );
+          
+          const cardImageUrl = await Promise.race([extractPromise, extractTimeout]);
+          
+          if (!cardImageUrl) {
+            console.warn(`Failed to extract card image for ${cardType} card ${cardId}`);
+            failedCards.push(cardId);
+            continue;
+          }
+
+          // Create a new page for each card
+          if (cardCount > 0) {
+            doc.addPage();
+          }
+
+          console.log(`Processing ${cardType} card ${cardId} with unified render utils...`);
+          
+          // Use unified rendering functions with timeout
+          const renderPromise = calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
+          const renderTimeout = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`Card ${cardId} render calculation timed out`)), 20000)
+          );
+          
+          const renderDimensions = await Promise.race([renderPromise, renderTimeout]);
           const positioning = calculateCardPositioning(renderDimensions, outputSettings, cardType);
-          const processedImage = await processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
+          
+          const processPromise = processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
+          const processTimeout = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error(`Card ${cardId} image processing timed out`)), 20000)
+          );
+          
+          const processedImage = await Promise.race([processPromise, processTimeout]);
           
           console.log(`Card ${cardId} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
           
@@ -233,7 +266,12 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           let finalImageUrl = processedImage.imageUrl;
           if (hasColorAdjustments) {
             try {
-              finalImageUrl = await applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
+              const colorPromise = applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
+              const colorTimeout = new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error(`Card ${cardId} color transformation timed out`)), 15000)
+              );
+              
+              finalImageUrl = await Promise.race([colorPromise, colorTimeout]);
               colorTransformationCount++;
               console.log(`Applied color transformation to ${cardType} card ${cardId}`);
             } catch (error) {
@@ -242,10 +280,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               finalImageUrl = processedImage.imageUrl;
             }
           }
+          
           const finalX = positioning.x;
           const finalY = positioning.y;
           const finalWidth = positioning.width;
           const finalHeight = positioning.height;
+
+          // Validate dimensions
+          if (finalWidth <= 0 || finalHeight <= 0) {
+            throw new Error(`Invalid dimensions for card ${cardId}: ${finalWidth}" × ${finalHeight}"`);
+          }
 
           // Warn if card goes off page (but still allow it in case user intends it)
           if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
@@ -257,47 +301,85 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
           console.log(`Adding ${cardType} card ${cardId} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 
-          // Add the card image to PDF
-          doc.addImage(
-            finalImageUrl,
-            'PNG',
-            finalX,
-            finalY,
-            finalWidth,
-            finalHeight
-          );
+          // Add the card image to PDF with error handling
+          try {
+            doc.addImage(
+              finalImageUrl,
+              'PNG',
+              finalX,
+              finalY,
+              finalWidth,
+              finalHeight
+            );
+          } catch (error) {
+            throw new Error(`Failed to add card ${cardId} to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
 
           cardCount++;
+          
         } catch (error) {
-          console.warn(`Failed to process ${cardType} card ${cardId} with unified render utils:`, error);
-          // Skip this card if processing fails
+          console.error(`Failed to process ${cardType} card ${cardId}:`, error);
+          failedCards.push(cardId);
+          
+          // If more than 50% of cards fail, abort the process
+          if (failedCards.length > cardIds.length / 2) {
+            throw new Error(`Too many cards failed to process (${failedCards.length}/${cardIds.length}). Export aborted.`);
+          }
+          
           continue;
         }
       }
 
       console.log(`${cardType} PDF generation completed with ${cardCount} cards${hasColorAdjustments ? `, ${colorTransformationCount} with color transformations applied` : ' (no color adjustments)'}`);
+      
+      if (failedCards.length > 0) {
+        console.warn(`${failedCards.length} ${cardType} cards failed to process: ${failedCards.join(', ')}`);
+      }
 
-      if (cardCount === 0) return null;
+      if (cardCount === 0) {
+        throw new Error(`No ${cardType} cards were successfully processed`);
+      }
 
-      // Return the PDF as a blob
-      return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
+      // Generate PDF blob with error handling
+      try {
+        setExportProgress(`Finalizing ${cardType} PDF...`);
+        return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
+      } catch (error) {
+        throw new Error(`Failed to generate ${cardType} PDF blob: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      
     } catch (error) {
       console.error(`Error generating ${cardType} PDF:`, error);
-      return null;
+      throw error; // Re-throw to be handled by caller
     }
   };
 
   const handleExport = async () => {
+    // Reset state
     setExportStatus('processing');
+    setExportError('');
+    setExportProgress('Initializing export...');
+    
+    // Clean up any existing blob URLs
+    if (exportedFiles.fronts) {
+      URL.revokeObjectURL(exportedFiles.fronts);
+    }
+    if (exportedFiles.backs) {
+      URL.revokeObjectURL(exportedFiles.backs);
+    }
+    setExportedFiles({ fronts: null, backs: null });
     
     try {
       console.log('Starting PDF export process...');
-        // Validate settings before export
+      setExportProgress('Validating export settings...');
+      
+      // Validate settings before export
       const validation = validateExportSettings();
       if (!validation.isValid) {
+        const errorMessage = 'Export validation failed:\n\n' + validation.errors.join('\n');
         console.error('Export validation failed:', validation.errors);
-        alert('Export validation failed:\n\n' + validation.errors.join('\n'));
-        setExportStatus('idle');
+        setExportError(errorMessage);
+        setExportStatus('error');
         return;
       }
       
@@ -306,30 +388,116 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       console.log('Active Pages:', activePages.length);
       console.log('Output Settings:', outputSettings);
       
-      // Generate both PDFs
-      const [frontsPdf, backsPdf] = await Promise.all([
-        generatePDF('front'),
-        generatePDF('back')
-      ]);
+      setExportProgress('Generating PDF files...');
+      
+      // Generate PDFs with individual error handling
+      let frontsPdf: Blob | null = null;
+      let backsPdf: Blob | null = null;
+      let frontsError: string | null = null;
+      let backsError: string | null = null;
+      
+      try {
+        setExportProgress('Generating fronts PDF...');
+        frontsPdf = await generatePDF('front');
+      } catch (error) {
+        frontsError = error instanceof Error ? error.message : 'Unknown error generating fronts PDF';
+        console.error('Failed to generate fronts PDF:', error);
+      }
+      
+      try {
+        setExportProgress('Generating backs PDF...');
+        backsPdf = await generatePDF('back');
+      } catch (error) {
+        backsError = error instanceof Error ? error.message : 'Unknown error generating backs PDF';
+        console.error('Failed to generate backs PDF:', error);
+      }
+      
+      // Check if any PDFs were generated successfully
+      if (!frontsPdf && !backsPdf) {
+        const errorMessages = [];
+        if (frontsError) errorMessages.push(`Fronts PDF: ${frontsError}`);
+        if (backsError) errorMessages.push(`Backs PDF: ${backsError}`);
+        
+        throw new Error(`Failed to generate any PDF files:\n\n${errorMessages.join('\n\n')}`);
+      }
+      
+      // Log warnings for partial failures
+      if (frontsError && backsPdf) {
+        console.warn('Fronts PDF generation failed, but backs PDF was successful:', frontsError);
+      }
+      if (backsError && frontsPdf) {
+        console.warn('Backs PDF generation failed, but fronts PDF was successful:', backsError);
+      }
 
       console.log('PDF generation completed:', {
-        frontsPdf: frontsPdf ? 'Generated' : 'No fronts found',
-        backsPdf: backsPdf ? 'Generated' : 'No backs found'
+        frontsPdf: frontsPdf ? 'Generated' : 'Failed',
+        backsPdf: backsPdf ? 'Generated' : 'Failed'
       });
 
-      // Create download URLs
-      const frontsUrl = frontsPdf ? URL.createObjectURL(frontsPdf) : null;
-      const backsUrl = backsPdf ? URL.createObjectURL(backsPdf) : null;
+      setExportProgress('Creating download links...');
+      
+      // Create download URLs with error handling
+      let frontsUrl: string | null = null;
+      let backsUrl: string | null = null;
+      
+      try {
+        frontsUrl = frontsPdf ? URL.createObjectURL(frontsPdf) : null;
+      } catch (error) {
+        console.error('Failed to create fronts blob URL:', error);
+        frontsError = 'Failed to create download link for fronts PDF';
+      }
+      
+      try {
+        backsUrl = backsPdf ? URL.createObjectURL(backsPdf) : null;
+      } catch (error) {
+        console.error('Failed to create backs blob URL:', error);
+        backsError = 'Failed to create download link for backs PDF';
+      }
 
       setExportedFiles({
         fronts: frontsUrl,
         backs: backsUrl
       });
       
-      setExportStatus('completed');
+      // Set final status
+      if (frontsUrl || backsUrl) {
+        setExportStatus('completed');
+        setExportProgress('Export completed successfully!');
+        
+        // Show warning if some PDFs failed
+        if (frontsError || backsError) {
+          const warnings = [];
+          if (frontsError) warnings.push(`Fronts: ${frontsError}`);
+          if (backsError) warnings.push(`Backs: ${backsError}`);
+          
+          setExportError(`Some files failed to generate:\n\n${warnings.join('\n\n')}\n\nSuccessfully generated files are available for download.`);
+        }
+      } else {
+        throw new Error('Failed to create download links for generated PDFs');
+      }
+      
     } catch (error) {
       console.error('Export failed:', error);
-      setExportStatus('idle');
+      
+      let errorMessage = 'Export failed due to an unexpected error.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('validation failed')) {
+          errorMessage = error.message;
+        } else if (error.message.includes('timeout') || error.message.includes('timed out')) {
+          errorMessage = 'Export timed out. This can happen with large or complex PDFs. Please try:\n\n• Using a smaller PDF file\n• Reducing output quality settings\n• Refreshing the page and trying again';
+        } else if (error.message.includes('memory') || error.message.includes('out of memory')) {
+          errorMessage = 'Not enough memory to complete export. Please try:\n\n• Refreshing the page\n• Using a smaller PDF file\n• Closing other browser tabs\n• Reducing card scale or page size';
+        } else if (error.message.includes('Failed to generate any PDF files')) {
+          errorMessage = error.message;
+        } else {
+          errorMessage = `Export failed: ${error.message}`;
+        }
+      }
+      
+      setExportError(errorMessage);
+      setExportStatus('error');
+      setExportProgress('');
     }
   };
   const handleDownload = (fileType: 'fronts' | 'backs') => {
@@ -452,17 +620,75 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           {exportStatus === 'processing' && (
             <div className="text-center py-8">
               <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
-              <p className="text-gray-600">Processing your files...</p>
+              <p className="text-gray-600 mb-2">Processing your files...</p>
+              {exportProgress && (
+                <p className="text-sm text-gray-500">{exportProgress}</p>
+              )}
+            </div>
+          )}
+
+          {exportStatus === 'error' && (
+            <div className="text-center py-8">
+              <div className="mb-6">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-red-600 text-2xl">⚠️</span>
+                </div>
+                <h3 className="text-lg font-medium text-red-800 mb-2">Export Failed</h3>
+                <div className="max-w-md mx-auto">
+                  <p className="text-sm text-red-700 whitespace-pre-line mb-4">
+                    {exportError}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                      onClick={() => {
+                        setExportStatus('idle');
+                        setExportError('');
+                        setExportProgress('');
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      onClick={onPrevious}
+                      className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                    >
+                      Go Back
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
           {exportStatus === 'completed' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-center text-green-600 py-2">
-                <CheckCircleIcon size={24} className="mr-2" />
-                <span className="font-medium">
-                  PDF files generated successfully!
-                </span>
+              <div className="flex items-center justify-center py-2">
+                <div className={`flex items-center ${exportError ? 'text-yellow-600' : 'text-green-600'}`}>
+                  <CheckCircleIcon size={24} className="mr-2" />
+                  <span className="font-medium">
+                    {exportError ? 'PDF files generated with warnings' : 'PDF files generated successfully!'}
+                  </span>
+                </div>
               </div>
+              
+              {/* Show warnings if there were partial failures */}
+              {exportError && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <span className="text-yellow-600">⚠️</span>
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-sm font-medium text-yellow-800">
+                        Partial Export Warning
+                      </h3>
+                      <div className="mt-2 text-sm text-yellow-700 whitespace-pre-line">
+                        {exportError}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {exportedFiles.fronts && (
                   <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">

@@ -6,6 +6,13 @@ import { ColorCalibrationStep } from './components/ColorCalibrationStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
 import { ImportExportManager } from './components/ImportExportManager';
+import { 
+  PDFProcessingErrorBoundary, 
+  CardProcessingErrorBoundary, 
+  RenderingErrorBoundary, 
+  ExportErrorBoundary 
+} from './components/ErrorBoundary';
+import { PageCountMismatchDialog } from './components/PageCountMismatchDialog';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 import { 
   saveSettingsToLocalStorage, 
@@ -25,6 +32,21 @@ export function App() {
   const [autoRestoredSettings, setAutoRestoredSettings] = useState(false);
   const [triggerImportSettings, setTriggerImportSettings] = useState<(() => void) | null>(null);
   const [lastImportedFileInfo, setLastImportedFileInfo] = useState<LastImportedFileInfo | null>(null);
+  const [pageCountMismatchDialog, setPageCountMismatchDialog] = useState<{
+    isOpen: boolean;
+    currentPdfPageCount: number;
+    importedSettingsPageCount: number;
+    appliedSettings: string[];
+    skippedSettings: string[];
+    pendingSettings: any;
+  }>({
+    isOpen: false,
+    currentPdfPageCount: 0,
+    importedSettingsPageCount: 0,
+    appliedSettings: [],
+    skippedSettings: [],
+    pendingSettings: null
+  });
   const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
   const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
   const [cardDimensions, setCardDimensions] = useState<{
@@ -128,8 +150,28 @@ export function App() {
 
   // Handle loading settings from file or auto-restore
   const handleLoadSettings = (settings: any, isAutoRestore = false) => {
+    const appliedSettings: string[] = [];
+    const skippedSettings: string[] = [];
+    
+    // Apply compatible settings first
     if (settings.pdfMode) {
       setPdfMode(settings.pdfMode);
+      appliedSettings.push('PDF Mode');
+    }
+    
+    if (settings.extractionSettings) {
+      setExtractionSettings(settings.extractionSettings);
+      appliedSettings.push('Extraction Settings (grid layout, cropping)');
+    }
+    
+    if (settings.outputSettings) {
+      setOutputSettings(settings.outputSettings);
+      appliedSettings.push('Output Settings (page size, card dimensions, positioning)');
+    }
+    
+    if (settings.colorSettings) {
+      setColorSettings(settings.colorSettings);
+      appliedSettings.push('Color Calibration Settings');
     }
     
     // Handle pageSettings with validation against current PDF
@@ -139,24 +181,29 @@ export function App() {
       
       if (currentPdfPageCount && importedPageCount !== currentPdfPageCount) {
         // Page count mismatch detected
-        console.warn(`Page count mismatch: Current PDF has ${currentPdfPageCount} pages, but imported settings are for ${importedPageCount} pages. Keeping current PDF's page count.`);
+        console.warn(`Page count mismatch: Current PDF has ${currentPdfPageCount} pages, but imported settings are for ${importedPageCount} pages.`);
         
-        // Only apply compatible settings (skip pageSettings)
-        // TODO: Show user warning dialog in future enhancement
+        skippedSettings.push('Page Settings (page types and skip flags)');
+        
+        // Show dialog for manual imports (not auto-restore)
+        if (!isAutoRestore) {
+          setPageCountMismatchDialog({
+            isOpen: true,
+            currentPdfPageCount,
+            importedSettingsPageCount: importedPageCount,
+            appliedSettings,
+            skippedSettings,
+            pendingSettings: settings
+          });
+          return; // Don't clear auto-restored flag yet, dialog will handle it
+        }
       } else {
         // Safe to import pageSettings (same page count or no current PDF)
         setPageSettings(settings.pageSettings);
+        appliedSettings.push('Page Settings (page types and skip flags)');
       }
     }
-    if (settings.extractionSettings) {
-      setExtractionSettings(settings.extractionSettings);
-    }
-    if (settings.outputSettings) {
-      setOutputSettings(settings.outputSettings);
-    }
-    if (settings.colorSettings) {
-      setColorSettings(settings.colorSettings);
-    }
+    
     // Clear auto-restored flag when manually loading settings (not auto-restore)
     if (!isAutoRestore) {
       setAutoRestoredSettings(false);
@@ -236,21 +283,113 @@ export function App() {
     }
   };
 
+  // Handle page count mismatch dialog actions
+  const handlePageCountMismatchClose = () => {
+    setPageCountMismatchDialog({
+      isOpen: false,
+      currentPdfPageCount: 0,
+      importedSettingsPageCount: 0,
+      appliedSettings: [],
+      skippedSettings: [],
+      pendingSettings: null
+    });
+  };
+
+  const handlePageCountMismatchProceed = () => {
+    // Clear auto-restored flag since this was a manual import
+    setAutoRestoredSettings(false);
+    
+    // Close the dialog
+    handlePageCountMismatchClose();
+  };
+
   const steps = [{
     title: 'Import PDF',
-    component: <ImportStep onFileSelect={(data, fileName, file) => handleFileSelect(data, fileName, file)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} onResetToDefaults={handleResetToDefaults} onTriggerImportSettings={handleTriggerImportSettings} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} autoRestoredSettings={autoRestoredSettings} lastImportedFileInfo={lastImportedFileInfo} onClearLastImportedFile={handleClearLastImportedFile} />
+    component: (
+      <PDFProcessingErrorBoundary onNavigate={() => setCurrentStep(0)}>
+        <ImportStep 
+          onFileSelect={(data, fileName, file) => handleFileSelect(data, fileName, file)} 
+          onModeSelect={handleModeSelect} 
+          onPageSettingsChange={settings => setPageSettings(settings)} 
+          onNext={() => setCurrentStep(1)} 
+          onResetToDefaults={handleResetToDefaults} 
+          onTriggerImportSettings={handleTriggerImportSettings} 
+          pdfData={pdfData} 
+          pdfMode={pdfMode} 
+          pageSettings={pageSettings} 
+          autoRestoredSettings={autoRestoredSettings} 
+          lastImportedFileInfo={lastImportedFileInfo} 
+          onClearLastImportedFile={handleClearLastImportedFile} 
+        />
+      </PDFProcessingErrorBoundary>
+    )
   }, {
     title: 'Extract Cards',
-    component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onCardDimensionsChange={setCardDimensions} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
+    component: (
+      <CardProcessingErrorBoundary onNavigate={() => setCurrentStep(0)}>
+        <ExtractStep 
+          pdfData={pdfData} 
+          pdfMode={pdfMode} 
+          pageSettings={pageSettings} 
+          extractionSettings={extractionSettings} 
+          onSettingsChange={settings => setExtractionSettings(settings)} 
+          onCardDimensionsChange={setCardDimensions} 
+          onPrevious={() => setCurrentStep(0)} 
+          onNext={() => setCurrentStep(2)} 
+        />
+      </CardProcessingErrorBoundary>
+    )
   }, {
     title: 'Configure Layout',
-    component: <ConfigureStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} onSettingsChange={settings => setOutputSettings(settings)} onPrevious={() => setCurrentStep(1)} onNext={() => setCurrentStep(3)} />
+    component: (
+      <RenderingErrorBoundary onNavigate={() => setCurrentStep(1)}>
+        <ConfigureStep 
+          pdfData={pdfData} 
+          pdfMode={pdfMode} 
+          extractionSettings={extractionSettings} 
+          outputSettings={outputSettings} 
+          pageSettings={pageSettings} 
+          cardDimensions={cardDimensions} 
+          onSettingsChange={settings => setOutputSettings(settings)} 
+          onPrevious={() => setCurrentStep(1)} 
+          onNext={() => setCurrentStep(3)} 
+        />
+      </RenderingErrorBoundary>
+    )
   }, {
     title: 'Color Calibration',
-    component: <ColorCalibrationStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} colorSettings={colorSettings} onColorSettingsChange={settings => setColorSettings(settings)} onPrevious={() => setCurrentStep(2)} onNext={() => setCurrentStep(4)} />
+    component: (
+      <RenderingErrorBoundary onNavigate={() => setCurrentStep(2)}>
+        <ColorCalibrationStep 
+          pdfData={pdfData} 
+          pdfMode={pdfMode} 
+          extractionSettings={extractionSettings} 
+          outputSettings={outputSettings} 
+          pageSettings={pageSettings} 
+          cardDimensions={cardDimensions} 
+          colorSettings={colorSettings} 
+          onColorSettingsChange={settings => setColorSettings(settings)} 
+          onPrevious={() => setCurrentStep(2)} 
+          onNext={() => setCurrentStep(4)} 
+        />
+      </RenderingErrorBoundary>
+    )
   }, {
     title: 'Export',
-    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} colorSettings={colorSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(3)} />
+    component: (
+      <ExportErrorBoundary onNavigate={() => setCurrentStep(3)}>
+        <ExportStep 
+          pdfData={pdfData} 
+          pdfMode={pdfMode} 
+          pageSettings={pageSettings} 
+          extractionSettings={extractionSettings} 
+          outputSettings={outputSettings} 
+          colorSettings={colorSettings} 
+          currentPdfFileName={currentPdfFileName} 
+          onPrevious={() => setCurrentStep(3)} 
+        />
+      </ExportErrorBoundary>
+    )
   }];
 
   return <div className="flex flex-col w-full min-h-screen bg-gray-50">
@@ -283,5 +422,16 @@ export function App() {
       <footer className="p-4 text-center text-gray-500 text-sm">
         Card Game PDF Transformer &copy; {new Date().getFullYear()}
       </footer>
+      
+      {/* Page Count Mismatch Dialog */}
+      <PageCountMismatchDialog
+        isOpen={pageCountMismatchDialog.isOpen}
+        onClose={handlePageCountMismatchClose}
+        onProceed={handlePageCountMismatchProceed}
+        currentPdfPageCount={pageCountMismatchDialog.currentPdfPageCount}
+        importedSettingsPageCount={pageCountMismatchDialog.importedSettingsPageCount}
+        appliedSettings={pageCountMismatchDialog.appliedSettings}
+        skippedSettings={pageCountMismatchDialog.skippedSettings}
+      />
     </div>;
 }
