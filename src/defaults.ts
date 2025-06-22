@@ -1,7 +1,7 @@
 // Default configuration values for the application
 // This is the single source of truth for all default settings
 
-import { PdfMode, PageSettings, ExtractionSettings, OutputSettings, ColorTransformationSettings } from './types';
+import { PdfMode, PageSettings } from './types';
 
 // Grid defaults based on PDF mode
 export const getDefaultGrid = (pdfMode: PdfMode) => {

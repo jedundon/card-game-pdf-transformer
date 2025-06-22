@@ -16,14 +16,7 @@ import { PageCountMismatchDialog } from './components/PageCountMismatchDialog';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 import { 
   PdfData, 
-  PdfMode, 
-  PageSettings, 
-  ExtractionSettings, 
-  OutputSettings, 
-  ColorTransformationSettings, 
-  CardDimensions,
-  LastImportedFileInfo,
-  AppSettings
+  PdfMode
 } from './types';
 import { 
   saveSettingsToLocalStorage, 
@@ -32,7 +25,8 @@ import {
   getLastImportedFile,
   saveLastImportedFile,
   clearLastImportedFile,
-  LastImportedFileInfo
+  LastImportedFileInfo,
+  WorkflowSettings
 } from './utils/localStorageUtils';
 import { getDefaultSettingsForMode } from './defaults';
 
@@ -49,7 +43,7 @@ export function App() {
     importedSettingsPageCount: number;
     appliedSettings: string[];
     skippedSettings: string[];
-    pendingSettings: AppSettings | null;
+    pendingSettings: WorkflowSettings | null;
   }>({
     isOpen: false,
     currentPdfPageCount: 0,
@@ -160,7 +154,7 @@ export function App() {
   };
 
   // Handle loading settings from file or auto-restore
-  const handleLoadSettings = (settings: AppSettings, isAutoRestore = false) => {
+  const handleLoadSettings = (settings: WorkflowSettings, isAutoRestore = false) => {
     const appliedSettings: string[] = [];
     const skippedSettings: string[] = [];
     

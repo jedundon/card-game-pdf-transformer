@@ -106,9 +106,13 @@ export interface OutputSettings {
   bleedMarginInches: number;
   spacing: CardSpacingSettings;
   rotation: LayoutRotationSettings;
-  cardSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
+  cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
   cardAlignment: 'top-left' | 'center';
   includeColorCalibration: boolean;
+  offset: {
+    horizontal: number;
+    vertical: number;
+  };
   printerCalibration?: {
     offsetX: number;
     offsetY: number;
@@ -121,13 +125,6 @@ export interface OutputSettings {
 export interface CardInfo {
   type: string;
   id: number;
-}
-
-// Last imported file information
-export interface LastImportedFileInfo {
-  fileName: string;
-  size: number;
-  timestamp: number;
 }
 
 // Settings for import/export

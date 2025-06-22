@@ -408,7 +408,7 @@ function applyTransformationValue(
   type: string,
   value: number
 ): void {
-  (transformation as Record<string, number>)[type] = value;
+  (transformation as unknown as Record<string, number>)[type] = value;
 }
 
 /**

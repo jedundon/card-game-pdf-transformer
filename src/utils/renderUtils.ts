@@ -1,6 +1,6 @@
 import { DPI_CONSTANTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
-import { PdfData, PageSettings, ExtractionSettings, PdfMode, OutputSettings, ColorTransformationSettings } from '../types';
+import { OutputSettings } from '../types';
 
 /**
  * Unified rendering utilities for card processing

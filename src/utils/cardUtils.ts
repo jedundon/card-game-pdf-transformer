@@ -331,7 +331,7 @@ export async function extractCardImage(
     }
     
     // Get viewport with error handling
-    let viewport: { width: number; height: number };
+    let viewport: any;
     try {
       viewport = page.getViewport({ scale: highResScale });
       
