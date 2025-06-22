@@ -773,14 +773,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       )}
       
       {/* First Row: Basic Color Controls and Card Preview */}
+      <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
+        <PaletteIcon size={20} className="mr-2" />
+        Color Transformation
+      </h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Left Panel: Basic Color Controls */}
         <div className="space-y-4">
           <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
-              <PaletteIcon size={20} className="mr-2" />
-              Color Transformation
-            </h3>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="text-sm font-medium text-blue-800 mb-2">
                 Color Calibration Workflow
@@ -1120,38 +1120,6 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               Reset All Adjustments
             </button>
           </div>
-
-          {/* Crop Region Selection */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Crop Region Selection
-            </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              <p>
-                <span className="font-medium">Grid size:</span>{' '}
-                {colorSettings?.gridConfig?.columns || 4}×{colorSettings?.gridConfig?.rows || 4}
-              </p>
-              {cropRegionDimensions && (
-                <p>
-                  <span className="font-medium">Crop size:</span>{' '}
-                  {cropRegionDimensions.widthInches.toFixed(3)}" × {cropRegionDimensions.heightInches.toFixed(3)}"
-                </p>
-              )}
-              {colorSettings?.selectedRegion ? (
-                <div>
-                  <p className="text-green-700 font-medium">✓ Region selected</p>
-                  <p>
-                    <span className="font-medium">Center:</span>{' '}
-                    ({colorSettings.selectedRegion.centerX.toFixed(3)}", {colorSettings.selectedRegion.centerY.toFixed(3)}")
-                  </p>
-                </div>
-              ) : (
-                <p className="text-orange-700">
-                  🎯 Hover over card and click to select crop region
-                </p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Right Panel: Card Preview */}
@@ -1340,18 +1308,50 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Crop Region Selection */}
+          <div className="p-4 bg-white border border-gray-200 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Crop Region Selection
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              <p>
+                <span className="font-medium">Grid size:</span>{' '}
+                {colorSettings?.gridConfig?.columns || 4}×{colorSettings?.gridConfig?.rows || 4}
+              </p>
+              {cropRegionDimensions && (
+                <p>
+                  <span className="font-medium">Crop size:</span>{' '}
+                  {cropRegionDimensions.widthInches.toFixed(3)}" × {cropRegionDimensions.heightInches.toFixed(3)}"
+                </p>
+              )}
+              {colorSettings?.selectedRegion ? (
+                <div>
+                  <p className="text-green-700 font-medium">✓ Region selected</p>
+                  <p>
+                    <span className="font-medium">Center:</span>{' '}
+                    ({colorSettings.selectedRegion.centerX.toFixed(3)}", {colorSettings.selectedRegion.centerY.toFixed(3)}")
+                  </p>
+                </div>
+              ) : (
+                <p className="text-orange-700">
+                  🎯 Hover over card and click to select crop region
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Second Row: Calibration Settings and Grid Preview */}
+      <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
+        🧪 Calibration Testing (Optional)
+      </h3>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel: Calibration Settings */}
         <div className="space-y-4">
-          {/* Calibration Testing Section Header */}
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mt-6">
-            <h3 className="text-lg font-semibold text-purple-800 mb-2 flex items-center">
-              🧪 Calibration Testing (Optional)
-            </h3>
+          {/* Calibration Testing Info Box */}
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
             <p className="text-sm text-purple-700 mb-3">
               Generate test grids to fine-tune color settings for your specific printer and media. 
               This step is optional - you can proceed directly to Export if your preview looks good.
