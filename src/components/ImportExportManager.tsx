@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SaveIcon, UploadIcon, SettingsIcon, TrashIcon, HardDriveIcon } from 'lucide-react';
 import { WorkflowSettings, getDefaultSettingsForMode } from '../defaults';
 import { 
@@ -15,6 +15,7 @@ interface ImportExportManagerProps {
   colorSettings: any;
   currentPdfFileName?: string;
   onLoadSettings: (settings: any) => void;
+  onTriggerImportRef?: (triggerFn: () => void) => void;
 }
 
 export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
@@ -24,12 +25,20 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   outputSettings,
   colorSettings,
   currentPdfFileName,
-  onLoadSettings
+  onLoadSettings,
+  onTriggerImportRef
 }) => {
   const [settingsFileName, setSettingsFileName] = useState<string>('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Expose the trigger function to parent components
+  useEffect(() => {
+    if (onTriggerImportRef) {
+      onTriggerImportRef(() => fileInputRef.current?.click());
+    }
+  }, [onTriggerImportRef]);
 
   // Generate default filename based on PDF name
   const getDefaultFileName = () => {

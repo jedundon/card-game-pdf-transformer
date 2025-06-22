@@ -9,13 +9,17 @@ import { ImportExportManager } from './components/ImportExportManager';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 import { 
   saveSettingsToLocalStorage, 
-  loadSettingsFromLocalStorage
+  loadSettingsFromLocalStorage,
+  clearLocalStorageSettings
 } from './utils/localStorageUtils';
+import { getDefaultSettingsForMode } from './defaults';
 
 export function App() {
   const [currentStep, setCurrentStep] = useState(0);
   const [pdfData, setPdfData] = useState(null);
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
+  const [autoRestoredSettings, setAutoRestoredSettings] = useState(false);
+  const [triggerImportSettings, setTriggerImportSettings] = useState<(() => void) | null>(null);
   const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
   const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
   const [cardDimensions, setCardDimensions] = useState<{
@@ -77,7 +81,8 @@ export function App() {
     const autoSavedSettings = loadSettingsFromLocalStorage();
     if (autoSavedSettings) {
       console.log('Auto-restoring settings from localStorage');
-      handleLoadSettings(autoSavedSettings);
+      handleLoadSettings(autoSavedSettings, true);
+      setAutoRestoredSettings(true);
     }
   }, []);
 
@@ -109,8 +114,8 @@ export function App() {
     });
   };
 
-  // Handle loading settings from file
-  const handleLoadSettings = (settings: any) => {
+  // Handle loading settings from file or auto-restore
+  const handleLoadSettings = (settings: any, isAutoRestore = false) => {
     if (settings.pdfMode) {
       setPdfMode(settings.pdfMode);
     }
@@ -126,6 +131,10 @@ export function App() {
     if (settings.colorSettings) {
       setColorSettings(settings.colorSettings);
     }
+    // Clear auto-restored flag when manually loading settings (not auto-restore)
+    if (!isAutoRestore) {
+      setAutoRestoredSettings(false);
+    }
   };
 
   // Handle PDF file selection with filename tracking
@@ -134,9 +143,55 @@ export function App() {
     setCurrentPdfFileName(fileName);
   };
 
+  // Handle resetting to defaults (clears auto-save and resets to defaults)
+  const handleResetToDefaults = () => {
+    clearLocalStorageSettings();
+    const defaultsForCurrentMode = getDefaultSettingsForMode(DEFAULT_SETTINGS.pdfMode);
+    setPdfMode(DEFAULT_SETTINGS.pdfMode);
+    setPageSettings(DEFAULT_SETTINGS.pageSettings);
+    setExtractionSettings(defaultsForCurrentMode.extractionSettings);
+    setOutputSettings(defaultsForCurrentMode.outputSettings);
+    // Reset color settings to initial state
+    setColorSettings({
+      selectedRegion: null,
+      gridConfig: { columns: 4, rows: 4 },
+      transformations: {
+        horizontal: { type: 'brightness', min: -20, max: 20 },
+        vertical: { type: 'contrast', min: 0.8, max: 1.3 }
+      },
+      selectedPreset: null,
+      finalAdjustments: {
+        brightness: 0,
+        contrast: 1.0,
+        saturation: 0,
+        hue: 0,
+        gamma: 1.0,
+        vibrance: 0,
+        redMultiplier: 1.0,
+        greenMultiplier: 1.0,
+        blueMultiplier: 1.0,
+        shadows: 0,
+        highlights: 0,
+        midtoneBalance: 0,
+        blackPoint: 0,
+        whitePoint: 255,
+        outputBlack: 0,
+        outputWhite: 255
+      }
+    });
+    setAutoRestoredSettings(false);
+  };
+
+  // Handle triggering the import settings functionality
+  const handleTriggerImportSettings = () => {
+    if (triggerImportSettings) {
+      triggerImportSettings();
+    }
+  };
+
   const steps = [{
     title: 'Import PDF',
-    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} />
+    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} onResetToDefaults={handleResetToDefaults} onTriggerImportSettings={handleTriggerImportSettings} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} autoRestoredSettings={autoRestoredSettings} />
   }, {
     title: 'Extract Cards',
     component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onCardDimensionsChange={setCardDimensions} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
@@ -161,7 +216,7 @@ export function App() {
         <StepIndicator steps={steps.map(s => s.title)} currentStep={currentStep} />
         
         {/* Import/Export Manager - Always visible */}
-        <div className="mt-6">
+        <div className="mt-6" data-import-export-manager>
           <ImportExportManager
             pdfMode={pdfMode}
             pageSettings={pageSettings}
@@ -170,6 +225,7 @@ export function App() {
             colorSettings={colorSettings}
             currentPdfFileName={currentPdfFileName}
             onLoadSettings={handleLoadSettings}
+            onTriggerImportRef={setTriggerImportSettings}
           />
         </div>
         

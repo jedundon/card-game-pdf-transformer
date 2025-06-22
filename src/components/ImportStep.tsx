@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { ChevronRightIcon } from 'lucide-react';
+import { ChevronRightIcon, RotateCcwIcon, UploadIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 
@@ -10,18 +10,24 @@ interface ImportStepProps {
   onModeSelect: (mode: any) => void;
   onPageSettingsChange: (settings: any) => void;
   onNext: () => void;
+  onResetToDefaults: () => void;
+  onTriggerImportSettings: () => void;
   pdfData: any;
   pdfMode: any;
   pageSettings: any;
+  autoRestoredSettings: boolean;
 }
 export const ImportStep: React.FC<ImportStepProps> = ({
   onFileSelect,
   onModeSelect,
   onPageSettingsChange,
   onNext,
+  onResetToDefaults,
+  onTriggerImportSettings,
   pdfData,
   pdfMode,
-  pageSettings
+  pageSettings,
+  autoRestoredSettings
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -98,6 +104,39 @@ export const ImportStep: React.FC<ImportStepProps> = ({
             Successfully loaded: {fileName} ({pageCount} pages)
           </p>}
       </div>
+      
+      {/* Auto-restored Settings Notification */}
+      {autoRestoredSettings && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-blue-800 mb-1">
+                Settings Automatically Restored
+              </h4>
+              <p className="text-xs text-blue-700 mb-3">
+                Your previous workflow settings have been automatically applied. 
+                This includes PDF mode, extraction settings, output configuration, and color calibration.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={onResetToDefaults}
+                  className="inline-flex items-center px-3 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  <RotateCcwIcon size={12} className="mr-1" />
+                  Reset to Defaults
+                </button>
+                <button
+                  onClick={onTriggerImportSettings}
+                  className="inline-flex items-center px-3 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <UploadIcon size={12} className="mr-1" />
+                  Import Different Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {pdfData && <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
