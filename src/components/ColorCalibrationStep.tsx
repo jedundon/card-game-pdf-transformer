@@ -5,8 +5,7 @@ import {
   calculateTotalCards, 
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
-  getAvailableCardIds,
-  countCardsByType
+  getAvailableCardIds
 } from '../utils/cardUtils';
 import { 
   calculateFinalCardRenderDimensions,
@@ -309,7 +308,6 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   extractionSettings,
   outputSettings,
   pageSettings,
-  cardDimensions,
   colorSettings,
   onColorSettingsChange,
   onPrevious,
@@ -805,20 +803,22 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               Color Presets
             </h4>
             <div className="space-y-2">
-              {Object.entries(COLOR_PRESETS).map(([key, preset]) => (
-                <button
-                  key={key}
-                  onClick={() => applyColorPreset(key as ColorPresetKey)}
-                  className={`w-full text-left p-2 rounded-md text-xs transition-colors ${
-                    colorSettings?.selectedPreset === key
-                      ? 'bg-blue-100 border border-blue-300 text-blue-800'
-                      : 'bg-gray-50 border border-gray-200 text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <div className="font-medium">{preset.name}</div>
-                  <div className="text-gray-600 mt-1">{preset.description}</div>
-                </button>
-              ))}
+              <select
+                value={colorSettings?.selectedPreset || 'none'}
+                onChange={(e) => applyColorPreset(e.target.value as ColorPresetKey)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
+              >
+                {Object.entries(COLOR_PRESETS).map(([key, preset]) => (
+                  <option key={key} value={key}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+              {colorSettings?.selectedPreset && colorSettings.selectedPreset !== 'none' && (
+                <p className="text-xs text-gray-600 mt-2">
+                  {COLOR_PRESETS[colorSettings.selectedPreset as ColorPresetKey]?.description}
+                </p>
+              )}
             </div>
           </div>
 
@@ -840,6 +840,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.brightness}
                   onChange={(e) => updateColorTransformation('brightness', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('brightness', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -856,6 +857,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="0.05"
                   value={currentColorTransformation.contrast}
                   onChange={(e) => updateColorTransformation('contrast', parseFloat(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('contrast', 1.0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -872,6 +874,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.saturation}
                   onChange={(e) => updateColorTransformation('saturation', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('saturation', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -888,6 +891,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.hue}
                   onChange={(e) => updateColorTransformation('hue', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('hue', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -904,6 +908,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="0.05"
                   value={currentColorTransformation.gamma}
                   onChange={(e) => updateColorTransformation('gamma', parseFloat(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('gamma', 1.0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -920,6 +925,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.vibrance}
                   onChange={(e) => updateColorTransformation('vibrance', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('vibrance', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -944,6 +950,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="0.01"
                   value={currentColorTransformation.redMultiplier}
                   onChange={(e) => updateColorTransformation('redMultiplier', parseFloat(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('redMultiplier', 1.0)}
                   className="w-full h-1 bg-red-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -960,6 +967,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="0.01"
                   value={currentColorTransformation.greenMultiplier}
                   onChange={(e) => updateColorTransformation('greenMultiplier', parseFloat(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('greenMultiplier', 1.0)}
                   className="w-full h-1 bg-green-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -976,6 +984,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="0.01"
                   value={currentColorTransformation.blueMultiplier}
                   onChange={(e) => updateColorTransformation('blueMultiplier', parseFloat(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('blueMultiplier', 1.0)}
                   className="w-full h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1000,6 +1009,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.shadows}
                   onChange={(e) => updateColorTransformation('shadows', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('shadows', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1016,6 +1026,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.highlights}
                   onChange={(e) => updateColorTransformation('highlights', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('highlights', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1032,6 +1043,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.midtoneBalance}
                   onChange={(e) => updateColorTransformation('midtoneBalance', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('midtoneBalance', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1056,6 +1068,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.blackPoint}
                   onChange={(e) => updateColorTransformation('blackPoint', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('blackPoint', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1072,6 +1085,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.whitePoint}
                   onChange={(e) => updateColorTransformation('whitePoint', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('whitePoint', 255)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1088,6 +1102,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.outputBlack}
                   onChange={(e) => updateColorTransformation('outputBlack', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('outputBlack', 0)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1104,6 +1119,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   step="1"
                   value={currentColorTransformation.outputWhite}
                   onChange={(e) => updateColorTransformation('outputWhite', parseInt(e.target.value))}
+                  onDoubleClick={() => updateColorTransformation('outputWhite', 255)}
                   className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 />
               </div>
@@ -1282,30 +1298,105 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </div>
           </div>
           
-          {/* Information Display */}
+          {/* Color Transformation Summary */}
           <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Current Settings
+              Current Color Settings
             </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              {cardDimensions && (
-                <p>
-                  <span className="font-medium">Card image:</span>{' '}
-                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
-                </p>
+            <div className="text-xs text-gray-600 space-y-1">
+              {/* Basic Adjustments */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                <div><span className="font-medium">Brightness:</span> {currentColorTransformation.brightness > 0 ? '+' : ''}{currentColorTransformation.brightness}%</div>
+                <div><span className="font-medium">Contrast:</span> {currentColorTransformation.contrast.toFixed(2)}×</div>
+                <div><span className="font-medium">Saturation:</span> {currentColorTransformation.saturation > 0 ? '+' : ''}{currentColorTransformation.saturation}%</div>
+                <div><span className="font-medium">Hue:</span> {currentColorTransformation.hue > 0 ? '+' : ''}{currentColorTransformation.hue}°</div>
+                <div><span className="font-medium">Gamma:</span> {currentColorTransformation.gamma.toFixed(2)}</div>
+                <div><span className="font-medium">Vibrance:</span> {currentColorTransformation.vibrance > 0 ? '+' : ''}{currentColorTransformation.vibrance}%</div>
+              </div>
+              
+              {/* RGB Channels - only show if not neutral */}
+              {(currentColorTransformation.redMultiplier !== 1.0 || 
+                currentColorTransformation.greenMultiplier !== 1.0 || 
+                currentColorTransformation.blueMultiplier !== 1.0) && (
+                <div className="pt-1 border-t border-gray-300">
+                  <div className="grid grid-cols-3 gap-x-4">
+                    <div><span className="font-medium text-red-600">R:</span> {currentColorTransformation.redMultiplier.toFixed(2)}×</div>
+                    <div><span className="font-medium text-green-600">G:</span> {currentColorTransformation.greenMultiplier.toFixed(2)}×</div>
+                    <div><span className="font-medium text-blue-600">B:</span> {currentColorTransformation.blueMultiplier.toFixed(2)}×</div>
+                  </div>
+                </div>
               )}
-              <p>
-                <span className="font-medium">Total cards:</span>{' '}
-                {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
-              </p>
-              <p>
-                <span className="font-medium">Front cards:</span>{' '}
-                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
-              <p>
-                <span className="font-medium">Back cards:</span>{' '}
-                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
+              
+              {/* Shadows/Highlights - only show if not neutral */}
+              {(currentColorTransformation.shadows !== 0 || 
+                currentColorTransformation.highlights !== 0 || 
+                currentColorTransformation.midtoneBalance !== 0) && (
+                <div className="pt-1 border-t border-gray-300">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {currentColorTransformation.shadows !== 0 && (
+                      <div><span className="font-medium">Shadows:</span> {currentColorTransformation.shadows > 0 ? '+' : ''}{currentColorTransformation.shadows}</div>
+                    )}
+                    {currentColorTransformation.highlights !== 0 && (
+                      <div><span className="font-medium">Highlights:</span> {currentColorTransformation.highlights > 0 ? '+' : ''}{currentColorTransformation.highlights}</div>
+                    )}
+                    {currentColorTransformation.midtoneBalance !== 0 && (
+                      <div className="col-span-2"><span className="font-medium">Midtones:</span> {currentColorTransformation.midtoneBalance > 0 ? '+' : ''}{currentColorTransformation.midtoneBalance}%</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Levels - only show if not neutral */}
+              {(currentColorTransformation.blackPoint !== 0 || 
+                currentColorTransformation.whitePoint !== 255 || 
+                currentColorTransformation.outputBlack !== 0 || 
+                currentColorTransformation.outputWhite !== 255) && (
+                <div className="pt-1 border-t border-gray-300">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {currentColorTransformation.blackPoint !== 0 && (
+                      <div><span className="font-medium">In Black:</span> {currentColorTransformation.blackPoint}</div>
+                    )}
+                    {currentColorTransformation.whitePoint !== 255 && (
+                      <div><span className="font-medium">In White:</span> {currentColorTransformation.whitePoint}</div>
+                    )}
+                    {currentColorTransformation.outputBlack !== 0 && (
+                      <div><span className="font-medium">Out Black:</span> {currentColorTransformation.outputBlack}</div>
+                    )}
+                    {currentColorTransformation.outputWhite !== 255 && (
+                      <div><span className="font-medium">Out White:</span> {currentColorTransformation.outputWhite}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Preset info */}
+              {colorSettings?.selectedPreset && colorSettings.selectedPreset !== 'none' && (
+                <div className="pt-1 border-t border-gray-300">
+                  <div><span className="font-medium">Preset:</span> {COLOR_PRESETS[colorSettings.selectedPreset as ColorPresetKey]?.name}</div>
+                </div>
+              )}
+              
+              {/* Show if all settings are neutral */}
+              {currentColorTransformation.brightness === 0 && 
+               currentColorTransformation.contrast === 1.0 && 
+               currentColorTransformation.saturation === 0 && 
+               currentColorTransformation.hue === 0 && 
+               currentColorTransformation.gamma === 1.0 && 
+               currentColorTransformation.vibrance === 0 && 
+               currentColorTransformation.redMultiplier === 1.0 && 
+               currentColorTransformation.greenMultiplier === 1.0 && 
+               currentColorTransformation.blueMultiplier === 1.0 && 
+               currentColorTransformation.shadows === 0 && 
+               currentColorTransformation.highlights === 0 && 
+               currentColorTransformation.midtoneBalance === 0 && 
+               currentColorTransformation.blackPoint === 0 && 
+               currentColorTransformation.whitePoint === 255 && 
+               currentColorTransformation.outputBlack === 0 && 
+               currentColorTransformation.outputWhite === 255 && (
+                <div className="text-center text-gray-500 italic py-2">
+                  No color adjustments applied
+                </div>
+              )}
             </div>
           </div>
 
