@@ -150,6 +150,20 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     };
   };
 
+  // Helper function to find card index by card ID and type
+  const findCardIndexByIDAndType = (targetCardID: number, targetCardType: 'front' | 'back'): number | null => {
+    const maxIndex = activePages.length * cardsPerPage;
+    
+    for (let cardIndex = 0; cardIndex < maxIndex; cardIndex++) {
+      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      if (cardInfo.id === targetCardID && cardInfo.type.toLowerCase() === targetCardType) {
+        return cardIndex;
+      }
+    }
+    
+    return null; // Card ID with matching type not found
+  };
+
   // Generate a PDF with all cards of a specific type
   const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
     if (!pdfData) return null;
@@ -157,10 +171,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     try {
       console.log(`Starting ${cardType} PDF generation...`);
       
-      // Get all card IDs for this type
+      // Get all card IDs for this type (already sorted numerically)
       const cardIds = getAvailableCardIds(cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
       
-      console.log(`Available ${cardType} card IDs:`, cardIds);
+      console.log(`Available ${cardType} card IDs (sorted):`, cardIds);
       
       if (cardIds.length === 0) {
         console.log(`No ${cardType} cards found`);
@@ -177,26 +191,26 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       let cardCount = 0;
       let colorTransformationCount = 0;
       
-      // Find the maximum card index for iteration
-      const maxCardIndex = activePages.length * cardsPerPage;
-      
-      console.log(`Processing up to ${maxCardIndex} card indices for ${cardType} cards...`);
+      console.log(`Processing ${cardIds.length} ${cardType} cards in numerical order...`);
       console.log(`Color adjustments ${hasColorAdjustments ? 'will be applied' : 'are disabled (all settings are neutral)'} for ${cardType} cards`);
       
-      // Process each card index to find cards of the specified type
-      for (let cardIndex = 0; cardIndex < maxCardIndex; cardIndex++) {
-        const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      // Process each card ID in sorted order
+      for (const cardId of cardIds) {
+        // Find the card index for this card ID and type
+        const cardIndex = findCardIndexByIDAndType(cardId, cardType);
         
-        // Skip cards that don't match the type we're generating
-        if (cardInfo.type.toLowerCase() !== cardType) continue;
+        if (cardIndex === null) {
+          console.warn(`Could not find card index for ${cardType} card ID ${cardId}`);
+          continue;
+        }
         
-        console.log(`Processing ${cardType} card ${cardInfo.id} at index ${cardIndex}...`);
+        console.log(`Processing ${cardType} card ${cardId} at index ${cardIndex}...`);
         
         // Extract the card image
         const cardImageUrl = await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
         
         if (!cardImageUrl) {
-          console.warn(`Failed to extract card image for ${cardType} card ${cardInfo.id}`);
+          console.warn(`Failed to extract card image for ${cardType} card ${cardId}`);
           continue;
         }
 
@@ -205,7 +219,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           doc.addPage();
         }
 
-        console.log(`Processing ${cardType} card ${cardInfo.id} with unified render utils...`);
+        console.log(`Processing ${cardType} card ${cardId} with unified render utils...`);
         
         try {
           // Use unified rendering functions for consistent behavior
@@ -213,7 +227,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           const positioning = calculateCardPositioning(renderDimensions, outputSettings, cardType);
           const processedImage = await processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
           
-          console.log(`Card ${cardInfo.id} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
+          console.log(`Card ${cardId} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
           
           // Apply color transformation to the processed image
           let finalImageUrl = processedImage.imageUrl;
@@ -221,9 +235,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             try {
               finalImageUrl = await applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
               colorTransformationCount++;
-              console.log(`Applied color transformation to ${cardType} card ${cardInfo.id}`);
+              console.log(`Applied color transformation to ${cardType} card ${cardId}`);
             } catch (error) {
-              console.warn(`Failed to apply color transformation to ${cardType} card ${cardInfo.id}:`, error);
+              console.warn(`Failed to apply color transformation to ${cardType} card ${cardId}:`, error);
               // Use original image if color transformation fails
               finalImageUrl = processedImage.imageUrl;
             }
@@ -235,13 +249,13 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
           // Warn if card goes off page (but still allow it in case user intends it)
           if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
-            console.warn(`Card ${cardInfo.id} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
+            console.warn(`Card ${cardId} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
           }
           if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
-            console.warn(`Card ${cardInfo.id} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
+            console.warn(`Card ${cardId} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
           }
 
-          console.log(`Adding ${cardType} card ${cardInfo.id} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
+          console.log(`Adding ${cardType} card ${cardId} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
 
           // Add the card image to PDF
           doc.addImage(
@@ -255,7 +269,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
           cardCount++;
         } catch (error) {
-          console.warn(`Failed to process ${cardType} card ${cardInfo.id} with unified render utils:`, error);
+          console.warn(`Failed to process ${cardType} card ${cardId} with unified render utils:`, error);
           // Skip this card if processing fails
           continue;
         }
