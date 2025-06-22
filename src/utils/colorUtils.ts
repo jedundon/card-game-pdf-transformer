@@ -42,7 +42,7 @@ export async function applyColorTransformation(
   imageUrl: string,
   transformation: ColorTransformation
 ): Promise<string> {
-  return new Promise((resolve, _reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     
     img.onload = () => {

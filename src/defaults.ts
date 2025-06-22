@@ -1,8 +1,10 @@
 // Default configuration values for the application
 // This is the single source of truth for all default settings
 
+import { PdfMode, PageSettings, ExtractionSettings, OutputSettings, ColorTransformationSettings } from './types';
+
 // Grid defaults based on PDF mode
-export const getDefaultGrid = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+export const getDefaultGrid = (pdfMode: PdfMode) => {
   if (pdfMode.type === 'duplex') {
     // Both long and short edge duplex use same grid
     return { rows: 2, columns: 3 };
@@ -114,7 +116,7 @@ export type WorkflowSettings = {
     orientation: string;
     flipEdge: string;
   };
-  pageSettings: any[];
+  pageSettings: PageSettings[];
   extractionSettings: {
     crop: {
       top: number;
@@ -158,13 +160,13 @@ export type WorkflowSettings = {
     cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
   };
   colorSettings: {
-    selectedRegion: any;
+    selectedRegion: unknown;
     gridConfig: { columns: number; rows: number };
     transformations: {
       horizontal: { type: string; min: number; max: number };
       vertical: { type: string; min: number; max: number };
     };
-    selectedPreset: any;
+    selectedPreset: unknown;
     finalAdjustments: {
       brightness: number;
       contrast: number;

@@ -530,7 +530,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         const leftCols = cols / 2;
         const rightCols = cols / 2;
         const totalCols = cols + 1; // +1 for gutter
-        let cells = [];
+        const cells = [];
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < totalCols; c++) {
             if (c === leftCols) {
@@ -568,7 +568,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         const topRows = rows / 2;
         const bottomRows = rows / 2;
         const totalRows = rows + 1;
-        let cells = [];
+        const cells = [];
         for (let r = 0; r < totalRows; r++) {
           for (let c = 0; c < cols; c++) {
             if (r === topRows) {

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { ColorTransformation, applyColorTransformation } from './colorUtils';
+import { OutputSettings } from '../types';
 
 /**
  * Generates a calibration PDF for printer offset and scale testing
@@ -212,11 +213,12 @@ export async function generateColorCalibrationPDF(
     horizontal: { type: string; min: number; max: number };
     vertical: { type: string; min: number; max: number };
   },
-  outputSettings: any,
-  _selectedRegion: any,
+  outputSettings: OutputSettings,
+  _selectedRegion: unknown,
   userColorSettings?: ColorTransformation
 ): Promise<Blob> {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
+    (async () => {
     try {
       // Create PDF with output page dimensions
       const doc = new jsPDF({
@@ -354,6 +356,7 @@ export async function generateColorCalibrationPDF(
       console.error('Failed to generate color calibration PDF:', error);
       reject(error);
     }
+    })();
   });
 }
 
@@ -405,7 +408,7 @@ function applyTransformationValue(
   type: string,
   value: number
 ): void {
-  (transformation as any)[type] = value;
+  (transformation as Record<string, number>)[type] = value;
 }
 
 /**

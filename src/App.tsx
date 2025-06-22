@@ -15,6 +15,17 @@ import {
 import { PageCountMismatchDialog } from './components/PageCountMismatchDialog';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 import { 
+  PdfData, 
+  PdfMode, 
+  PageSettings, 
+  ExtractionSettings, 
+  OutputSettings, 
+  ColorTransformationSettings, 
+  CardDimensions,
+  LastImportedFileInfo,
+  AppSettings
+} from './types';
+import { 
   saveSettingsToLocalStorage, 
   loadSettingsFromLocalStorage,
   clearLocalStorageSettings,
@@ -38,7 +49,7 @@ export function App() {
     importedSettingsPageCount: number;
     appliedSettings: string[];
     skippedSettings: string[];
-    pendingSettings: any;
+    pendingSettings: AppSettings | null;
   }>({
     isOpen: false,
     currentPdfPageCount: 0,
@@ -130,7 +141,7 @@ export function App() {
   }, [pdfMode, pageSettings, extractionSettings, outputSettings, colorSettings]);
 
   // Handle PDF mode changes and update grid and rotation defaults
-  const handleModeSelect = (mode: any) => {
+  const handleModeSelect = (mode: PdfMode) => {
     setPdfMode(mode);
     
     // Update extraction settings with appropriate grid for the new mode
@@ -149,7 +160,7 @@ export function App() {
   };
 
   // Handle loading settings from file or auto-restore
-  const handleLoadSettings = (settings: any, isAutoRestore = false) => {
+  const handleLoadSettings = (settings: AppSettings, isAutoRestore = false) => {
     const appliedSettings: string[] = [];
     const skippedSettings: string[] = [];
     
@@ -211,7 +222,7 @@ export function App() {
   };
 
   // Handle PDF file selection with filename tracking
-  const handleFileSelect = (data: any, fileName: string, file?: File) => {
+  const handleFileSelect = (data: PdfData, fileName: string, file?: File) => {
     setPdfData(data);
     setCurrentPdfFileName(fileName);
     

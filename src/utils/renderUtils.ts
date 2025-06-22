@@ -1,5 +1,6 @@
 import { DPI_CONSTANTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
+import { PdfData, PageSettings, ExtractionSettings, PdfMode, OutputSettings, ColorTransformationSettings } from '../types';
 
 /**
  * Unified rendering utilities for card processing
@@ -56,7 +57,7 @@ export interface RotatedImageData {
  */
 export async function calculateFinalCardRenderDimensions(
   cardImageUrl: string,
-  outputSettings: any
+  outputSettings: OutputSettings
 ): Promise<CardRenderDimensions> {
   // Validate inputs
   if (!cardImageUrl || typeof cardImageUrl !== 'string') {
@@ -247,7 +248,7 @@ export async function calculateFinalCardRenderDimensions(
  */
 export function calculateCardPositioning(
   renderDimensions: CardRenderDimensions,
-  outputSettings: any,
+  outputSettings: OutputSettings,
   cardType: 'front' | 'back'
 ): CardPositioning {
   const pageWidth = outputSettings.pageSize.width;
@@ -503,7 +504,7 @@ export async function processCardImageForRendering(
  * 
  * Extracted from cardUtils.ts for consistency
  */
-function getRotationForCardType(outputSettings: any, cardType: 'front' | 'back'): number {
+function getRotationForCardType(outputSettings: OutputSettings, cardType: 'front' | 'back'): number {
   if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
     return outputSettings.rotation[cardType] || 0;
   }

@@ -1,47 +1,8 @@
 import { DPI_CONSTANTS } from '../constants';
+import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings } from '../types';
 
 // Utility functions for card calculations and extraction
 // Shared between ExtractStep and ConfigureStep components
-
-interface PageSettings {
-  skip?: boolean;
-  type?: string;
-}
-
-interface PdfMode {
-  type: string;
-  orientation?: string;
-  flipEdge?: string;
-}
-
-interface ExtractionSettings {
-  grid: {
-    rows: number;
-    columns: number;
-  };
-  crop: {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  };
-  gutterWidth?: number;
-  cardCrop?: {
-    left: number;
-    right: number;
-    top: number;
-    bottom: number;
-  };
-  imageRotation?: {
-    front: number;
-    back: number;
-  };
-}
-
-interface CardInfo {
-  type: string;
-  id: number;
-}
 
 /**
  * Calculate active pages (non-skipped pages)
@@ -293,7 +254,7 @@ export function getActualPageNumber(
  */
 export async function extractCardImage(
   cardIndex: number,
-  pdfData: any,
+  pdfData: PdfData,
   pdfMode: PdfMode,
   activePages: PageSettings[],
   pageSettings: PageSettings[],
@@ -344,7 +305,7 @@ export async function extractCardImage(
     }
 
     // Get PDF page with timeout and validation
-    let page: any;
+    let page: PdfPage;
     try {
       const pagePromise = pdfData.getPage(actualPageNumber);
       const timeoutPromise = new Promise<never>((_, reject) => 
@@ -370,7 +331,7 @@ export async function extractCardImage(
     }
     
     // Get viewport with error handling
-    let viewport: any;
+    let viewport: { width: number; height: number };
     try {
       viewport = page.getViewport({ scale: highResScale });
       
@@ -693,7 +654,7 @@ export function getAvailableCardIds(
  * Get rotation value for a specific card type from settings
  */
 export function getRotationForCardType(
-  outputSettings: any,
+  outputSettings: OutputSettings,
   cardType: 'front' | 'back'
 ): number {
   if (typeof outputSettings.rotation === 'object' && outputSettings.rotation !== null) {
@@ -706,7 +667,7 @@ export function getRotationForCardType(
  * Calculate card dimensions using new card size settings
  */
 export function calculateCardDimensions(
-  outputSettings: any
+  outputSettings: OutputSettings
 ) {
   // Use new card size settings with bleed
   const baseCardWidthInches = outputSettings.cardSize?.widthInches || 2.5;

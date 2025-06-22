@@ -200,7 +200,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
       let cardCount = 0;
       let colorTransformationCount = 0;
-      let failedCards: number[] = [];
+      const failedCards: number[] = [];
       
       console.log(`Processing ${cardIds.length} ${cardType} cards in numerical order...`);
       console.log(`Color adjustments ${hasColorAdjustments ? 'will be applied' : 'are disabled (all settings are neutral)'} for ${cardType} cards`);
