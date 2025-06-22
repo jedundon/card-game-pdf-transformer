@@ -778,25 +778,6 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* Left Panel: Basic Color Controls */}
         <div className="space-y-4">
-          <div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">
-                Color Calibration Workflow
-              </h4>
-              <div className="text-sm text-blue-700 space-y-1">
-                <p>1. Adjust color settings and see real-time preview on the right</p>
-                <p>2. Select a region for calibration testing</p>
-                <p>3. Configure grid axes (your current settings become the baseline)</p>
-                <p>4. Generate test grid PDF for physical printer comparison</p>
-                <p>5. Apply optimal settings from test results</p>
-              </div>
-              <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
-                <span className="font-medium">💡 Tip:</span> The test grid uses your current color adjustments as the starting point, 
-                then varies the selected parameters around those values. This lets you iteratively refine your settings.
-              </div>
-            </div>
-          </div>
-
           {/* Color Presets */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
@@ -1140,6 +1121,24 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
         {/* Right Panel: Card Preview */}
         <div className="space-y-4">
+          {/* Color Calibration Workflow Info */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-blue-800 mb-2">
+              Color Calibration Workflow
+            </h4>
+            <div className="text-sm text-blue-700 space-y-1">
+              <p>1. Adjust color settings and see real-time preview on the right</p>
+              <p>2. Select a region for calibration testing</p>
+              <p>3. Configure grid axes (your current settings become the baseline)</p>
+              <p>4. Generate test grid PDF for physical printer comparison</p>
+              <p>5. Apply optimal settings from test results</p>
+            </div>
+            <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+              <span className="font-medium">💡 Tip:</span> The test grid uses your current color adjustments as the starting point, 
+              then varies the selected parameters around those values. This lets you iteratively refine your settings.
+            </div>
+          </div>
+
           {/* Card Preview */}
           <div className="border border-gray-200 rounded-lg overflow-hidden">
             <div className="bg-gray-50 p-3 border-b border-gray-200">
@@ -1441,18 +1440,6 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Panel: Calibration Settings */}
         <div className="space-y-4">
-          {/* Calibration Testing Info Box */}
-          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
-            <p className="text-sm text-purple-700 mb-3">
-              Generate test grids to fine-tune color settings for your specific printer and media. 
-              This step is optional - you can proceed directly to Export if your preview looks good.
-            </p>
-            <div className="bg-purple-100 rounded-md p-3 text-xs text-purple-800">
-              <p className="font-medium mb-1">How it works:</p>
-              <p>1. Select a crop region from your card • 2. Configure grid parameters • 3. Generate test PDF • 4. Print and compare results • 5. Apply best settings</p>
-            </div>
-          </div>
-
           {/* Test Grid Configuration */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <h4 className="text-sm font-medium text-gray-700 mb-3">
@@ -1795,6 +1782,18 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
         {/* Right Panel: Grid Preview */}
         <div className="space-y-4">
+          {/* Calibration Testing Info */}
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4">
+            <p className="text-sm text-purple-700 mb-3">
+              Generate test grids to fine-tune color settings for your specific printer and media. 
+              This step is optional - you can proceed directly to Export if your preview looks good.
+            </p>
+            <div className="bg-purple-100 rounded-md p-3 text-xs text-purple-800">
+              <p className="font-medium mb-1">How it works:</p>
+              <p>1. Select a crop region from your card • 2. Configure grid parameters • 3. Generate test PDF • 4. Print and compare results • 5. Apply best settings</p>
+            </div>
+          </div>
+
           {/* Grid Preview */}
           {colorSettings?.selectedRegion ? (
             <div className="p-4 bg-white border border-gray-200 rounded-lg">
