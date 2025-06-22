@@ -123,7 +123,7 @@ export function App() {
     component: <ColorCalibrationStep pdfData={pdfData} pdfMode={pdfMode} extractionSettings={extractionSettings} outputSettings={outputSettings} pageSettings={pageSettings} cardDimensions={cardDimensions} colorSettings={colorSettings} onColorSettingsChange={settings => setColorSettings(settings)} onPrevious={() => setCurrentStep(2)} onNext={() => setCurrentStep(4)} />
   }, {
     title: 'Export',
-    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(3)} />
+    component: <ExportStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} outputSettings={outputSettings} colorSettings={colorSettings} currentPdfFileName={currentPdfFileName} onPrevious={() => setCurrentStep(3)} />
   }];
 
   return <div className="flex flex-col w-full min-h-screen bg-gray-50">

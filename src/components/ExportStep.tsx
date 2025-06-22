@@ -14,6 +14,12 @@ import {
   calculateCardPositioning,
   processCardImageForRendering
 } from '../utils/renderUtils';
+import { 
+  applyColorTransformation,
+  getDefaultColorTransformation,
+  ColorTransformation,
+  hasNonDefaultColorSettings
+} from '../utils/colorUtils';
 import jsPDF from 'jspdf';
 
 interface ExportStepProps {
@@ -22,6 +28,7 @@ interface ExportStepProps {
   pageSettings: any;
   extractionSettings: any;
   outputSettings: any;
+  colorSettings: any;
   currentPdfFileName?: string;
   onPrevious: () => void;
 }
@@ -32,6 +39,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   pageSettings,
   extractionSettings,
   outputSettings,
+  colorSettings,
   currentPdfFileName,
   onPrevious
 }) => {
@@ -43,6 +51,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     fronts: null,
     backs: null
   });
+
+  // Get current color transformation settings
+  const currentColorTransformation: ColorTransformation = useMemo(() => {
+    return colorSettings?.finalAdjustments || getDefaultColorTransformation();
+  }, [colorSettings?.finalAdjustments]);
+
+  // Check if color adjustments are being applied
+  const hasColorAdjustments = useMemo(() => {
+    return hasNonDefaultColorSettings(currentColorTransformation);
+  }, [currentColorTransformation]);
 
   // Calculate total cards
   const activePages = useMemo(() => 
@@ -157,11 +175,13 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       });
 
       let cardCount = 0;
+      let colorTransformationCount = 0;
       
       // Find the maximum card index for iteration
       const maxCardIndex = activePages.length * cardsPerPage;
       
       console.log(`Processing up to ${maxCardIndex} card indices for ${cardType} cards...`);
+      console.log(`Color adjustments ${hasColorAdjustments ? 'will be applied' : 'are disabled (all settings are neutral)'} for ${cardType} cards`);
       
       // Process each card index to find cards of the specified type
       for (let cardIndex = 0; cardIndex < maxCardIndex; cardIndex++) {
@@ -195,7 +215,19 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           
           console.log(`Card ${cardInfo.id} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
           
-          const finalImageUrl = processedImage.imageUrl;
+          // Apply color transformation to the processed image
+          let finalImageUrl = processedImage.imageUrl;
+          if (hasColorAdjustments) {
+            try {
+              finalImageUrl = await applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
+              colorTransformationCount++;
+              console.log(`Applied color transformation to ${cardType} card ${cardInfo.id}`);
+            } catch (error) {
+              console.warn(`Failed to apply color transformation to ${cardType} card ${cardInfo.id}:`, error);
+              // Use original image if color transformation fails
+              finalImageUrl = processedImage.imageUrl;
+            }
+          }
           const finalX = positioning.x;
           const finalY = positioning.y;
           const finalWidth = positioning.width;
@@ -229,7 +261,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         }
       }
 
-      console.log(`${cardType} PDF generation completed with ${cardCount} cards`);
+      console.log(`${cardType} PDF generation completed with ${cardCount} cards${hasColorAdjustments ? `, ${colorTransformationCount} with color transformations applied` : ' (no color adjustments)'}`);
 
       if (cardCount === 0) return null;
 
@@ -368,6 +400,12 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
                 Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Color Adjustments:</span>
+              <span className={`font-medium ${hasColorAdjustments ? 'text-green-700' : 'text-gray-800'}`}>
+                {hasColorAdjustments ? '✓ Applied' : 'None'}
               </span>
             </div>
             <div className="flex justify-between text-sm">
