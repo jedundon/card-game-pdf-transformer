@@ -340,12 +340,38 @@ export function getDefaultColorTransformation(): ColorTransformation {
 }
 
 /**
+ * Check if a color transformation has any non-default values
+ */
+export function hasNonDefaultColorSettings(transformation: ColorTransformation): boolean {
+  const defaults = getDefaultColorTransformation();
+  
+  return (
+    transformation.brightness !== defaults.brightness ||
+    transformation.contrast !== defaults.contrast ||
+    transformation.saturation !== defaults.saturation ||
+    transformation.hue !== defaults.hue ||
+    transformation.gamma !== defaults.gamma ||
+    transformation.vibrance !== defaults.vibrance ||
+    transformation.redMultiplier !== defaults.redMultiplier ||
+    transformation.greenMultiplier !== defaults.greenMultiplier ||
+    transformation.blueMultiplier !== defaults.blueMultiplier ||
+    transformation.shadows !== defaults.shadows ||
+    transformation.highlights !== defaults.highlights ||
+    transformation.midtoneBalance !== defaults.midtoneBalance ||
+    transformation.blackPoint !== defaults.blackPoint ||
+    transformation.whitePoint !== defaults.whitePoint ||
+    transformation.outputBlack !== defaults.outputBlack ||
+    transformation.outputWhite !== defaults.outputWhite
+  );
+}
+
+/**
  * Color transformation presets for common printer/media combinations
  */
 export const COLOR_PRESETS = {
   'none': {
-    name: 'No Color Adjustment',
-    description: 'Original colors with no modifications',
+    name: 'Custom',
+    description: 'Use your own custom color adjustments',
     transformation: getDefaultColorTransformation()
   },
   'inkjet-glossy': {

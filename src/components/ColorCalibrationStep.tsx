@@ -20,7 +20,8 @@ import {
   ColorTransformation,
   COLOR_PRESETS,
   ColorPresetKey,
-  getTransformationRange
+  getTransformationRange,
+  hasNonDefaultColorSettings
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
@@ -600,6 +601,31 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
   // Helper function to apply color preset
   const applyColorPreset = useCallback((presetKey: ColorPresetKey) => {
+    // If user is selecting 'none' (custom), just update the preset selection
+    if (presetKey === 'none') {
+      const newSettings = {
+        ...colorSettings,
+        selectedPreset: presetKey
+      };
+      onColorSettingsChange(newSettings);
+      return;
+    }
+
+    // Check if user has non-default settings
+    const hasCustomSettings = hasNonDefaultColorSettings(currentColorTransformation);
+    
+    if (hasCustomSettings) {
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        `Applying "${COLOR_PRESETS[presetKey].name}" will overwrite your current color adjustments.\n\nDo you want to continue?`
+      );
+      
+      if (!confirmed) {
+        return; // User cancelled, don't apply preset
+      }
+    }
+
+    // Apply the preset
     const preset = COLOR_PRESETS[presetKey];
     const newSettings = {
       ...colorSettings,
@@ -607,7 +633,32 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       finalAdjustments: { ...preset.transformation }
     };
     onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange]);
+  }, [colorSettings, onColorSettingsChange, currentColorTransformation]);
+
+  // Helper function to reset all color adjustments
+  const resetAllAdjustments = useCallback(() => {
+    // Check if user has non-default settings
+    const hasCustomSettings = hasNonDefaultColorSettings(currentColorTransformation);
+    
+    if (hasCustomSettings) {
+      // Show confirmation dialog
+      const confirmed = window.confirm(
+        "This will reset all color adjustments to their default values.\n\nDo you want to continue?"
+      );
+      
+      if (!confirmed) {
+        return; // User cancelled, don't reset
+      }
+    }
+
+    // Reset to defaults
+    const newSettings = {
+      ...colorSettings,
+      selectedPreset: 'none',
+      finalAdjustments: { ...getDefaultColorTransformation() }
+    };
+    onColorSettingsChange(newSettings);
+  }, [colorSettings, onColorSettingsChange, currentColorTransformation]);
 
   // Helper function to update horizontal transformation type and auto-adjust range
   const updateHorizontalTransformationType = useCallback((type: string) => {
@@ -1110,7 +1161,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           {/* Reset Controls */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
             <button
-              onClick={() => applyColorPreset('none')}
+              onClick={resetAllAdjustments}
               className="w-full flex items-center justify-center px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
             >
               <RotateCcwIcon size={16} className="mr-2" />
