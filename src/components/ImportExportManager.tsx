@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SaveIcon, UploadIcon, SettingsIcon, TrashIcon, HardDriveIcon } from 'lucide-react';
+import { SaveIcon, UploadIcon, SettingsIcon, TrashIcon, HardDriveIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { WorkflowSettings, getDefaultSettingsForMode } from '../defaults';
 import { 
   clearLocalStorageSettings, 
@@ -30,6 +30,7 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
 }) => {
   const [settingsFileName, setSettingsFileName] = useState<string>('');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDocumentation, setShowDocumentation] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -154,50 +155,52 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
       </div>
       
       {isExpanded && (
-        <div className="p-4 border-t border-gray-200 space-y-4">
-          {/* Auto-save Status */}
-          <div className="bg-blue-50 p-3 rounded-md">
-            <div className="flex items-center space-x-2 mb-2">
-              <HardDriveIcon size={16} className="text-blue-600" />
-              <span className="text-sm font-medium text-blue-800">Auto-save Status</span>
+        <div className="p-3 border-t border-gray-200 space-y-3">
+          {/* Compact Auto-save Status */}
+          <div className="bg-blue-50 p-2 rounded-md">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <HardDriveIcon size={14} className="text-blue-600" />
+                <span className="text-xs font-medium text-blue-800">Auto-save:</span>
+                <span className="text-xs text-blue-700">{getAutoSaveInfo()}</span>
+              </div>
+              {autoSaveStatus && (
+                <span className="text-xs text-green-700 font-medium">{autoSaveStatus}</span>
+              )}
             </div>
-            <p className="text-xs text-blue-700">{getAutoSaveInfo()}</p>
-            {autoSaveStatus && (
-              <p className="text-xs text-green-700 mt-1 font-medium">{autoSaveStatus}</p>
-            )}
-            <p className="text-xs text-blue-600 mt-2">
-              Settings are automatically saved to your browser and restored when you return.
-            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">            
+          {/* Main Controls Grid - 3 columns for better space usage */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            {/* Column 1: File Name Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Custom Settings File Name (Optional)
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Custom File Name
               </label>
               <input
                 type="text"
                 placeholder={getDefaultFileName()}
                 value={settingsFileName}
                 onChange={(e) => setSettingsFileName(e.target.value)}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Leave empty to always use current PDF filename: <strong>{getDefaultFileName()}</strong>
+                Default: <strong>{getDefaultFileName()}</strong>
               </p>
             </div>
             
-            <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">
+            {/* Column 2: File Operations */}
+            <div>
+              <div className="text-xs font-medium text-gray-700 mb-1">
                 File Operations
               </div>
-              <div className="flex flex-col space-y-2">
+              <div className="space-y-1.5">
                 <button
                   onClick={handleSaveSettings}
-                  className="flex items-center justify-center bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 text-sm"
+                  className="w-full flex items-center justify-center bg-blue-600 text-white px-2 py-1.5 rounded-md hover:bg-blue-700 text-xs"
                 >
-                  <SaveIcon size={14} className="mr-2" />
-                  Export Settings to File
+                  <SaveIcon size={12} className="mr-1.5" />
+                  Export Settings
                 </button>
                 
                 <div className="relative">
@@ -210,60 +213,70 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
                   />
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-sm"
+                    className="w-full flex items-center justify-center bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 text-xs"
                   >
-                    <UploadIcon size={14} className="mr-2" />
-                    Import Settings from File
-                  </button>
-                </div>
-                
-                <div className="border-t pt-2 mt-2">
-                  <div className="text-xs font-medium text-gray-600 mb-2">
-                    Auto-save Controls
-                  </div>
-                  <button
-                    onClick={handleClearAutoSave}
-                    className="w-full flex items-center justify-center bg-orange-600 text-white px-3 py-2 rounded-md hover:bg-orange-700 text-sm"
-                    disabled={!hasAutoSavedSettings()}
-                  >
-                    <TrashIcon size={14} className="mr-2" />
-                    Clear Auto-saved Settings
-                  </button>
-                </div>
-                
-                <div className="border-t pt-2 mt-2">
-                  <button
-                    onClick={handleResetToDefaults}
-                    className="w-full flex items-center justify-center bg-gray-500 text-white px-3 py-2 rounded-md hover:bg-gray-600 text-sm"
-                  >
-                    Reset to Defaults
+                    <UploadIcon size={12} className="mr-1.5" />
+                    Import Settings
                   </button>
                 </div>
               </div>
             </div>
+            
+            {/* Column 3: System Operations */}
+            <div>
+              <div className="text-xs font-medium text-gray-700 mb-1">
+                System Controls
+              </div>
+              <div className="space-y-1.5">
+                <button
+                  onClick={handleClearAutoSave}
+                  className="w-full flex items-center justify-center bg-orange-600 text-white px-2 py-1.5 rounded-md hover:bg-orange-700 text-xs disabled:bg-gray-400"
+                  disabled={!hasAutoSavedSettings()}
+                >
+                  <TrashIcon size={12} className="mr-1.5" />
+                  Clear Auto-save
+                </button>
+                
+                <button
+                  onClick={handleResetToDefaults}
+                  className="w-full flex items-center justify-center bg-gray-500 text-white px-2 py-1.5 rounded-md hover:bg-gray-600 text-xs"
+                >
+                  Reset to Defaults
+                </button>
+              </div>
+            </div>
           </div>
-            <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded-md">
-            <p className="font-medium mb-1">File Import/Export includes:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>PDF mode and orientation settings</li>
-              <li>Page configuration (skip/type settings)</li>
-              <li>Card extraction settings (crop margins and grid)</li>
-              <li>Output layout settings (page size, offsets, rotation)</li>
-              <li>Color calibration settings (adjustments and presets)</li>
-            </ul>
-            <p className="mt-2 font-medium">Auto-save Features:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Settings automatically saved to browser storage</li>
-              <li>Restored when you reload or return to the page</li>
-              <li>Survives browser refresh and prevents data loss</li>
-              <li>Can be cleared manually for privacy</li>
-            </ul>
-            <p className="mt-2 font-medium">Notes:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>PDF file data is never saved (files or auto-save)</li>
-              <li>Imported settings override auto-saved settings</li>
-              <li>Files download to your browser's default Downloads folder</li>
-            </ul>
+
+          {/* Collapsible Documentation */}
+          <div className="border-t pt-2">
+            <button
+              onClick={() => setShowDocumentation(!showDocumentation)}
+              className="flex items-center justify-between w-full text-xs text-gray-600 hover:text-gray-800 transition-colors"
+            >
+              <span className="font-medium">Documentation & Details</span>
+              {showDocumentation ? (
+                <ChevronUpIcon size={14} />
+              ) : (
+                <ChevronDownIcon size={14} />
+              )}
+            </button>
+            
+            {showDocumentation && (
+              <div className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded-md space-y-2">
+                <div>
+                  <p className="font-medium mb-1">Import/Export includes:</p>
+                  <p className="text-xs leading-relaxed">
+                    PDF mode & orientation, page configuration, extraction settings, output layout, and color calibration.
+                  </p>
+                </div>
+                <div>
+                  <p className="font-medium mb-1">Auto-save:</p>
+                  <p className="text-xs leading-relaxed">
+                    Settings saved to browser storage, restored on page reload. PDF data never saved.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
