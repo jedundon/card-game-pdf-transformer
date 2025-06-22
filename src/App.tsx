@@ -131,8 +131,22 @@ export function App() {
     if (settings.pdfMode) {
       setPdfMode(settings.pdfMode);
     }
+    
+    // Handle pageSettings with validation against current PDF
     if (settings.pageSettings) {
-      setPageSettings(settings.pageSettings);
+      const currentPdfPageCount = pdfData && (pdfData as any).numPages;
+      const importedPageCount = settings.pageSettings.length;
+      
+      if (currentPdfPageCount && importedPageCount !== currentPdfPageCount) {
+        // Page count mismatch detected
+        console.warn(`Page count mismatch: Current PDF has ${currentPdfPageCount} pages, but imported settings are for ${importedPageCount} pages. Keeping current PDF's page count.`);
+        
+        // Only apply compatible settings (skip pageSettings)
+        // TODO: Show user warning dialog in future enhancement
+      } else {
+        // Safe to import pageSettings (same page count or no current PDF)
+        setPageSettings(settings.pageSettings);
+      }
     }
     if (settings.extractionSettings) {
       setExtractionSettings(settings.extractionSettings);
