@@ -77,6 +77,39 @@ export function calculateTotalCards(
 
 
 /**
+ * Helper function to count front pages up to a given index
+ */
+function countFrontPagesUpTo(activePages: PageSettings[], pageIndex: number): number {
+  let count = 0;
+  for (let i = 0; i <= pageIndex && i < activePages.length; i++) {
+    if (activePages[i]?.type === 'front') {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Helper function to count back pages up to a given index
+ */
+function countBackPagesUpTo(activePages: PageSettings[], pageIndex: number): number {
+  let count = 0;
+  for (let i = 0; i <= pageIndex && i < activePages.length; i++) {
+    if (activePages[i]?.type === 'back') {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Helper function to get total count of pages of a specific type
+ */
+function getTotalPagesOfType(activePages: PageSettings[], pageType: 'front' | 'back'): number {
+  return activePages.filter(page => page?.type === pageType).length;
+}
+
+/**
  * Calculate card front/back identification based on PDF mode
  */
 export function getCardInfo(
@@ -96,39 +129,88 @@ export function getCardInfo(
   const pageType = activePages[pageIndex]?.type || 'front';
   
   if (pdfMode.type === 'duplex') {
-    // In duplex mode, front and back pages alternate
-    // Calculate global card ID based on which front page this card logically belongs to
+    // In duplex mode, handle non-alternating pages and unequal page counts
+    // Use actual page types instead of positional assumptions
     
     if (pageType === 'front') {
-      // Front cards: global sequential numbering
-      // Find which front page this is (0-indexed)
-      const frontPageIndex = Math.floor(pageIndex / 2);
+      // Front cards: sequential numbering based on which front page this is
+      const frontPageIndex = countFrontPagesUpTo(activePages, pageIndex) - 1; // 0-indexed
       const globalCardId = frontPageIndex * cardsPerPage + cardOnPage + 1;
       return { type: 'Front', id: globalCardId };
     } else {
-      // Back cards: need to map physical position to logical card ID
-      // Find which front page this back page corresponds to
-      const correspondingFrontPageIndex = Math.floor((pageIndex - 1) / 2);
+      // Back cards: map to corresponding front cards based on logical position
+      const backPageIndex = countBackPagesUpTo(activePages, pageIndex) - 1; // 0-indexed
+      const totalFrontPages = getTotalPagesOfType(activePages, 'front');
+      const totalBackPages = getTotalPagesOfType(activePages, 'back');
       
+      // Calculate which front card this back corresponds to
+      let correspondingFrontPageIndex: number;
+      
+      if (totalBackPages === 1 && totalFrontPages > 1) {
+        // Special case: single back page for all fronts (common in card games)
+        // Map each back card position to corresponding front cards across all front pages
+        const totalFrontCards = totalFrontPages * cardsPerPage;
+        const backCardGlobalIndex = cardOnPage; // position within the single back page
+        
+        // Cycle through front cards if we have more front cards than back card positions
+        const targetFrontCardIndex = backCardGlobalIndex % totalFrontCards;
+        correspondingFrontPageIndex = Math.floor(targetFrontCardIndex / cardsPerPage);
+        const targetCardOnPage = targetFrontCardIndex % cardsPerPage;
+        
+        // Apply flip edge logic to get the actual card position on the back page
+        let logicalCardOnPage: number;
+        if (pdfMode.flipEdge === 'short') {
+          // Short edge flip: horizontally mirrored
+          const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
+          const col = targetCardOnPage % extractionSettings.grid.columns;
+          const flippedCol = extractionSettings.grid.columns - 1 - col;
+          logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+        } else {
+          // Long edge flip: vertically mirrored
+          const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
+          const col = targetCardOnPage % extractionSettings.grid.columns;
+          const flippedRow = extractionSettings.grid.rows - 1 - row;
+          logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+        }
+        
+        // Only assign back card ID if this matches our current card position
+        if (logicalCardOnPage === cardOnPage) {
+          const globalCardId = correspondingFrontPageIndex * cardsPerPage + targetCardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        } else {
+          // This back card position doesn't correspond to a front card
+          return { type: 'Back', id: cardOnPage + 1 };
+        }
+      } else {
+        // Normal case: map back pages to front pages proportionally
+        if (totalFrontPages === 0) {
+          // No front pages, treat as standalone back cards
+          const globalCardId = backPageIndex * cardsPerPage + cardOnPage + 1;
+          return { type: 'Back', id: globalCardId };
+        }
+        
+        // Map back page index to corresponding front page index
+        correspondingFrontPageIndex = Math.floor((backPageIndex * totalFrontPages) / Math.max(totalBackPages, 1));
+      }
+      
+      // Apply flip edge logic for normal cases
+      let logicalCardOnPage: number;
       if (pdfMode.flipEdge === 'short') {
         // Short edge flip: horizontally mirrored
-        // Top-left becomes top-right, etc.
         const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
         const col = cardOnPage % extractionSettings.grid.columns;
         const flippedCol = extractionSettings.grid.columns - 1 - col;
-        const logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
-        const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
-        return { type: 'Back', id: globalCardId };
+        logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
       } else {
         // Long edge flip: vertically mirrored
-        // Top-left becomes bottom-left, etc.
         const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
         const col = cardOnPage % extractionSettings.grid.columns;
         const flippedRow = extractionSettings.grid.rows - 1 - row;
-        const logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
-        const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
-        return { type: 'Back', id: globalCardId };
+        logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
       }
+      
+      const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+      return { type: 'Back', id: globalCardId };
     }
   } else if (pdfMode.type === 'gutter-fold') {
     // In gutter-fold mode, each page contains both front and back cards
