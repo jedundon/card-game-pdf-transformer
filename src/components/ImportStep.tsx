@@ -1,12 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { ChevronRightIcon, RotateCcwIcon, UploadIcon } from 'lucide-react';
+import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
+import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
 interface ImportStepProps {
-  onFileSelect: (data: any, fileName: string) => void;
+  onFileSelect: (data: any, fileName: string, file?: File) => void;
   onModeSelect: (mode: any) => void;
   onPageSettingsChange: (settings: any) => void;
   onNext: () => void;
@@ -16,6 +17,8 @@ interface ImportStepProps {
   pdfMode: any;
   pageSettings: any;
   autoRestoredSettings: boolean;
+  lastImportedFileInfo: LastImportedFileInfo | null;
+  onClearLastImportedFile: () => void;
 }
 export const ImportStep: React.FC<ImportStepProps> = ({
   onFileSelect,
@@ -27,7 +30,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   pdfData,
   pdfMode,
   pageSettings,
-  autoRestoredSettings
+  autoRestoredSettings,
+  lastImportedFileInfo,
+  onClearLastImportedFile
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -44,7 +49,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;
       setPageCount(pdf.numPages);
-      onFileSelect(pdf, file.name); // Pass the PDF.js document object and filename up
+      onFileSelect(pdf, file.name, file); // Pass the PDF.js document object, filename, and File object up
       // Initialize page settings with default values
       const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
         skip: false,
@@ -92,13 +97,48 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   };
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Import PDF File</h2>
+      
+      {/* Previously Imported File Display */}
+      {lastImportedFileInfo && !pdfData && (
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center mb-2">
+                <ClockIcon size={16} className="text-blue-600 mr-2" />
+                <h4 className="text-sm font-medium text-blue-800">
+                  Previously Imported File
+                </h4>
+              </div>
+              <div className="mb-2">
+                <p className="text-sm font-medium text-blue-900 mb-1">
+                  {lastImportedFileInfo.name}
+                </p>
+                <p className="text-xs text-blue-700">
+                  {formatFileSize(lastImportedFileInfo.size)} • {formatImportTimestamp(lastImportedFileInfo.importTimestamp)}
+                </p>
+              </div>
+              <p className="text-xs text-blue-600">
+                Upload the same file or choose a different one to continue working.
+              </p>
+            </div>
+            <button
+              onClick={onClearLastImportedFile}
+              className="ml-3 flex-shrink-0 p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-colors"
+              title="Clear previous file info"
+            >
+              <XIcon size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
         <input type="file" accept=".pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
         <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center mx-auto mb-4 w-16 h-16 bg-blue-50 rounded-full text-blue-600">
           <span className="material-icons" style={{ fontSize: 24 }}>upload</span>
         </button>
         <p className="text-gray-600 mb-2">
-          {fileName || 'Click to upload your print-and-play PDF file'}
+          {fileName || (lastImportedFileInfo ? `Click to upload a PDF file (last: ${lastImportedFileInfo.name})` : 'Click to upload your print-and-play PDF file')}
         </p>
         {fileName && <p className="text-green-600 text-sm">
             Successfully loaded: {fileName} ({pageCount} pages)

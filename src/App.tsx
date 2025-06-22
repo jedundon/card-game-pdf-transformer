@@ -10,7 +10,11 @@ import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults
 import { 
   saveSettingsToLocalStorage, 
   loadSettingsFromLocalStorage,
-  clearLocalStorageSettings
+  clearLocalStorageSettings,
+  getLastImportedFile,
+  saveLastImportedFile,
+  clearLastImportedFile,
+  LastImportedFileInfo
 } from './utils/localStorageUtils';
 import { getDefaultSettingsForMode } from './defaults';
 
@@ -20,6 +24,7 @@ export function App() {
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
   const [autoRestoredSettings, setAutoRestoredSettings] = useState(false);
   const [triggerImportSettings, setTriggerImportSettings] = useState<(() => void) | null>(null);
+  const [lastImportedFileInfo, setLastImportedFileInfo] = useState<LastImportedFileInfo | null>(null);
   const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
   const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
   const [cardDimensions, setCardDimensions] = useState<{
@@ -76,13 +81,20 @@ export function App() {
     }
   });
 
-  // Auto-restore settings from localStorage on app start
+  // Auto-restore settings and last imported file info from localStorage on app start
   useEffect(() => {
     const autoSavedSettings = loadSettingsFromLocalStorage();
     if (autoSavedSettings) {
       console.log('Auto-restoring settings from localStorage');
       handleLoadSettings(autoSavedSettings, true);
       setAutoRestoredSettings(true);
+    }
+
+    // Load last imported file info
+    const lastFileInfo = getLastImportedFile();
+    if (lastFileInfo) {
+      console.log('Found last imported file info:', lastFileInfo.name);
+      setLastImportedFileInfo(lastFileInfo);
     }
   }, []);
 
@@ -138,14 +150,34 @@ export function App() {
   };
 
   // Handle PDF file selection with filename tracking
-  const handleFileSelect = (data: any, fileName: string) => {
+  const handleFileSelect = (data: any, fileName: string, file?: File) => {
     setPdfData(data);
     setCurrentPdfFileName(fileName);
+    
+    // Save file info to localStorage if File object is provided
+    if (file) {
+      saveLastImportedFile(file);
+      // Update the current lastImportedFileInfo state
+      setLastImportedFileInfo({
+        name: file.name,
+        size: file.size,
+        lastModified: file.lastModified,
+        importTimestamp: new Date().toISOString(),
+        version: '1.0'
+      });
+    }
+  };
+
+  // Handle clearing last imported file info
+  const handleClearLastImportedFile = () => {
+    clearLastImportedFile();
+    setLastImportedFileInfo(null);
   };
 
   // Handle resetting to defaults (clears auto-save and resets to defaults)
   const handleResetToDefaults = () => {
     clearLocalStorageSettings();
+    clearLastImportedFile();
     const defaultsForCurrentMode = getDefaultSettingsForMode(DEFAULT_SETTINGS.pdfMode);
     setPdfMode(DEFAULT_SETTINGS.pdfMode);
     setPageSettings(DEFAULT_SETTINGS.pageSettings);
@@ -180,6 +212,7 @@ export function App() {
       }
     });
     setAutoRestoredSettings(false);
+    setLastImportedFileInfo(null);
   };
 
   // Handle triggering the import settings functionality
@@ -191,7 +224,7 @@ export function App() {
 
   const steps = [{
     title: 'Import PDF',
-    component: <ImportStep onFileSelect={(data, fileName) => handleFileSelect(data, fileName)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} onResetToDefaults={handleResetToDefaults} onTriggerImportSettings={handleTriggerImportSettings} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} autoRestoredSettings={autoRestoredSettings} />
+    component: <ImportStep onFileSelect={(data, fileName, file) => handleFileSelect(data, fileName, file)} onModeSelect={handleModeSelect} onPageSettingsChange={settings => setPageSettings(settings)} onNext={() => setCurrentStep(1)} onResetToDefaults={handleResetToDefaults} onTriggerImportSettings={handleTriggerImportSettings} pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} autoRestoredSettings={autoRestoredSettings} lastImportedFileInfo={lastImportedFileInfo} onClearLastImportedFile={handleClearLastImportedFile} />
   }, {
     title: 'Extract Cards',
     component: <ExtractStep pdfData={pdfData} pdfMode={pdfMode} pageSettings={pageSettings} extractionSettings={extractionSettings} onSettingsChange={settings => setExtractionSettings(settings)} onCardDimensionsChange={setCardDimensions} onPrevious={() => setCurrentStep(0)} onNext={() => setCurrentStep(2)} />
