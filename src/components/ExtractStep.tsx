@@ -86,7 +86,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
   }, [cardType, cardId, pdfMode, totalCards, activePages, cardsPerPage, extractionSettings]);
 
-  // Calculate card dimensions for display
+  // Calculate card dimensions for display with rotation effects
   const cardDimensions = useMemo(() => {
     if (!pdfData || !activePages.length || !renderedPageData) {
       return null;
@@ -125,20 +125,45 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         cardHeightPx = croppedHeight / extractionSettings.grid.rows;
       }
 
+      // Apply individual card crop if specified
+      if (extractionSettings.cardCrop) {
+        cardWidthPx = Math.max(1, cardWidthPx - (extractionSettings.cardCrop.left || 0) - (extractionSettings.cardCrop.right || 0));
+        cardHeightPx = Math.max(1, cardHeightPx - (extractionSettings.cardCrop.top || 0) - (extractionSettings.cardCrop.bottom || 0));
+      }
+
+      // Get current card type and rotation for this specific card
+      const currentCardInfo = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const currentCardType = currentCardInfo.type.toLowerCase() as 'front' | 'back';
+      const currentRotation = extractionSettings.imageRotation?.[currentCardType] || 0;
+
+      // Apply rotation effects to displayed dimensions
+      let finalWidthPx = cardWidthPx;
+      let finalHeightPx = cardHeightPx;
+      
+      // For 90° or 270° rotations, swap width and height
+      if (currentRotation === 90 || currentRotation === 270) {
+        finalWidthPx = cardHeightPx;
+        finalHeightPx = cardWidthPx;
+      }
+
       // Convert to inches (300 DPI means 300 pixels per inch)
-      const cardWidthInches = cardWidthPx / DPI_CONSTANTS.EXTRACTION_DPI;
-      const cardHeightInches = cardHeightPx / DPI_CONSTANTS.EXTRACTION_DPI;
+      const cardWidthInches = finalWidthPx / DPI_CONSTANTS.EXTRACTION_DPI;
+      const cardHeightInches = finalHeightPx / DPI_CONSTANTS.EXTRACTION_DPI;
 
       return {
-        widthPx: Math.round(cardWidthPx),
-        heightPx: Math.round(cardHeightPx),
+        widthPx: Math.round(finalWidthPx),
+        heightPx: Math.round(finalHeightPx),
         widthInches: cardWidthInches,
-        heightInches: cardHeightInches
+        heightInches: cardHeightInches,
+        originalWidthPx: Math.round(cardWidthPx),
+        originalHeightPx: Math.round(cardHeightPx),
+        rotation: currentRotation,
+        cardType: currentCardType
       };
     } catch (error) {
       console.error('Error calculating card dimensions:', error);
       return null;
-    }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode]);
+    }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode, globalCardIndex, cardsPerPage]);
 
   // Notify parent component when card dimensions change
   useEffect(() => {
@@ -714,19 +739,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </>
           )}
 
-          {/* Card dimensions display */}
-          {cardDimensions && (
-            <div className="p-3 bg-gray-50 rounded-md">
-              <div className="flex items-center">
-                <span className="text-sm font-medium text-gray-800 mr-3">
-                  Card Dimensions:
-                </span>
-                <span className="text-sm text-gray-600">
-                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* 300 DPI indicator */}
           <div className="p-3 bg-blue-50 rounded-md">
@@ -1033,6 +1045,40 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                 Reset All
               </button>
             </div>
+
+            {/* Card Dimensions Display */}
+            {cardDimensions && (
+              <div className="mb-4 p-3 bg-gray-50 rounded-md">
+                <h5 className="text-xs font-medium text-gray-700 mb-2">
+                  Extracted Card Dimensions
+                </h5>
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Final Size:</span>
+                    <span className="font-medium text-gray-800">
+                      {cardDimensions.widthPx} × {cardDimensions.heightPx} px
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Inches:</span>
+                    <span className="font-medium text-gray-800">
+                      {cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}"
+                    </span>
+                  </div>
+                  {cardDimensions.rotation !== 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Rotation Applied:</span>
+                      <span className="font-medium text-blue-600">
+                        {cardDimensions.rotation}° ({cardDimensions.cardType})
+                      </span>
+                    </div>
+                  )}
+                  <div className="text-xs text-gray-500 mt-2">
+                    Live preview updates as you change settings above
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Image Rotation Controls */}
             <div className="mb-4">

@@ -560,8 +560,8 @@ export function countCardsByType(
 export function calculatePreviewScale(
   pageWidth: number,
   pageHeight: number,
-  maxWidth: number = 400,
-  maxHeight: number = 500
+  maxWidth = 400,
+  maxHeight = 500
 ): { scale: number; previewWidth: number; previewHeight: number } {
   let width = pageWidth * DPI_CONSTANTS.SCREEN_DPI;
   let height = pageHeight * DPI_CONSTANTS.SCREEN_DPI;
