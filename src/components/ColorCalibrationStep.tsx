@@ -200,7 +200,24 @@ const GridPreview: React.FC<GridPreviewProps> = ({
   return (
     <div className="bg-gray-50 p-3 rounded-md">
       <div className="relative" style={{ maxWidth: '280px', margin: '0 auto' }}>
-        {/* Column labels (top) */}
+        {/* Column header with transformation type label */}
+        <div 
+          className="grid gap-1 mb-1"
+          style={{ 
+            gridTemplateColumns: `20px repeat(${gridConfig.columns}, 1fr)`,
+            marginBottom: '2px'
+          }}
+        >
+          <div></div> {/* Empty space above row labels */}
+          <div 
+            className="text-xs font-medium text-gray-700 text-center capitalize"
+            style={{ gridColumn: `2 / ${gridConfig.columns + 2}` }}
+          >
+            {transformations.horizontal.type}
+          </div>
+        </div>
+        
+        {/* Column value labels */}
         <div 
           className="grid gap-1 mb-1"
           style={{ 
@@ -227,7 +244,20 @@ const GridPreview: React.FC<GridPreviewProps> = ({
           {Array.from({ length: gridConfig.rows }).map((_, rowIndex) => (
             <React.Fragment key={`row-${rowIndex}`}>
               {/* Row label */}
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center relative">
+                {rowIndex === Math.floor(gridConfig.rows / 2) && (
+                  <div 
+                    className="absolute text-xs font-medium text-gray-700 capitalize"
+                    style={{ 
+                      transform: 'rotate(-90deg)',
+                      whiteSpace: 'nowrap',
+                      left: '-45px',
+                      transformOrigin: 'center'
+                    }}
+                  >
+                    {transformations.vertical.type}
+                  </div>
+                )}
                 <div 
                   className="text-xs text-gray-600 text-center font-mono"
                   style={{ 
@@ -270,11 +300,8 @@ const GridPreview: React.FC<GridPreviewProps> = ({
       
       <div className="mt-3 text-xs text-gray-600 space-y-1">
         <p>
-          <span className="font-medium">Columns:</span> {transformations.horizontal.type} 
-          ({transformations.horizontal.min} to {transformations.horizontal.max})
-        </p>
-        <p>
-          <span className="font-medium">Rows:</span> {transformations.vertical.type} 
+          <span className="font-medium">Range:</span> {transformations.horizontal.type} 
+          ({transformations.horizontal.min} to {transformations.horizontal.max}) × {transformations.vertical.type} 
           ({transformations.vertical.min} to {transformations.vertical.max})
         </p>
         <p className="text-gray-500">
