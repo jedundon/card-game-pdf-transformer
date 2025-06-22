@@ -37,25 +37,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
   const [pageCount, setPageCount] = useState<number>(0);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [dragError, setDragError] = useState<string>('');
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setFileName(file.name);
-      setPageCount(0); // Reset page count
-      onPageSettingsChange([]); // Reset page settings
-      // Read the file as ArrayBuffer
-      const arrayBuffer = await file.arrayBuffer();
-      // Load PDF using pdfjs-dist
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdf = await loadingTask.promise;
-      setPageCount(pdf.numPages);
-      onFileSelect(pdf, file.name, file); // Pass the PDF.js document object, filename, and File object up
-      // Initialize page settings with default values
-      const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
-        skip: false,
-        type: i % 2 === 0 ? 'front' : 'back' // Default alternating front/back for duplex
-      }));
-      onPageSettingsChange(initialPageSettings);
+      await processFile(file);
     }
   };
   const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -95,6 +82,125 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     };
     onPageSettingsChange(newSettings);
   };
+  
+  // File processing helper function (shared between drag/drop and file input)
+  const processFile = async (file: File) => {
+    setFileName(file.name);
+    setPageCount(0); // Reset page count
+    setDragError(''); // Clear any previous errors
+    onPageSettingsChange([]); // Reset page settings
+    
+    try {
+      // Read the file as ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+      // Load PDF using pdfjs-dist
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      setPageCount(pdf.numPages);
+      onFileSelect(pdf, file.name, file); // Pass the PDF.js document object, filename, and File object up
+      // Initialize page settings with default values
+      const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
+        skip: false,
+        type: i % 2 === 0 ? 'front' : 'back' // Default alternating front/back for duplex
+      }));
+      onPageSettingsChange(initialPageSettings);
+    } catch (error) {
+      console.error('Error processing PDF file:', error);
+      setDragError('Failed to process PDF file. Please try a different file.');
+    }
+  };
+  
+  // Validate if file is a PDF
+  const isValidPdfFile = (file: File): boolean => {
+    const validTypes = ['application/pdf'];
+    const validExtensions = ['.pdf'];
+    
+    // Check MIME type
+    if (!validTypes.includes(file.type)) {
+      return false;
+    }
+    
+    // Check file extension
+    const fileName = file.name.toLowerCase();
+    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    
+    return hasValidExtension;
+  };
+  
+  // Drag and drop event handlers
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+    setDragError('');
+  };
+  
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Validate dragged files
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      const item = e.dataTransfer.items[0];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file && !isValidPdfFile(file)) {
+          setDragError('Only PDF files are supported');
+        } else {
+          setDragError('');
+        }
+      }
+    }
+  };
+  
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only reset drag state if we're actually leaving the drop zone
+    // Check if the mouse is leaving to go to a child element
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isLeavingDropZone = (
+      e.clientX < rect.left ||
+      e.clientX > rect.right ||
+      e.clientY < rect.top ||
+      e.clientY > rect.bottom
+    );
+    
+    if (isLeavingDropZone) {
+      setIsDragOver(false);
+      setDragError('');
+    }
+  };
+  
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    
+    if (files.length === 0) {
+      setDragError('No files were dropped');
+      return;
+    }
+    
+    if (files.length > 1) {
+      setDragError('Please drop only one PDF file at a time');
+      return;
+    }
+    
+    const file = files[0];
+    
+    if (!isValidPdfFile(file)) {
+      setDragError('Only PDF files are supported. Please drop a valid PDF file.');
+      return;
+    }
+    
+    // Process the dropped PDF file
+    await processFile(file);
+  };
+  
   return <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Import PDF File</h2>
       
@@ -132,17 +238,52 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         </div>
       )}
       
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+      <div 
+        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          isDragOver 
+            ? 'border-blue-400 bg-blue-50' 
+            : dragError 
+              ? 'border-red-400 bg-red-50' 
+              : 'border-gray-300 bg-white'
+        }`}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <input type="file" accept=".pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center mx-auto mb-4 w-16 h-16 bg-blue-50 rounded-full text-blue-600">
-          <span className="material-icons" style={{ fontSize: 24 }}>upload</span>
+        <button 
+          onClick={() => fileInputRef.current?.click()} 
+          className={`flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full transition-colors ${
+            isDragOver 
+              ? 'bg-blue-100 text-blue-700' 
+              : dragError 
+                ? 'bg-red-100 text-red-600' 
+                : 'bg-blue-50 text-blue-600'
+          }`}
+        >
+          <UploadIcon size={24} />
         </button>
-        <p className="text-gray-600 mb-2">
-          {fileName || (lastImportedFileInfo ? `Click to upload a PDF file (last: ${lastImportedFileInfo.name})` : 'Click to upload your print-and-play PDF file')}
+        <p className={`mb-2 ${isDragOver ? 'text-blue-700' : dragError ? 'text-red-600' : 'text-gray-600'}`}>
+          {isDragOver 
+            ? 'Drop your PDF file here' 
+            : fileName 
+              ? `Successfully loaded: ${fileName} (${pageCount} pages)`
+              : lastImportedFileInfo 
+                ? `Drag & drop or click to upload a PDF file (last: ${lastImportedFileInfo.name})` 
+                : 'Drag & drop your PDF file here or click to browse'
+          }
         </p>
-        {fileName && <p className="text-green-600 text-sm">
+        {dragError && (
+          <p className="text-red-600 text-sm mt-2 font-medium">
+            {dragError}
+          </p>
+        )}
+        {fileName && !dragError && (
+          <p className="text-green-600 text-sm">
             Successfully loaded: {fileName} ({pageCount} pages)
-          </p>}
+          </p>
+        )}
       </div>
       
       {/* Auto-restored Settings Notification */}
