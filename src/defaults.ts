@@ -149,6 +149,33 @@ export type WorkflowSettings = {
     };
     cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
   };
+  colorSettings: {
+    selectedRegion: any;
+    gridConfig: { columns: number; rows: number };
+    transformations: {
+      horizontal: { type: string; min: number; max: number };
+      vertical: { type: string; min: number; max: number };
+    };
+    selectedPreset: any;
+    finalAdjustments: {
+      brightness: number;
+      contrast: number;
+      saturation: number;
+      hue: number;
+      gamma: number;
+      vibrance: number;
+      redMultiplier: number;
+      greenMultiplier: number;
+      blueMultiplier: number;
+      shadows: number;
+      highlights: number;
+      midtoneBalance: number;
+      blackPoint: number;
+      whitePoint: number;
+      outputBlack: number;
+      outputWhite: number;
+    };
+  };
   savedAt?: string;
   version?: string;
 };

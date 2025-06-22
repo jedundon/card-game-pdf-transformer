@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ImportStep } from './components/ImportStep';
 import { ExtractStep } from './components/ExtractStep';
 import { ConfigureStep } from './components/ConfigureStep';
 import { ColorCalibrationStep } from './components/ColorCalibrationStep';
 import { ExportStep } from './components/ExportStep';
 import { StepIndicator } from './components/StepIndicator';
-import { SettingsManager } from './components/SettingsManager';
+import { ImportExportManager } from './components/ImportExportManager';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
+import { 
+  saveSettingsToLocalStorage, 
+  loadSettingsFromLocalStorage
+} from './utils/localStorageUtils';
 
 export function App() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -68,6 +72,24 @@ export function App() {
     }
   });
 
+  // Auto-restore settings from localStorage on app start
+  useEffect(() => {
+    const autoSavedSettings = loadSettingsFromLocalStorage();
+    if (autoSavedSettings) {
+      console.log('Auto-restoring settings from localStorage');
+      handleLoadSettings(autoSavedSettings);
+    }
+  }, []);
+
+  // Auto-save settings whenever they change (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      saveSettingsToLocalStorage(pdfMode, pageSettings, extractionSettings, outputSettings, colorSettings);
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [pdfMode, pageSettings, extractionSettings, outputSettings, colorSettings]);
+
   // Handle PDF mode changes and update grid and rotation defaults
   const handleModeSelect = (mode: any) => {
     setPdfMode(mode);
@@ -100,6 +122,9 @@ export function App() {
     }
     if (settings.outputSettings) {
       setOutputSettings(settings.outputSettings);
+    }
+    if (settings.colorSettings) {
+      setColorSettings(settings.colorSettings);
     }
   };
 
@@ -135,13 +160,14 @@ export function App() {
       <main className="flex-1 p-4 md:p-6">
         <StepIndicator steps={steps.map(s => s.title)} currentStep={currentStep} />
         
-        {/* Settings Manager - Always visible */}
+        {/* Import/Export Manager - Always visible */}
         <div className="mt-6">
-          <SettingsManager
+          <ImportExportManager
             pdfMode={pdfMode}
             pageSettings={pageSettings}
             extractionSettings={extractionSettings}
             outputSettings={outputSettings}
+            colorSettings={colorSettings}
             currentPdfFileName={currentPdfFileName}
             onLoadSettings={handleLoadSettings}
           />
