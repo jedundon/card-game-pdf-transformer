@@ -59,6 +59,10 @@ export const DEFAULT_SETTINGS = {
       right: 0,
       bottom: 0,
       left: 0
+    },
+    imageRotation: {
+      front: 0,
+      back: 0
     }
   },  outputSettings: {
     pageSize: {
@@ -128,6 +132,10 @@ export type WorkflowSettings = {
       right: number;
       bottom: number;
       left: number;
+    };
+    imageRotation: {
+      front: number;
+      back: number;
     };
   };  outputSettings: {
     pageSize: {

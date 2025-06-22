@@ -32,6 +32,10 @@ interface ExtractionSettings {
     top: number;
     bottom: number;
   };
+  imageRotation?: {
+    front: number;
+    back: number;
+  };
 }
 
 interface CardInfo {
@@ -362,6 +366,7 @@ export async function extractCardImage(
     );
 
     // Apply individual card cropping if specified
+    let finalCanvas = cardCanvas;
     if (extractionSettings.cardCrop && 
         (extractionSettings.cardCrop.top > 0 || extractionSettings.cardCrop.right > 0 || 
          extractionSettings.cardCrop.bottom > 0 || extractionSettings.cardCrop.left > 0)) {
@@ -386,13 +391,56 @@ export async function extractCardImage(
             0, 0, croppedCardWidth, croppedCardHeight
           );
           
-          const dataUrl = croppedCanvas.toDataURL('image/png');
-          return dataUrl;
+          finalCanvas = croppedCanvas;
         }
       }
     }
 
-    const dataUrl = cardCanvas.toDataURL('image/png');
+    // Apply image rotation if specified
+    if (extractionSettings.imageRotation) {
+      // Determine card type to get appropriate rotation
+      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
+      const rotation = extractionSettings.imageRotation[cardType] || 0;
+      
+      if (rotation !== 0) {
+        // Create a new canvas for the rotated card
+        const rotatedCanvas = document.createElement('canvas');
+        const rotatedContext = rotatedCanvas.getContext('2d');
+        
+        if (rotatedContext) {
+          // For 90° or 270° rotations, swap width and height
+          if (rotation === 90 || rotation === 270) {
+            rotatedCanvas.width = finalCanvas.height;
+            rotatedCanvas.height = finalCanvas.width;
+          } else {
+            rotatedCanvas.width = finalCanvas.width;
+            rotatedCanvas.height = finalCanvas.height;
+          }
+          
+          // Clear canvas and apply rotation
+          rotatedContext.clearRect(0, 0, rotatedCanvas.width, rotatedCanvas.height);
+          rotatedContext.save();
+          
+          // Move to center and apply rotation
+          rotatedContext.translate(rotatedCanvas.width / 2, rotatedCanvas.height / 2);
+          const radians = (rotation * Math.PI) / 180;
+          rotatedContext.rotate(radians);
+          
+          // Draw the image centered
+          rotatedContext.drawImage(
+            finalCanvas, 
+            -finalCanvas.width / 2, 
+            -finalCanvas.height / 2
+          );
+          
+          rotatedContext.restore();
+          finalCanvas = rotatedCanvas;
+        }
+      }
+    }
+
+    const dataUrl = finalCanvas.toDataURL('image/png');
     return dataUrl;
   } catch (error) {
     console.error('Error in high-DPI card extraction:', error);
@@ -561,13 +609,14 @@ export function calculateCardImageDimensions(
       let finalHeightInches = imageHeightInches;
       
       switch (sizingMode) {
-        case 'actual-size':
+        case 'actual-size': {
           // Use the image at its original size (no scaling)
           finalWidthInches = imageWidthInches;
           finalHeightInches = imageHeightInches;
           break;
+        }
           
-        case 'fit-to-card':
+        case 'fit-to-card': {
           // Scale the image to fit entirely within the card boundaries, maintaining aspect ratio
           const imageAspectRatio = imageWidthInches / imageHeightInches;
           const cardAspectRatio = targetCardWidthInches / targetCardHeightInches;
@@ -582,8 +631,9 @@ export function calculateCardImageDimensions(
             finalWidthInches = targetCardHeightInches * imageAspectRatio;
           }
           break;
+        }
           
-        case 'fill-card':
+        case 'fill-card': {
           // Scale the image to fill the entire card area, maintaining aspect ratio (may crop edges)
           const imageAspectRatioFill = imageWidthInches / imageHeightInches;
           const cardAspectRatioFill = targetCardWidthInches / targetCardHeightInches;
@@ -598,6 +648,7 @@ export function calculateCardImageDimensions(
             finalHeightInches = targetCardWidthInches / imageAspectRatioFill;
           }
           break;
+        }
       }
       
       resolve({
