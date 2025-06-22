@@ -42,7 +42,7 @@ export function App() {
   // Initialize color calibration settings
   const [colorSettings, setColorSettings] = useState({
     selectedRegion: null,
-    gridConfig: { columns: 5, rows: 4 },
+    gridConfig: { columns: 4, rows: 4 },
     transformations: {
       horizontal: { type: 'brightness', min: -20, max: 20 },
       vertical: { type: 'contrast', min: 0.8, max: 1.3 }

@@ -25,6 +25,266 @@ import {
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
+// GridPreview component for showing the actual calibration grid
+interface GridPreviewProps {
+  cropImageUrl: () => Promise<string | null>;
+  gridConfig: { columns: number; rows: number };
+  transformations: {
+    horizontal: { type: string; min: number; max: number };
+    vertical: { type: string; min: number; max: number };
+  };
+  userColorSettings: ColorTransformation;
+}
+
+const GridPreview: React.FC<GridPreviewProps> = ({ 
+  cropImageUrl, 
+  gridConfig, 
+  transformations, 
+  userColorSettings 
+}) => {
+  const [gridImages, setGridImages] = useState<(string | null)[][]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Generate transformation values for each axis (copied from calibrationUtils.ts)
+  const generateTransformationValues = useCallback((min: number, max: number, count: number): number[] => {
+    if (count === 1) return [(min + max) / 2];
+    
+    const values: number[] = [];
+    const step = (max - min) / (count - 1);
+    
+    for (let i = 0; i < count; i++) {
+      values.push(min + i * step);
+    }
+    
+    return values;
+  }, []);
+
+  // Apply transformation value to transformation object (copied from calibrationUtils.ts)
+  const applyTransformationValue = useCallback((
+    transformation: ColorTransformation,
+    type: string,
+    value: number
+  ): void => {
+    (transformation as any)[type] = value;
+  }, []);
+
+  // Generate grid images with transformations
+  const generateGridImages = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const cropImage = await cropImageUrl();
+      if (!cropImage) {
+        setGridImages([]);
+        return;
+      }
+
+      const horizontalValues = generateTransformationValues(
+        transformations.horizontal.min,
+        transformations.horizontal.max,
+        gridConfig.columns
+      );
+
+      const verticalValues = generateTransformationValues(
+        transformations.vertical.min,
+        transformations.vertical.max,
+        gridConfig.rows
+      );
+
+      const newGridImages: (string | null)[][] = [];
+      
+      for (let row = 0; row < gridConfig.rows; row++) {
+        const rowImages: (string | null)[] = [];
+        
+        for (let col = 0; col < gridConfig.columns; col++) {
+          try {
+            // Create transformation for this cell - start with user's current settings
+            const transformation: ColorTransformation = { ...userColorSettings };
+            
+            // Apply horizontal transformation (column-based)
+            const horizontalValue = horizontalValues[col];
+            applyTransformationValue(transformation, transformations.horizontal.type, horizontalValue);
+            
+            // Apply vertical transformation (row-based)
+            const verticalValue = verticalValues[row];
+            applyTransformationValue(transformation, transformations.vertical.type, verticalValue);
+
+            // Apply color transformation to crop image
+            const transformedImageUrl = await applyColorTransformation(cropImage, transformation);
+            rowImages.push(transformedImageUrl);
+          } catch (error) {
+            console.warn(`Failed to generate cell image for row ${row}, col ${col}:`, error);
+            rowImages.push(null);
+          }
+        }
+        
+        newGridImages.push(rowImages);
+      }
+
+      setGridImages(newGridImages);
+    } catch (error) {
+      console.warn('Failed to generate grid preview:', error);
+      setGridImages([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [cropImageUrl, gridConfig, transformations, userColorSettings, generateTransformationValues, applyTransformationValue]);
+
+  // Regenerate grid when settings change
+  useEffect(() => {
+    generateGridImages();
+  }, [generateGridImages]);
+
+  if (isLoading) {
+    return (
+      <div className="bg-gray-50 p-8 rounded-md text-center">
+        <div className="text-gray-400 mb-2">
+          <svg className="animate-spin mx-auto h-8 w-8" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <p className="text-sm text-gray-500">Generating grid preview...</p>
+      </div>
+    );
+  }
+
+  if (gridImages.length === 0) {
+    return (
+      <div className="bg-gray-50 p-8 rounded-md text-center">
+        <p className="text-sm text-gray-500">Failed to generate grid preview</p>
+      </div>
+    );
+  }
+
+  // Generate transformation values for labels (same as used for images)
+  const horizontalValues = generateTransformationValues(
+    transformations.horizontal.min,
+    transformations.horizontal.max,
+    gridConfig.columns
+  );
+
+  const verticalValues = generateTransformationValues(
+    transformations.vertical.min,
+    transformations.vertical.max,
+    gridConfig.rows
+  );
+
+  // Format transformation values for display (copied from calibrationUtils.ts)
+  const formatTransformationValue = (type: string, value: number): string => {
+    const range = getTransformationRange(type);
+    switch (type) {
+      case 'brightness':
+      case 'saturation':
+      case 'hue':
+      case 'vibrance':
+      case 'shadows':
+      case 'highlights':
+      case 'midtoneBalance':
+        return `${value >= 0 ? '+' : ''}${Math.round(value)}${range.unit}`;
+      case 'contrast':
+      case 'gamma':
+      case 'redMultiplier':
+      case 'greenMultiplier':
+      case 'blueMultiplier':
+        return `${value.toFixed(2)}${range.unit}`;
+      case 'blackPoint':
+      case 'whitePoint':
+      case 'outputBlack':
+      case 'outputWhite':
+        return `${Math.round(value)}${range.unit}`;
+      default:
+        return `${value.toFixed(1)}${range.unit}`;
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 p-3 rounded-md">
+      <div className="relative" style={{ maxWidth: '280px', margin: '0 auto' }}>
+        {/* Column labels (top) */}
+        <div 
+          className="grid gap-1 mb-1"
+          style={{ 
+            gridTemplateColumns: `20px repeat(${gridConfig.columns}, 1fr)`,
+            marginBottom: '4px'
+          }}
+        >
+          <div></div> {/* Empty space above row labels */}
+          {horizontalValues.map((value, index) => (
+            <div key={index} className="text-xs text-gray-600 text-center font-mono">
+              {formatTransformationValue(transformations.horizontal.type, value)}
+            </div>
+          ))}
+        </div>
+
+        {/* Grid with row labels */}
+        <div 
+          className="grid gap-1"
+          style={{ 
+            gridTemplateColumns: `20px repeat(${gridConfig.columns}, 1fr)`,
+            gridTemplateRows: `repeat(${gridConfig.rows}, 1fr)`
+          }}
+        >
+          {Array.from({ length: gridConfig.rows }).map((_, rowIndex) => (
+            <React.Fragment key={`row-${rowIndex}`}>
+              {/* Row label */}
+              <div className="flex items-center justify-center">
+                <div 
+                  className="text-xs text-gray-600 text-center font-mono"
+                  style={{ 
+                    transform: 'rotate(-90deg)',
+                    whiteSpace: 'nowrap',
+                    minWidth: '20px'
+                  }}
+                >
+                  {formatTransformationValue(transformations.vertical.type, verticalValues[rowIndex])}
+                </div>
+              </div>
+              
+              {/* Grid cells for this row */}
+              {Array.from({ length: gridConfig.columns }).map((_, colIndex) => {
+                const imageUrl = gridImages[rowIndex]?.[colIndex];
+                return (
+                  <div
+                    key={`${rowIndex}-${colIndex}`}
+                    className="bg-gray-200 border border-gray-300 rounded-sm aspect-square overflow-hidden"
+                    title={`${transformations.horizontal.type}: ${formatTransformationValue(transformations.horizontal.type, horizontalValues[colIndex])}, ${transformations.vertical.type}: ${formatTransformationValue(transformations.vertical.type, verticalValues[rowIndex])}`}
+                  >
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={`Grid cell with transformations`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-xs text-gray-400">✗</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+      
+      <div className="mt-3 text-xs text-gray-600 space-y-1">
+        <p>
+          <span className="font-medium">Columns:</span> {transformations.horizontal.type} 
+          ({transformations.horizontal.min} to {transformations.horizontal.max})
+        </p>
+        <p>
+          <span className="font-medium">Rows:</span> {transformations.vertical.type} 
+          ({transformations.vertical.min} to {transformations.vertical.max})
+        </p>
+        <p className="text-gray-500">
+          Hover over cells to see exact transformation values
+        </p>
+      </div>
+    </div>
+  );
+};
+
 interface ColorCalibrationStepProps {
   pdfData: any;
   pdfMode: any;
@@ -76,7 +336,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const cropRegionDimensions = useMemo(() => {
     if (!cardRenderData) return null;
     
-    const gridColumns = colorSettings?.gridConfig?.columns || 5;
+    const gridColumns = colorSettings?.gridConfig?.columns || 4;
     const gridRows = colorSettings?.gridConfig?.rows || 4;
     
     // Calculate crop region size in preview pixels
@@ -512,8 +772,9 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         </div>
       )}
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Panel: Color Controls */}
+      {/* First Row: Basic Color Controls and Card Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Left Panel: Basic Color Controls */}
         <div className="space-y-4">
           <div>
             <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
@@ -868,7 +1129,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <div className="text-sm text-gray-600 space-y-2">
               <p>
                 <span className="font-medium">Grid size:</span>{' '}
-                {colorSettings?.gridConfig?.columns || 5}×{colorSettings?.gridConfig?.rows || 4}
+                {colorSettings?.gridConfig?.columns || 4}×{colorSettings?.gridConfig?.rows || 4}
               </p>
               {cropRegionDimensions && (
                 <p>
@@ -891,6 +1152,215 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               )}
             </div>
           </div>
+        </div>
+
+        {/* Right Panel: Card Preview */}
+        <div className="space-y-4">
+          {/* Card Preview */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 p-3 border-b border-gray-200">
+              {/* Combined Controls Row */}
+              <div className="relative flex items-center">
+                {/* View Mode Toggle - Left */}
+                <div className="flex bg-gray-200 rounded-lg p-1">
+                  <button
+                    onClick={() => handleViewModeToggle('front')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'front'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Fronts
+                  </button>
+                  <button
+                    onClick={() => handleViewModeToggle('back')}
+                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                      viewMode === 'back'
+                        ? 'bg-white text-gray-900 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Backs
+                  </button>
+                </div>
+                
+                {/* Card Navigation - Perfectly Centered */}
+                <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
+                  <button 
+                    onClick={handlePreviousCard} 
+                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === 0} 
+                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ChevronLeftIcon size={16} />
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    {totalFilteredCards > 0 && currentCardExists ? `${viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} ${currentCardPosition} of ${totalFilteredCards}` : `No ${viewMode} cards`}
+                  </span>
+                  <button 
+                    onClick={handleNextCard} 
+                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === availableCardIds.length - 1} 
+                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    <ChevronRightIcon size={16} />
+                  </button>
+                </div>
+                
+                {/* Card ID - Right */}
+                <div className="ml-auto text-sm text-gray-500">
+                  {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Card Preview Area */}
+            <div className="p-4 bg-gray-100">
+              <div 
+                className="relative mx-auto bg-white shadow cursor-crosshair" 
+                style={{
+                  ...(cardRenderData ? {
+                    width: `${cardRenderData.previewScaling.previewPageWidth}px`,
+                    height: `${cardRenderData.previewScaling.previewPageHeight}px`
+                  } : {
+                    width: '400px',
+                    height: '300px'
+                  })
+                }}
+                onMouseMove={handleCardMouseMove}
+                onMouseLeave={handleCardMouseLeave}
+                onClick={handleCardClick}
+              >
+                {/* Card positioned on the page */}
+                <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
+                  ...(cardRenderData ? {
+                    width: `${cardRenderData.previewScaling.previewCardWidth}px`,
+                    height: `${cardRenderData.previewScaling.previewCardHeight}px`,
+                    left: `${cardRenderData.previewScaling.previewX}px`,
+                    top: `${cardRenderData.previewScaling.previewY}px`
+                  } : {
+                    width: '100px',
+                    height: '140px',
+                    left: '50%',
+                    top: '50%',
+                    marginLeft: '-50px',
+                    marginTop: '-70px'
+                  })
+                }}>
+                  {colorTransformedPreviewUrl && cardRenderData ? (
+                    <div 
+                      className="w-full h-full bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${colorTransformedPreviewUrl})`,
+                        backgroundPosition: 'center center',
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat'
+                      }}
+                    />
+                  ) : processedPreviewUrl && cardRenderData ? (
+                    <div 
+                      className="w-full h-full bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(${processedPreviewUrl})`,
+                        backgroundPosition: 'center center',
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat'
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs text-gray-400">No preview</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Hover Crop Region Preview */}
+                {hoverPosition && cropRegionDimensions && (
+                  <div 
+                    className="absolute border-2 border-orange-400 bg-orange-200 bg-opacity-30 pointer-events-none"
+                    style={{
+                      left: `${hoverPosition.x - cropRegionDimensions.widthPreview / 2}px`,
+                      top: `${hoverPosition.y - cropRegionDimensions.heightPreview / 2}px`,
+                      width: `${cropRegionDimensions.widthPreview}px`,
+                      height: `${cropRegionDimensions.heightPreview}px`
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs text-orange-800 bg-white bg-opacity-90 px-1 rounded">
+                        Click to select
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Selected Crop Region */}
+                {colorSettings?.selectedRegion && (
+                  <div 
+                    className="absolute border-2 border-green-500 bg-green-200 bg-opacity-30 pointer-events-none"
+                    style={{
+                      left: `${colorSettings.selectedRegion.previewCenterX - colorSettings.selectedRegion.previewWidth / 2}px`,
+                      top: `${colorSettings.selectedRegion.previewCenterY - colorSettings.selectedRegion.previewHeight / 2}px`,
+                      width: `${colorSettings.selectedRegion.previewWidth}px`,
+                      height: `${colorSettings.selectedRegion.previewHeight}px`
+                    }}
+                  >
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-xs text-green-800 bg-white bg-opacity-90 px-1 rounded">
+                        Selected region
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Information Display */}
+          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">
+              Current Settings
+            </h4>
+            <div className="text-sm text-gray-600 space-y-2">
+              {cardDimensions && (
+                <p>
+                  <span className="font-medium">Card image:</span>{' '}
+                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
+                </p>
+              )}
+              <p>
+                <span className="font-medium">Total cards:</span>{' '}
+                {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
+              </p>
+              <p>
+                <span className="font-medium">Front cards:</span>{' '}
+                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
+              </p>
+              <p>
+                <span className="font-medium">Back cards:</span>{' '}
+                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Second Row: Calibration Settings and Grid Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Panel: Calibration Settings */}
+        <div className="space-y-4">
+          {/* Calibration Testing Section Header */}
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-lg p-4 mt-6">
+            <h3 className="text-lg font-semibold text-purple-800 mb-2 flex items-center">
+              🧪 Calibration Testing (Optional)
+            </h3>
+            <p className="text-sm text-purple-700 mb-3">
+              Generate test grids to fine-tune color settings for your specific printer and media. 
+              This step is optional - you can proceed directly to Export if your preview looks good.
+            </p>
+            <div className="bg-purple-100 rounded-md p-3 text-xs text-purple-800">
+              <p className="font-medium mb-1">How it works:</p>
+              <p>1. Select a crop region from your card • 2. Configure grid parameters • 3. Generate test PDF • 4. Print and compare results • 5. Apply best settings</p>
+            </div>
+          </div>
 
           {/* Test Grid Configuration */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -903,30 +1373,53 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               <label className="block text-xs font-medium text-gray-600 mb-2">
                 Grid Size (Columns × Rows)
               </label>
-              <select
-                value={`${colorSettings?.gridConfig?.columns || 5}x${colorSettings?.gridConfig?.rows || 4}`}
-                onChange={(e) => {
-                  const [cols, rows] = e.target.value.split('x').map(Number);
-                  const newSettings = {
-                    ...colorSettings,
-                    gridConfig: {
-                      ...colorSettings.gridConfig,
-                      columns: cols,
-                      rows: rows
-                    }
-                  };
-                  onColorSettingsChange(newSettings);
-                }}
-                className="w-full border border-gray-300 rounded-md px-2 py-1 text-sm"
-              >
-                <option value="3x3">3×3 (9 variations)</option>
-                <option value="4x3">4×3 (12 variations)</option>
-                <option value="5x3">5×3 (15 variations)</option>
-                <option value="5x4">5×4 (20 variations)</option>
-                <option value="6x4">6×4 (24 variations)</option>
-                <option value="7x4">7×4 (28 variations)</option>
-                <option value="7x5">7×5 (35 variations)</option>
-              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Columns</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="10"
+                    value={colorSettings?.gridConfig?.columns || 4}
+                    onChange={(e) => {
+                      const cols = Math.max(2, Math.min(10, parseInt(e.target.value) || 2));
+                      const newSettings = {
+                        ...colorSettings,
+                        gridConfig: {
+                          ...colorSettings.gridConfig,
+                          columns: cols
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Rows</label>
+                  <input
+                    type="number"
+                    min="2"
+                    max="10"
+                    value={colorSettings?.gridConfig?.rows || 4}
+                    onChange={(e) => {
+                      const rows = Math.max(2, Math.min(10, parseInt(e.target.value) || 2));
+                      const newSettings = {
+                        ...colorSettings,
+                        gridConfig: {
+                          ...colorSettings.gridConfig,
+                          rows: rows
+                        }
+                      };
+                      onColorSettingsChange(newSettings);
+                    }}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Total variations: {(colorSettings?.gridConfig?.columns || 4) * (colorSettings?.gridConfig?.rows || 4)}
+              </p>
             </div>
 
             {/* Column Transformation Type */}
@@ -1107,7 +1600,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               <div className="text-xs text-blue-700 space-y-1">
                 <p>
                   <span className="font-medium">Size:</span>{' '}
-                  {colorSettings?.gridConfig?.columns || 5}×{colorSettings?.gridConfig?.rows || 4} = {((colorSettings?.gridConfig?.columns || 5) * (colorSettings?.gridConfig?.rows || 4))} variations
+                  {colorSettings?.gridConfig?.columns || 4}×{colorSettings?.gridConfig?.rows || 4} = {((colorSettings?.gridConfig?.columns || 4) * (colorSettings?.gridConfig?.rows || 4))} variations
                 </p>
                 {(() => {
                   const horizontalType = colorSettings?.transformations?.horizontal?.type || 'brightness';
@@ -1209,194 +1702,37 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           </div>
         </div>
 
-        {/* Right Panel: Live Preview (copied from ConfigureStep) */}
+        {/* Right Panel: Grid Preview */}
         <div className="space-y-4">
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <div className="bg-gray-50 p-3 border-b border-gray-200">
-              {/* Combined Controls Row */}
-              <div className="relative flex items-center">
-                {/* View Mode Toggle - Left */}
-                <div className="flex bg-gray-200 rounded-lg p-1">
-                  <button
-                    onClick={() => handleViewModeToggle('front')}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                      viewMode === 'front'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Fronts
-                  </button>
-                  <button
-                    onClick={() => handleViewModeToggle('back')}
-                    className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                      viewMode === 'back'
-                        ? 'bg-white text-gray-900 shadow-sm'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    Backs
-                  </button>
+          {/* Grid Preview */}
+          {colorSettings?.selectedRegion ? (
+            <div className="p-4 bg-white border border-gray-200 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Grid Preview
+              </h4>
+              <GridPreview
+                cropImageUrl={extractCropRegion}
+                gridConfig={colorSettings.gridConfig}
+                transformations={colorSettings.transformations}
+                userColorSettings={currentColorTransformation}
+              />
+            </div>
+          ) : (
+            <div className="p-4 bg-white border border-gray-200 rounded-lg">
+              <h4 className="text-sm font-medium text-gray-700 mb-3">
+                Grid Preview
+              </h4>
+              <div className="bg-gray-50 p-8 rounded-md text-center">
+                <div className="text-gray-400 mb-2">
+                  <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" className="mx-auto">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                 </div>
-                
-                {/* Card Navigation - Perfectly Centered */}
-                <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center space-x-2">
-                  <button 
-                    onClick={handlePreviousCard} 
-                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === 0} 
-                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
-                  >
-                    <ChevronLeftIcon size={16} />
-                  </button>
-                  <span className="text-sm text-gray-700">
-                    {totalFilteredCards > 0 && currentCardExists ? `${viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} ${currentCardPosition} of ${totalFilteredCards}` : `No ${viewMode} cards`}
-                  </span>
-                  <button 
-                    onClick={handleNextCard} 
-                    disabled={!currentCardExists || availableCardIds.indexOf(currentCardId) === availableCardIds.length - 1} 
-                    className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50"
-                  >
-                    <ChevronRightIcon size={16} />
-                  </button>
-                </div>
-                
-                {/* Card ID - Right */}
-                <div className="ml-auto text-sm text-gray-500">
-                  {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
-                </div>
+                <p className="text-sm text-gray-500">Select a crop region to see grid preview</p>
+                <p className="text-xs text-gray-400 mt-1">Click on the card image to choose an area</p>
               </div>
             </div>
-            
-            {/* Card Preview Area */}
-            <div className="p-4 bg-gray-100">
-              <div 
-                className="relative mx-auto bg-white shadow cursor-crosshair" 
-                style={{
-                  ...(cardRenderData ? {
-                    width: `${cardRenderData.previewScaling.previewPageWidth}px`,
-                    height: `${cardRenderData.previewScaling.previewPageHeight}px`
-                  } : {
-                    width: '400px',
-                    height: '300px'
-                  })
-                }}
-                onMouseMove={handleCardMouseMove}
-                onMouseLeave={handleCardMouseLeave}
-                onClick={handleCardClick}
-              >
-                {/* Card positioned on the page */}
-                <div className="absolute bg-gray-200 border border-gray-300 overflow-hidden" style={{
-                  ...(cardRenderData ? {
-                    width: `${cardRenderData.previewScaling.previewCardWidth}px`,
-                    height: `${cardRenderData.previewScaling.previewCardHeight}px`,
-                    left: `${cardRenderData.previewScaling.previewX}px`,
-                    top: `${cardRenderData.previewScaling.previewY}px`
-                  } : {
-                    width: '100px',
-                    height: '140px',
-                    left: '50%',
-                    top: '50%',
-                    marginLeft: '-50px',
-                    marginTop: '-70px'
-                  })
-                }}>
-                  {colorTransformedPreviewUrl && cardRenderData ? (
-                    <div 
-                      className="w-full h-full bg-cover bg-center"
-                      style={{
-                        backgroundImage: `url(${colorTransformedPreviewUrl})`,
-                        backgroundPosition: 'center center',
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat'
-                      }}
-                    />
-                  ) : cardPreviewUrl ? (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Loading dimensions...
-                    </div>
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-500 text-sm">
-                      Card ID {currentCardId}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Page boundary indicators */}
-                <div className="absolute inset-0 border border-dashed border-gray-400 pointer-events-none"></div>
-                
-                {/* Center guides */}
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-1/2 left-0 w-full h-px bg-blue-300 opacity-50"></div>
-                  <div className="absolute left-1/2 top-0 w-px h-full bg-blue-300 opacity-50"></div>
-                </div>
-
-                {/* Crop Region Hover Preview */}
-                {hoverPosition && cropRegionDimensions && (
-                  <div 
-                    className="absolute border-2 border-orange-400 bg-orange-200 bg-opacity-30 pointer-events-none"
-                    style={{
-                      left: `${hoverPosition.x - cropRegionDimensions.widthPreview / 2}px`,
-                      top: `${hoverPosition.y - cropRegionDimensions.heightPreview / 2}px`,
-                      width: `${cropRegionDimensions.widthPreview}px`,
-                      height: `${cropRegionDimensions.heightPreview}px`
-                    }}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs text-orange-800 bg-white bg-opacity-90 px-1 rounded">
-                        Click to select
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Selected Crop Region */}
-                {colorSettings?.selectedRegion && (
-                  <div 
-                    className="absolute border-2 border-green-500 bg-green-200 bg-opacity-30 pointer-events-none"
-                    style={{
-                      left: `${colorSettings.selectedRegion.previewCenterX - colorSettings.selectedRegion.previewWidth / 2}px`,
-                      top: `${colorSettings.selectedRegion.previewCenterY - colorSettings.selectedRegion.previewHeight / 2}px`,
-                      width: `${colorSettings.selectedRegion.previewWidth}px`,
-                      height: `${colorSettings.selectedRegion.previewHeight}px`
-                    }}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs text-green-800 bg-white bg-opacity-90 px-1 rounded">
-                        Selected region
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Information Display */}
-          <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">
-              Current Settings
-            </h4>
-            <div className="text-sm text-gray-600 space-y-2">
-              {cardDimensions && (
-                <p>
-                  <span className="font-medium">Card image:</span>{' '}
-                  {cardDimensions.widthPx} × {cardDimensions.heightPx} px ({cardDimensions.widthInches.toFixed(2)}" × {cardDimensions.heightInches.toFixed(2)}")
-                </p>
-              )}
-              <p>
-                <span className="font-medium">Total cards:</span>{' '}
-                {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
-              </p>
-              <p>
-                <span className="font-medium">Front cards:</span>{' '}
-                {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
-              <p>
-                <span className="font-medium">Back cards:</span>{' '}
-                {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
