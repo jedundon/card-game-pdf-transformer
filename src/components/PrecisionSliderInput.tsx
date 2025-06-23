@@ -69,21 +69,30 @@ export const PrecisionSliderInput: React.FC<PrecisionSliderInputProps> = ({
       case 'vibrance':
       case 'shadows':
       case 'highlights':
-      case 'midtoneBalance':
-        return `${val >= 0 ? '+' : ''}${Math.round(val)}${range.unit}`;
+      case 'midtoneBalance': {
+        // Show decimals if they exist, otherwise show integers
+        const roundedVal = Math.round(val * 100) / 100;
+        const displayVal = roundedVal % 1 === 0 ? Math.round(roundedVal) : roundedVal.toFixed(2);
+        return `${roundedVal >= 0 ? '+' : ''}${displayVal}${range.unit}`;
+      }
       case 'contrast':
       case 'gamma':
       case 'redMultiplier':
       case 'greenMultiplier':
       case 'blueMultiplier':
+        // Always show 2 decimal places for multipliers
         return `${val.toFixed(2)}${range.unit}`;
       case 'blackPoint':
       case 'whitePoint':
       case 'outputBlack':
-      case 'outputWhite':
-        return `${Math.round(val)}${range.unit}`;
+      case 'outputWhite': {
+        // Show decimals if they exist, otherwise show integers  
+        const roundedLevelVal = Math.round(val * 100) / 100;
+        const displayLevelVal = roundedLevelVal % 1 === 0 ? Math.round(roundedLevelVal) : roundedLevelVal.toFixed(2);
+        return `${displayLevelVal}${range.unit}`;
+      }
       default:
-        return `${val.toFixed(1)}${range.unit}`;
+        return `${val.toFixed(2)}${range.unit}`;
     }
   }, [type, range.unit]);
   
@@ -125,10 +134,14 @@ export const PrecisionSliderInput: React.FC<PrecisionSliderInputProps> = ({
       if (parsed !== null) {
         const validationError = validateValue(parsed);
         if (!validationError) {
-          // Clamp value to range and apply step rounding
+          // Clamp value to range but allow higher precision than slider step
           const clampedValue = Math.max(range.min, Math.min(range.max, parsed));
-          const steppedValue = Math.round(clampedValue / range.step) * range.step;
-          onChange(steppedValue);
+          
+          // For precise input, round to 2 decimal places instead of slider step
+          // This allows fine-tuning beyond what the slider can provide
+          const preciseValue = Math.round(clampedValue * 100) / 100;
+          
+          onChange(preciseValue);
         } else {
           setError(validationError);
           return; // Don't exit edit mode if there's an error
@@ -142,7 +155,7 @@ export const PrecisionSliderInput: React.FC<PrecisionSliderInputProps> = ({
     setIsEditing(false);
     setInputValue('');
     setError('');
-  }, [inputValue, parseValue, validateValue, range.min, range.max, range.step, onChange]);
+  }, [inputValue, parseValue, validateValue, range.min, range.max, onChange]);
   
   // Handle key presses in edit mode
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -221,7 +234,7 @@ export const PrecisionSliderInput: React.FC<PrecisionSliderInputProps> = ({
             onClick={handleLabelClick}
             onDoubleClick={handleDoubleClick}
             className="cursor-pointer hover:text-blue-600 hover:underline transition-colors"
-            title="Click to enter precise value, double-click to reset"
+            title="Click to enter precise value (up to 2 decimal places), double-click to reset"
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
