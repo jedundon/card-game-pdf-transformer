@@ -28,7 +28,7 @@ import { PREVIEW_CONSTRAINTS } from '../constants';
 
 // GridPreview component for showing the actual calibration grid
 interface GridPreviewProps {
-  cropImageUrl: () => Promise<string | null>;
+  cropImageUrl: (gridConfig?: { columns: number; rows: number }) => Promise<string | null>;
   gridConfig: { columns: number; rows: number };
   transformations: {
     horizontal: { type: string; min: number; max: number };
@@ -73,7 +73,7 @@ const GridPreview: React.FC<GridPreviewProps> = ({
   const generateGridImages = useCallback(async () => {
     setIsLoading(true);
     try {
-      const cropImage = await cropImageUrl();
+      const cropImage = await cropImageUrl(gridConfig);
       if (!cropImage) {
         setGridImages([]);
         return;
@@ -277,14 +277,16 @@ const GridPreview: React.FC<GridPreviewProps> = ({
                 return (
                   <div
                     key={`${rowIndex}-${colIndex}`}
-                    className="bg-gray-200 border border-gray-300 rounded-sm aspect-square overflow-hidden"
+                    className="bg-gray-200 border border-gray-300 rounded-sm overflow-hidden flex items-center justify-center"
+                    style={{ aspectRatio: '1' }}
                     title={`${transformations.horizontal.type}: ${formatTransformationValue(transformations.horizontal.type, horizontalValues[colIndex])}, ${transformations.vertical.type}: ${formatTransformationValue(transformations.vertical.type, verticalValues[rowIndex])}`}
                   >
                     {imageUrl ? (
                       <img
                         src={imageUrl}
                         alt={`Grid cell with transformations`}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
+                        style={{ imageRendering: 'pixelated' }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
@@ -723,7 +725,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   }, [colorSettings, onColorSettingsChange]);
 
   // Extract crop region from card image
-  const extractCropRegion = useCallback(async (): Promise<string | null> => {
+  const extractCropRegion = useCallback(async (gridConfig?: { columns: number; rows: number }): Promise<string | null> => {
     if (!cardPreviewUrl || !colorSettings?.selectedRegion || !cardRenderData) {
       return null;
     }
@@ -745,17 +747,56 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           const imageWidth = img.naturalWidth;
           const imageHeight = img.naturalHeight;
           
-          // Convert from card inches to image pixels
-          const cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
-          const cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
-          const cropXPx = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - cropWidthPx / 2;
-          const cropYPx = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - cropHeightPx / 2;
+          // Calculate crop position (same as before)
+          const cropXPx = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - 
+                         (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth / 2;
+          const cropYPx = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - 
+                         (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight / 2;
           
-          // Set canvas size to crop dimensions
-          canvas.width = cropWidthPx;
-          canvas.height = cropHeightPx;
+          let cropWidthPx: number;
+          let cropHeightPx: number;
           
-          // Draw cropped region
+          if (gridConfig && outputSettings && gridConfig.columns > 0 && gridConfig.rows > 0) {
+            // PIXEL-PERFECT EXTRACTION: Calculate target pixel dimensions for grid cell
+            // Determine the final output pixel dimensions for a single grid cell
+            
+            // Calculate card dimensions in final output at 300 DPI (print resolution)
+            const finalCardWidthPx = cardRenderData.renderDimensions.cardWidthInches * 300;
+            const finalCardHeightPx = cardRenderData.renderDimensions.cardHeightInches * 300;
+            
+            // Validate final card dimensions
+            if (finalCardWidthPx <= 0 || finalCardHeightPx <= 0) {
+              console.warn('Invalid final card dimensions, falling back to region-based extraction');
+              cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
+              cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
+            } else {
+              // Calculate target grid cell dimensions in final output pixels
+              const targetCellWidthPx = finalCardWidthPx / gridConfig.columns;
+              const targetCellHeightPx = finalCardHeightPx / gridConfig.rows;
+              
+              // Extract exactly the target pixel count from the source image
+              // Scale from final output (300 DPI) to source image resolution
+              const sourceToFinalScale = imageWidth / finalCardWidthPx;
+              cropWidthPx = targetCellWidthPx * sourceToFinalScale;
+              cropHeightPx = targetCellHeightPx * sourceToFinalScale;
+              
+              // Ensure minimum 1px dimensions
+              cropWidthPx = Math.max(1, cropWidthPx);
+              cropHeightPx = Math.max(1, cropHeightPx);
+              
+              console.log(`Pixel-perfect extraction: Grid ${gridConfig.columns}x${gridConfig.rows}, Target cell: ${targetCellWidthPx.toFixed(0)}x${targetCellHeightPx.toFixed(0)}px, Source crop: ${cropWidthPx.toFixed(0)}x${cropHeightPx.toFixed(0)}px`);
+            }
+          } else {
+            // Fallback to original behavior for backward compatibility
+            cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
+            cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
+          }
+          
+          // Set canvas size to target pixel dimensions
+          canvas.width = Math.round(cropWidthPx);
+          canvas.height = Math.round(cropHeightPx);
+          
+          // Draw cropped region at exact pixel dimensions
           ctx.drawImage(
             img,
             Math.max(0, cropXPx),
@@ -764,8 +805,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             Math.min(cropHeightPx, imageHeight - cropYPx),
             0,
             0,
-            cropWidthPx,
-            cropHeightPx
+            canvas.width,
+            canvas.height
           );
           
           // Return cropped image as data URL
@@ -779,7 +820,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       img.onerror = () => resolve(null);
       img.src = cardPreviewUrl;
     });
-  }, [cardPreviewUrl, colorSettings?.selectedRegion, cardRenderData]);
+  }, [cardPreviewUrl, colorSettings?.selectedRegion, cardRenderData, outputSettings]);
 
   // Generate color calibration test grid PDF
   const handleGenerateTestGrid = useCallback(async () => {
@@ -789,8 +830,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     }
 
     try {
-      // Extract crop region from card image
-      const cropImageUrl = await extractCropRegion();
+      // Extract crop region from card image with pixel-perfect grid sizing
+      const cropImageUrl = await extractCropRegion(colorSettings.gridConfig);
       if (!cropImageUrl) {
         alert('Failed to extract crop region from card image');
         return;
