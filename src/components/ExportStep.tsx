@@ -157,7 +157,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     const maxIndex = activePages.length * cardsPerPage;
     
     for (let cardIndex = 0; cardIndex < maxIndex; cardIndex++) {
-      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, undefined, undefined);
       if (cardInfo.id === targetCardID && cardInfo.type.toLowerCase() === targetCardType) {
         return cardIndex;
       }

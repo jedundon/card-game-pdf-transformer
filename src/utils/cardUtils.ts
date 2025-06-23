@@ -78,7 +78,9 @@ export function getCardInfo(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  cardsPerPage: number,
+  pageWidth?: number,
+  pageHeight?: number
 ): CardInfo {
   if (!activePages.length) return { type: 'Unknown', id: 0 };
   
@@ -120,18 +122,32 @@ export function getCardInfo(
         
         // Apply flip edge logic to get the actual card position on the back page
         let logicalCardOnPage: number;
-        if (pdfMode.flipEdge === 'short') {
-          // Short edge flip: horizontally mirrored
-          const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
-          const col = targetCardOnPage % extractionSettings.grid.columns;
-          const flippedCol = extractionSettings.grid.columns - 1 - col;
-          logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+        
+        // Determine flip direction based on page orientation and flip edge
+        let shouldFlipRows: boolean;
+        if (pageWidth && pageHeight) {
+          const isPortraitPage = pageHeight > pageWidth;
+          if (isPortraitPage) {
+            shouldFlipRows = (pdfMode.flipEdge === 'short'); // Short edge = flip rows for portrait
+          } else {
+            shouldFlipRows = (pdfMode.flipEdge === 'long');  // Long edge = flip rows for landscape  
+          }
         } else {
-          // Long edge flip: vertically mirrored
-          const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
-          const col = targetCardOnPage % extractionSettings.grid.columns;
+          // Fallback to original logic if page dimensions not available
+          shouldFlipRows = (pdfMode.flipEdge === 'long');
+        }
+        
+        const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
+        const col = targetCardOnPage % extractionSettings.grid.columns;
+        
+        if (shouldFlipRows) {
+          // Flip rows (vertical mirroring)
           const flippedRow = extractionSettings.grid.rows - 1 - row;
           logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+        } else {
+          // Flip columns (horizontal mirroring)
+          const flippedCol = extractionSettings.grid.columns - 1 - col;
+          logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
         }
         
         // Only assign back card ID if this matches our current card position
@@ -156,18 +172,32 @@ export function getCardInfo(
       
       // Apply flip edge logic for normal cases
       let logicalCardOnPage: number;
-      if (pdfMode.flipEdge === 'short') {
-        // Short edge flip: horizontally mirrored
-        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-        const col = cardOnPage % extractionSettings.grid.columns;
-        const flippedCol = extractionSettings.grid.columns - 1 - col;
-        logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+      
+      // Determine flip direction based on page orientation and flip edge
+      let shouldFlipRows: boolean;
+      if (pageWidth && pageHeight) {
+        const isPortraitPage = pageHeight > pageWidth;
+        if (isPortraitPage) {
+          shouldFlipRows = (pdfMode.flipEdge === 'short'); // Short edge = flip rows for portrait
+        } else {
+          shouldFlipRows = (pdfMode.flipEdge === 'long');  // Long edge = flip rows for landscape  
+        }
       } else {
-        // Long edge flip: vertically mirrored
-        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
-        const col = cardOnPage % extractionSettings.grid.columns;
+        // Fallback to original logic if page dimensions not available
+        shouldFlipRows = (pdfMode.flipEdge === 'long');
+      }
+      
+      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+      const col = cardOnPage % extractionSettings.grid.columns;
+      
+      if (shouldFlipRows) {
+        // Flip rows (vertical mirroring)
         const flippedRow = extractionSettings.grid.rows - 1 - row;
         logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+      } else {
+        // Flip columns (horizontal mirroring)
+        const flippedCol = extractionSettings.grid.columns - 1 - col;
+        logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
       }
       
       const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;

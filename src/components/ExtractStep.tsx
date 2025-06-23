@@ -47,6 +47,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const renderTaskRef = useRef<any>(null);
   const renderingRef = useRef(false);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null);
     // Memoize activePages to prevent unnecessary re-renders
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 
@@ -64,7 +65,15 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   // Calculate the global card index from current page and card
   const globalCardIndex = currentPage * cardsPerPage + currentCard;
     // Get current card info (type and ID) for display
-  const { type: cardType, id: cardId } = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+  const { type: cardType, id: cardId } = getCardInfo(
+    globalCardIndex, 
+    activePages, 
+    extractionSettings, 
+    pdfMode, 
+    cardsPerPage,
+    pageDimensions?.width,
+    pageDimensions?.height
+  );
   // Calculate total cards of the current card type for context-aware navigation
   const totalCardsOfType = useMemo(() => {
     if (pdfMode.type === 'gutter-fold') {
@@ -132,7 +141,15 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
 
       // Get current card type and rotation for this specific card
-      const currentCardInfo = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const currentCardInfo = getCardInfo(
+        globalCardIndex, 
+        activePages, 
+        extractionSettings, 
+        pdfMode, 
+        cardsPerPage,
+        pageDimensions?.width,
+        pageDimensions?.height
+      );
       const currentCardType = currentCardInfo.type.toLowerCase() as 'front' | 'back';
       const currentRotation = extractionSettings.imageRotation?.[currentCardType] || 0;
 
@@ -206,6 +223,10 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         
         // Calculate base scale to fit the preview area nicely
         const baseViewport = page.getViewport({ scale: 1.0 });
+        
+        // Store page dimensions for card info calculations
+        setPageDimensions({ width: baseViewport.width, height: baseViewport.height });
+        
         const maxWidth = 450; // Fixed max width for consistency
         const maxHeight = 600; // Fixed max height for consistency
         
