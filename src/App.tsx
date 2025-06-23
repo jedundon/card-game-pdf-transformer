@@ -16,7 +16,8 @@ import { PageCountMismatchDialog } from './components/PageCountMismatchDialog';
 import { DEFAULT_SETTINGS, getDefaultGrid, getDefaultRotation } from './defaults';
 import { 
   PdfData, 
-  PdfMode
+  PdfMode,
+  PageSettings
 } from './types';
 import { 
   saveSettingsToLocalStorage, 
@@ -32,7 +33,7 @@ import { getDefaultSettingsForMode } from './defaults';
 
 export function App() {
   const [currentStep, setCurrentStep] = useState(0);
-  const [pdfData, setPdfData] = useState(null);
+  const [pdfData, setPdfData] = useState<PdfData | null>(null);
   const [currentPdfFileName, setCurrentPdfFileName] = useState<string>('');
   const [autoRestoredSettings, setAutoRestoredSettings] = useState(false);
   const [triggerImportSettings, setTriggerImportSettings] = useState<(() => void) | null>(null);
@@ -52,8 +53,8 @@ export function App() {
     skippedSettings: [],
     pendingSettings: null
   });
-  const [pdfMode, setPdfMode] = useState(DEFAULT_SETTINGS.pdfMode);
-  const [pageSettings, setPageSettings] = useState(DEFAULT_SETTINGS.pageSettings);
+  const [pdfMode, setPdfMode] = useState<PdfMode>(DEFAULT_SETTINGS.pdfMode);
+  const [pageSettings, setPageSettings] = useState<PageSettings[]>(DEFAULT_SETTINGS.pageSettings);
   const [cardDimensions, setCardDimensions] = useState<{
     widthPx: number;
     heightPx: number;
@@ -62,7 +63,14 @@ export function App() {
   } | null>(null);
   
   // Initialize extraction settings with mode-specific grid
-  const [extractionSettings, setExtractionSettings] = useState(() => {
+  const [extractionSettings, setExtractionSettings] = useState<{
+    grid: { rows: number; columns: number };
+    crop: { top: number; right: number; bottom: number; left: number };
+    gutterWidth: number;
+    cardCrop: { top: number; right: number; bottom: number; left: number };
+    imageRotation: { front: number; back: number };
+    skippedCards: any[];
+  }>(() => {
     const defaultGrid = getDefaultGrid(DEFAULT_SETTINGS.pdfMode);
     return {
       ...DEFAULT_SETTINGS.extractionSettings,
@@ -80,7 +88,33 @@ export function App() {
   });
 
   // Initialize color calibration settings
-  const [colorSettings, setColorSettings] = useState({
+  const [colorSettings, setColorSettings] = useState<{
+    selectedRegion: any;
+    gridConfig: { columns: number; rows: number };
+    transformations: {
+      horizontal: { type: string; min: number; max: number };
+      vertical: { type: string; min: number; max: number };
+    };
+    selectedPreset: any;
+    finalAdjustments: {
+      brightness: number;
+      contrast: number;
+      saturation: number;
+      hue: number;
+      gamma: number;
+      vibrance: number;
+      redMultiplier: number;
+      greenMultiplier: number;
+      blueMultiplier: number;
+      shadows: number;
+      highlights: number;
+      midtoneBalance: number;
+      blackPoint: number;
+      whitePoint: number;
+      outputBlack: number;
+      outputWhite: number;
+    };
+  }>({
     selectedRegion: null,
     gridConfig: { columns: 4, rows: 4 },
     transformations: {

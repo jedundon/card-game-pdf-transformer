@@ -1,4 +1,8 @@
 import { WorkflowSettings } from '../defaults';
+import { PdfMode, PageSettings } from '../types';
+
+// Re-export WorkflowSettings for use in other modules
+export type { WorkflowSettings };
 
 const AUTOSAVE_KEY = 'card-pdf-transformer-autosave';
 const AUTOSAVE_VERSION = '1.0';
@@ -23,11 +27,11 @@ export interface LastImportedFileInfo {
  * Save current workflow settings to localStorage for auto-recovery
  */
 export const saveSettingsToLocalStorage = (
-  pdfMode: unknown,
-  pageSettings: unknown,
-  extractionSettings: unknown,
-  outputSettings: unknown,
-  colorSettings: unknown
+  pdfMode: PdfMode,
+  pageSettings: PageSettings[],
+  extractionSettings: any,
+  outputSettings: any,
+  colorSettings: any
 ): void => {
   try {
     const autoSaveData: AutoSaveData = {

@@ -20,7 +20,7 @@ export const getDefaultGrid = (pdfMode: PdfMode) => {
 };
 
 // Rotation defaults based on PDF mode
-export const getDefaultRotation = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+export const getDefaultRotation = (pdfMode: PdfMode) => {
   // Front cards always default to 0 degrees
   const front = 0;
   
@@ -95,7 +95,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 // Helper function to get default settings with mode-specific grid and rotation
-export const getDefaultSettingsForMode = (pdfMode: { type: string; orientation: string; flipEdge: string }) => {
+export const getDefaultSettingsForMode = (pdfMode: PdfMode) => {
   return {
     ...DEFAULT_SETTINGS,
     pdfMode,
@@ -112,11 +112,7 @@ export const getDefaultSettingsForMode = (pdfMode: { type: string; orientation: 
 
 // Type definition for the settings structure
 export type WorkflowSettings = {
-  pdfMode: {
-    type: string;
-    orientation: string;
-    flipEdge: string;
-  };
+  pdfMode: PdfMode;
   pageSettings: PageSettings[];
   extractionSettings: {
     crop: {
@@ -140,6 +136,7 @@ export type WorkflowSettings = {
       front: number;
       back: number;
     };
+    skippedCards: any[];
   };  outputSettings: {
     pageSize: {
       width: number;
@@ -161,13 +158,13 @@ export type WorkflowSettings = {
     cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
   };
   colorSettings: {
-    selectedRegion: unknown;
+    selectedRegion: any;
     gridConfig: { columns: number; rows: number };
     transformations: {
       horizontal: { type: string; min: number; max: number };
       vertical: { type: string; min: number; max: number };
     };
-    selectedPreset: unknown;
+    selectedPreset: any;
     finalAdjustments: {
       brightness: number;
       contrast: number;
