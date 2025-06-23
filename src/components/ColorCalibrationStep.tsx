@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'lucide-react';
+import { PrecisionSliderInput } from './PrecisionSliderInput';
 import { 
   getActivePages, 
   calculateTotalCards, 
@@ -889,9 +890,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {/* Brightness */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Brightness: {currentColorTransformation.brightness}%
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.brightness}
+                  type="brightness"
+                  onChange={(value) => updateColorTransformation('brightness', value)}
+                  onDoubleClick={() => updateColorTransformation('brightness', 0)}
+                />
                 <input
                   type="range"
                   min="-100"
@@ -906,9 +910,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Contrast */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Contrast: {currentColorTransformation.contrast.toFixed(2)}x
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.contrast}
+                  type="contrast"
+                  onChange={(value) => updateColorTransformation('contrast', value)}
+                  onDoubleClick={() => updateColorTransformation('contrast', 1.0)}
+                />
                 <input
                   type="range"
                   min="0.5"
@@ -923,9 +930,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Saturation */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Saturation: {currentColorTransformation.saturation}%
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.saturation}
+                  type="saturation"
+                  onChange={(value) => updateColorTransformation('saturation', value)}
+                  onDoubleClick={() => updateColorTransformation('saturation', 0)}
+                />
                 <input
                   type="range"
                   min="-100"
@@ -940,9 +950,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Hue */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Hue: {currentColorTransformation.hue}°
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.hue}
+                  type="hue"
+                  onChange={(value) => updateColorTransformation('hue', value)}
+                  onDoubleClick={() => updateColorTransformation('hue', 0)}
+                />
                 <input
                   type="range"
                   min="-180"
@@ -957,9 +970,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Gamma */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Gamma: {currentColorTransformation.gamma.toFixed(2)}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.gamma}
+                  type="gamma"
+                  onChange={(value) => updateColorTransformation('gamma', value)}
+                  onDoubleClick={() => updateColorTransformation('gamma', 1.0)}
+                />
                 <input
                   type="range"
                   min="0.5"
@@ -974,9 +990,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Vibrance */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Vibrance: {currentColorTransformation.vibrance}%
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.vibrance}
+                  type="vibrance"
+                  onChange={(value) => updateColorTransformation('vibrance', value)}
+                  onDoubleClick={() => updateColorTransformation('vibrance', 0)}
+                />
                 <input
                   type="range"
                   min="-100"
@@ -999,9 +1018,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <div className="grid grid-cols-3 gap-x-3 gap-y-3">
               {/* Red Channel */}
               <div>
-                <label className="block text-xs font-medium text-red-600 mb-1">
-                  Red: {currentColorTransformation.redMultiplier.toFixed(2)}x
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.redMultiplier}
+                  type="redMultiplier"
+                  label="Red"
+                  labelColorClass="text-red-600"
+                  onChange={(value) => updateColorTransformation('redMultiplier', value)}
+                  onDoubleClick={() => updateColorTransformation('redMultiplier', 1.0)}
+                />
                 <input
                   type="range"
                   min="0.5"
@@ -1016,9 +1040,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Green Channel */}
               <div>
-                <label className="block text-xs font-medium text-green-600 mb-1">
-                  Green: {currentColorTransformation.greenMultiplier.toFixed(2)}x
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.greenMultiplier}
+                  type="greenMultiplier"
+                  label="Green"
+                  labelColorClass="text-green-600"
+                  onChange={(value) => updateColorTransformation('greenMultiplier', value)}
+                  onDoubleClick={() => updateColorTransformation('greenMultiplier', 1.0)}
+                />
                 <input
                   type="range"
                   min="0.5"
@@ -1033,9 +1062,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Blue Channel */}
               <div>
-                <label className="block text-xs font-medium text-blue-600 mb-1">
-                  Blue: {currentColorTransformation.blueMultiplier.toFixed(2)}x
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.blueMultiplier}
+                  type="blueMultiplier"
+                  label="Blue"
+                  labelColorClass="text-blue-600"
+                  onChange={(value) => updateColorTransformation('blueMultiplier', value)}
+                  onDoubleClick={() => updateColorTransformation('blueMultiplier', 1.0)}
+                />
                 <input
                   type="range"
                   min="0.5"
@@ -1058,9 +1092,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <div className="grid grid-cols-3 gap-x-3 gap-y-3">
               {/* Shadows */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Shadows: {currentColorTransformation.shadows > 0 ? '+' : ''}{currentColorTransformation.shadows}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.shadows}
+                  type="shadows"
+                  onChange={(value) => updateColorTransformation('shadows', value)}
+                  onDoubleClick={() => updateColorTransformation('shadows', 0)}
+                />
                 <input
                   type="range"
                   min="-50"
@@ -1075,9 +1112,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Highlights */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Highlights: {currentColorTransformation.highlights > 0 ? '+' : ''}{currentColorTransformation.highlights}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.highlights}
+                  type="highlights"
+                  onChange={(value) => updateColorTransformation('highlights', value)}
+                  onDoubleClick={() => updateColorTransformation('highlights', 0)}
+                />
                 <input
                   type="range"
                   min="-50"
@@ -1092,9 +1132,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Midtone Balance */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Midtone Balance: {currentColorTransformation.midtoneBalance > 0 ? '+' : ''}{currentColorTransformation.midtoneBalance}%
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.midtoneBalance}
+                  type="midtoneBalance"
+                  label="Midtone Balance"
+                  onChange={(value) => updateColorTransformation('midtoneBalance', value)}
+                  onDoubleClick={() => updateColorTransformation('midtoneBalance', 0)}
+                />
                 <input
                   type="range"
                   min="-100"
@@ -1117,9 +1161,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {/* Input Black Point */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Input Black: {currentColorTransformation.blackPoint}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.blackPoint}
+                  type="blackPoint"
+                  label="Input Black"
+                  onChange={(value) => updateColorTransformation('blackPoint', value)}
+                  onDoubleClick={() => updateColorTransformation('blackPoint', 0)}
+                />
                 <input
                   type="range"
                   min="0"
@@ -1134,9 +1182,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Input White Point */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Input White: {currentColorTransformation.whitePoint}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.whitePoint}
+                  type="whitePoint"
+                  label="Input White"
+                  onChange={(value) => updateColorTransformation('whitePoint', value)}
+                  onDoubleClick={() => updateColorTransformation('whitePoint', 255)}
+                />
                 <input
                   type="range"
                   min="205"
@@ -1151,9 +1203,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Output Black */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Output Black: {currentColorTransformation.outputBlack}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.outputBlack}
+                  type="outputBlack"
+                  label="Output Black"
+                  onChange={(value) => updateColorTransformation('outputBlack', value)}
+                  onDoubleClick={() => updateColorTransformation('outputBlack', 0)}
+                />
                 <input
                   type="range"
                   min="0"
@@ -1168,9 +1224,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
               {/* Output White */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  Output White: {currentColorTransformation.outputWhite}
-                </label>
+                <PrecisionSliderInput
+                  value={currentColorTransformation.outputWhite}
+                  type="outputWhite"
+                  label="Output White"
+                  onChange={(value) => updateColorTransformation('outputWhite', value)}
+                  onDoubleClick={() => updateColorTransformation('outputWhite', 255)}
+                />
                 <input
                   type="range"
                   min="225"
