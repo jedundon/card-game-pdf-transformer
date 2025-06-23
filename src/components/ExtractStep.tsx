@@ -7,8 +7,12 @@ import {
   extractCardImage as extractCardImageUtil,
   getActualPageNumber,
   getDpiScaleFactor,
-  countCardsByType,
-  getAvailableCardIds
+  getAvailableCardIds,
+  isCardSkipped,
+  toggleCardSkip,
+  skipAllInRow,
+  skipAllInColumn,
+  clearAllSkips
 } from '../utils/cardUtils';
 import { DPI_CONSTANTS } from '../constants';
 
@@ -74,26 +78,17 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     pageDimensions?.width,
     pageDimensions?.height
   );
-  // Calculate total cards of the current card type for context-aware navigation
+  // Calculate total cards of the current card type for context-aware navigation (excluding skipped cards)
   const totalCardsOfType = useMemo(() => {
-    if (pdfMode.type === 'gutter-fold') {
-      // For gutter-fold mode, count only cards of the current type
-      return countCardsByType(cardType.toLowerCase() as 'front' | 'back', activePages, cardsPerPage, pdfMode, extractionSettings);
-    } else {
-      // For other modes, use the existing total calculation
-      return totalCards;
-    }
-  }, [cardType, pdfMode, activePages, cardsPerPage, extractionSettings, totalCards]);
+    const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+    return availableCardIds.length;
+  }, [cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
 
-  // Calculate the position of the current card within cards of the same type
+  // Calculate the position of the current card within cards of the same type (excluding skipped cards)
   const currentCardPosition = useMemo(() => {
-    if (pdfMode.type === 'gutter-fold') {
-      const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
-      return availableCardIds.indexOf(cardId) + 1; // 1-based position
-    } else {
-      return cardId; // For other modes, use the card ID directly
-    }
-  }, [cardType, cardId, pdfMode, totalCards, activePages, cardsPerPage, extractionSettings]);
+    const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+    return availableCardIds.indexOf(cardId) + 1; // 1-based position, -1 if not found (skipped)
+  }, [cardType, cardId, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
 
   // Calculate card dimensions for display with rotation effects
   const cardDimensions = useMemo(() => {
@@ -541,6 +536,39 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     const gridTop = extractionSettings.crop.top * scale;
     const gridWidth = Math.max(0, overlayWidth - (extractionSettings.crop.left + extractionSettings.crop.right) * scale);
     const gridHeight = Math.max(0, overlayHeight - (extractionSettings.crop.top + extractionSettings.crop.bottom) * scale);
+    
+    const skippedCards = extractionSettings.skippedCards || [];
+    
+    // Helper function to check if a grid position is skipped
+    const isGridPositionSkipped = (gridRow: number, gridCol: number): boolean => {
+      return isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
+    };
+    
+    // Helper function to render a cell with skip overlay
+    const renderCell = (cardIdx: number, gridRow: number, gridCol: number, key: string) => {
+      const isSkipped = isGridPositionSkipped(gridRow, gridCol);
+      const isSelected = cardIdx === currentCard;
+      
+      return (
+        <div key={key}
+          className={`cursor-pointer transition-all duration-200 relative ${
+            isSelected ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'
+          }`}
+          style={{ 
+            background: isSelected ? 'transparent' : 'rgba(0,0,0,0.25)'
+          }}
+          onClick={() => setCurrentCard(cardIdx)}
+        >
+          {isSkipped && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-full h-full bg-red-500 bg-opacity-30 flex items-center justify-center">
+                <span className="text-red-600 text-2xl font-bold">✕</span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
 
     // Gutter-fold mode
     if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth > 0) {
@@ -561,13 +589,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               const actualCol = c > leftCols ? c - 1 : c;
               const cardIdx = r * cols + actualCol;
               if (cardIdx >= cols * rows) continue;
-              cells.push(
-                <div key={`cell-${r}-${c}`}
-                  className={`cursor-pointer transition-all duration-200 ${cardIdx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
-                  style={{ background: cardIdx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
-                  onClick={() => setCurrentCard(cardIdx)}
-                />
-              );
+              cells.push(renderCell(cardIdx, r, actualCol, `cell-${r}-${c}`));
             }
           }
         }
@@ -598,13 +620,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               const actualRow = r > topRows ? r - 1 : r;
               const cardIdx = actualRow * cols + c;
               if (cardIdx >= cols * rows) continue;
-              cells.push(
-                <div key={`cell-${r}-${c}`}
-                  className={`cursor-pointer transition-all duration-200 ${cardIdx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
-                  style={{ background: cardIdx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
-                  onClick={() => setCurrentCard(cardIdx)}
-                />
-              );
+              cells.push(renderCell(cardIdx, actualRow, c, `cell-${r}-${c}`));
             }
           }
         }
@@ -633,13 +649,11 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         gridTemplateColumns: `repeat(${extractionSettings.grid.columns}, 1fr)`,
         gap: '1px', pointerEvents: 'auto'
       }}>
-        {Array.from({ length: totalCells }).map((_, idx) => (
-          <div key={idx}
-            className={`cursor-pointer transition-all duration-200 ${idx === currentCard ? 'border-2 border-blue-500' : 'border border-blue-300 hover:border-blue-400'}`}
-            style={{ background: idx === currentCard ? 'transparent' : 'rgba(0,0,0,0.25)' }}
-            onClick={() => setCurrentCard(idx)}
-          />
-        ))}
+        {Array.from({ length: totalCells }).map((_, idx) => {
+          const gridRow = Math.floor(idx / extractionSettings.grid.columns);
+          const gridCol = idx % extractionSettings.grid.columns;
+          return renderCell(idx, gridRow, gridCol, `cell-${idx}`);
+        })}
       </div>
     );
   };
@@ -759,6 +773,149 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               </div>
             </>
           )}
+
+          {/* Card Skip Controls */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-800 mb-3">
+              Card Skip Controls
+            </h3>
+            <p className="text-sm text-gray-600 mb-3">
+              Mark cards to exclude from extraction and export. Click on the grid to the right to select a card, then use the controls below.
+            </p>
+            
+            {/* Export summary */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+              <div className="text-sm text-blue-800 mb-3">
+                <strong>Export Summary:</strong> {(() => {
+                  const skippedCards = extractionSettings.skippedCards || [];
+                  const totalCards = calculateTotalCards(pdfMode, activePages, cardsPerPage);
+                  const skippedCount = skippedCards.length;
+                  return `${totalCards - skippedCount} of ${totalCards} cards will be exported`;
+                })()}
+                {(() => {
+                  const skippedCount = extractionSettings.skippedCards?.length || 0;
+                  return skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
+                })()}
+              </div>
+              <button
+                onClick={() => {
+                  onSettingsChange({
+                    ...extractionSettings,
+                    skippedCards: clearAllSkips()
+                  });
+                }}
+                className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
+              >
+                Clear All Skips
+              </button>
+            </div>
+            
+            {/* Current card skip controls */}
+            <div className="space-y-3">
+              <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm">
+                    <div className="font-medium text-gray-800">
+                      Selected: {cardType} {cardId}
+                    </div>
+                    <div className="text-gray-600">
+                      Row {Math.floor(currentCard / extractionSettings.grid.columns) + 1}, 
+                      Column {(currentCard % extractionSettings.grid.columns) + 1}
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {(() => {
+                      const skippedCards = extractionSettings.skippedCards || [];
+                      const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
+                      const gridCol = currentCard % extractionSettings.grid.columns;
+                      const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
+                      return isSkipped ? '🚫 Skipped' : '✓ Will export';
+                    })()}
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => {
+                    const skippedCards = extractionSettings.skippedCards || [];
+                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
+                    const gridCol = currentCard % extractionSettings.grid.columns;
+                    const newSkippedCards = toggleCardSkip(
+                      currentPage, 
+                      gridRow, 
+                      gridCol, 
+                      cardType.toLowerCase() as 'front' | 'back',
+                      skippedCards
+                    );
+                    onSettingsChange({
+                      ...extractionSettings,
+                      skippedCards: newSkippedCards
+                    });
+                  }}
+                  className={(() => {
+                    const skippedCards = extractionSettings.skippedCards || [];
+                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
+                    const gridCol = currentCard % extractionSettings.grid.columns;
+                    const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
+                    return isSkipped 
+                      ? 'w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium'
+                      : 'w-full px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium';
+                  })()}
+                >
+                  {(() => {
+                    const skippedCards = extractionSettings.skippedCards || [];
+                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
+                    const gridCol = currentCard % extractionSettings.grid.columns;
+                    const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
+                    return isSkipped ? 'Include This Card' : 'Skip This Card';
+                  })()}
+                </button>
+                
+                {/* Row/Column skip buttons */}
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button
+                    onClick={() => {
+                      const skippedCards = extractionSettings.skippedCards || [];
+                      const currentRow = Math.floor(currentCard / extractionSettings.grid.columns);
+                      const newSkippedCards = skipAllInRow(
+                        currentPage,
+                        currentRow,
+                        extractionSettings.grid.columns,
+                        cardType.toLowerCase() as 'front' | 'back',
+                        skippedCards
+                      );
+                      onSettingsChange({
+                        ...extractionSettings,
+                        skippedCards: newSkippedCards
+                      });
+                    }}
+                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                  >
+                    Skip All in Row {Math.floor(currentCard / extractionSettings.grid.columns) + 1}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const skippedCards = extractionSettings.skippedCards || [];
+                      const currentCol = currentCard % extractionSettings.grid.columns;
+                      const newSkippedCards = skipAllInColumn(
+                        currentPage,
+                        currentCol,
+                        extractionSettings.grid.rows,
+                        cardType.toLowerCase() as 'front' | 'back',
+                        skippedCards
+                      );
+                      onSettingsChange({
+                        ...extractionSettings,
+                        skippedCards: newSkippedCards
+                      });
+                    }}
+                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
+                  >
+                    Skip All in Column {(currentCard % extractionSettings.grid.columns) + 1}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="space-y-4">
@@ -1030,6 +1187,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               )}
             </div>
           </div>
+
 
           {/* Individual Card Settings - next to preview */}
           <div className="border border-gray-200 rounded-lg p-4">

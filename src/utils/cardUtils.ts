@@ -1,5 +1,5 @@
 import { DPI_CONSTANTS } from '../constants';
-import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings } from '../types';
+import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings, SkippedCard } from '../types';
 
 // Utility functions for card calculations and extraction
 // Shared between ExtractStep and ConfigureStep components
@@ -9,6 +9,45 @@ import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, 
  */
 export function getActivePages(pageSettings: PageSettings[]): PageSettings[] {
   return pageSettings.filter((page: PageSettings) => !page?.skip);
+}
+
+/**
+ * Check if a specific card position is skipped
+ */
+export function isCardSkipped(
+  pageIndex: number,
+  gridRow: number,
+  gridColumn: number,
+  skippedCards: SkippedCard[] = [],
+  cardType?: 'front' | 'back'
+): boolean {
+  return skippedCards.some(skip => 
+    skip.pageIndex === pageIndex &&
+    skip.gridRow === gridRow &&
+    skip.gridColumn === gridColumn &&
+    (cardType === undefined || skip.cardType === undefined || skip.cardType === cardType)
+  );
+}
+
+/**
+ * Get all skipped cards for a specific page
+ */
+export function getSkippedCardsForPage(pageIndex: number, skippedCards: SkippedCard[] = []): SkippedCard[] {
+  return skippedCards.filter(skip => skip.pageIndex === pageIndex);
+}
+
+/**
+ * Calculate effective card count excluding skipped cards
+ */
+export function getEffectiveCardCount(
+  pdfMode: PdfMode,
+  activePages: PageSettings[],
+  cardsPerPage: number,
+  skippedCards: SkippedCard[] = []
+): number {
+  const totalCards = calculateTotalCards(pdfMode, activePages, cardsPerPage);
+  const skippedCount = skippedCards.length;
+  return Math.max(0, totalCards - skippedCount);
 }
 
 /**
@@ -667,11 +706,21 @@ export function getAvailableCardIds(
   const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
     ? activePages.length * cardsPerPage 
     : totalCards;
+  const skippedCards = extractionSettings.skippedCards || [];
   
   for (let i = 0; i < maxIndex; i++) {
     const cardInfo = getCardInfo(i, activePages, extractionSettings, pdfMode, cardsPerPage);
     if (cardInfo.type.toLowerCase() === viewMode) {
-      if (!cardIds.includes(cardInfo.id)) {
+      // Calculate grid position for this card
+      const pageIndex = Math.floor(i / cardsPerPage);
+      const cardOnPage = i % cardsPerPage;
+      const gridRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+      const gridColumn = cardOnPage % extractionSettings.grid.columns;
+      
+      // Check if this card position is skipped
+      const isSkipped = isCardSkipped(pageIndex, gridRow, gridColumn, skippedCards, cardInfo.type.toLowerCase() as 'front' | 'back');
+      
+      if (!isSkipped && !cardIds.includes(cardInfo.id)) {
         cardIds.push(cardInfo.id);
       }
     }
@@ -865,4 +914,109 @@ export function calculateCardImageDimensions(
     img.onerror = reject;
     img.src = cardImageUrl;
   });
+}
+
+/**
+ * Toggle skip state for a specific card position
+ */
+export function toggleCardSkip(
+  pageIndex: number,
+  gridRow: number,
+  gridColumn: number,
+  cardType: 'front' | 'back' | undefined,
+  skippedCards: SkippedCard[]
+): SkippedCard[] {
+  const existingIndex = skippedCards.findIndex(skip => 
+    skip.pageIndex === pageIndex &&
+    skip.gridRow === gridRow &&
+    skip.gridColumn === gridColumn &&
+    (cardType === undefined || skip.cardType === undefined || skip.cardType === cardType)
+  );
+  
+  if (existingIndex >= 0) {
+    // Remove from skipped cards
+    return skippedCards.filter((_, index) => index !== existingIndex);
+  } else {
+    // Add to skipped cards
+    const newSkip: SkippedCard = {
+      pageIndex,
+      gridRow,
+      gridColumn,
+      cardType
+    };
+    return [...skippedCards, newSkip];
+  }
+}
+
+/**
+ * Skip all cards in a specific row on a page
+ */
+export function skipAllInRow(
+  pageIndex: number,
+  gridRow: number,
+  gridColumns: number,
+  cardType: 'front' | 'back' | undefined,
+  skippedCards: SkippedCard[]
+): SkippedCard[] {
+  const newSkips = [...skippedCards];
+  
+  for (let col = 0; col < gridColumns; col++) {
+    const existingIndex = newSkips.findIndex(skip => 
+      skip.pageIndex === pageIndex &&
+      skip.gridRow === gridRow &&
+      skip.gridColumn === col &&
+      (cardType === undefined || skip.cardType === undefined || skip.cardType === cardType)
+    );
+    
+    if (existingIndex < 0) {
+      newSkips.push({
+        pageIndex,
+        gridRow,
+        gridColumn: col,
+        cardType
+      });
+    }
+  }
+  
+  return newSkips;
+}
+
+/**
+ * Skip all cards in a specific column on a page
+ */
+export function skipAllInColumn(
+  pageIndex: number,
+  gridColumn: number,
+  gridRows: number,
+  cardType: 'front' | 'back' | undefined,
+  skippedCards: SkippedCard[]
+): SkippedCard[] {
+  const newSkips = [...skippedCards];
+  
+  for (let row = 0; row < gridRows; row++) {
+    const existingIndex = newSkips.findIndex(skip => 
+      skip.pageIndex === pageIndex &&
+      skip.gridRow === row &&
+      skip.gridColumn === gridColumn &&
+      (cardType === undefined || skip.cardType === undefined || skip.cardType === cardType)
+    );
+    
+    if (existingIndex < 0) {
+      newSkips.push({
+        pageIndex,
+        gridRow: row,
+        gridColumn,
+        cardType
+      });
+    }
+  }
+  
+  return newSkips;
+}
+
+/**
+ * Clear all skipped cards
+ */
+export function clearAllSkips(): SkippedCard[] {
+  return [];
 }

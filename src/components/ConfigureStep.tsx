@@ -1057,11 +1057,21 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 </p>
                 <p>
                   <span className="font-medium">Front cards:</span>{' '}
-                  {countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings)}
+                  {getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length} 
+                  {(() => {
+                    const totalFronts = countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings);
+                    const availableFronts = getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                    return totalFronts !== availableFronts ? ` (${totalFronts - availableFronts} skipped)` : '';
+                  })()}
                 </p>
                 <p>
                   <span className="font-medium">Back cards:</span>{' '}
-                  {countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings)}
+                  {getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length}
+                  {(() => {
+                    const totalBacks = countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings);
+                    const availableBacks = getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                    return totalBacks !== availableBacks ? ` (${totalBacks - availableBacks} skipped)` : '';
+                  })()}
                 </p>
                 <p>
                   <span className="font-medium">PDF mode:</span>{' '}

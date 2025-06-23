@@ -41,6 +41,14 @@ export interface CardCropSettings {
   left: number;
 }
 
+// Skipped card position
+export interface SkippedCard {
+  pageIndex: number;    // Index in activePages array
+  gridRow: number;      // 0-based row in extraction grid
+  gridColumn: number;   // 0-based column in extraction grid
+  cardType?: 'front' | 'back'; // For duplex/gutter-fold modes
+}
+
 // Image rotation settings
 export interface ImageRotationSettings {
   front: number;
@@ -54,6 +62,7 @@ export interface ExtractionSettings {
   gutterWidth?: number;
   cardCrop?: CardCropSettings;
   imageRotation?: ImageRotationSettings;
+  skippedCards?: SkippedCard[];
 }
 
 // Color transformation settings

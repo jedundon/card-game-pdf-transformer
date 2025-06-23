@@ -537,7 +537,15 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total Cards:</span>
-              <span className="font-medium text-gray-800">{totalCards}</span>
+              <span className="font-medium text-gray-800">
+                {(() => {
+                  const frontCards = getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                  const backCards = getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                  const effectiveTotal = frontCards + backCards;
+                  const skippedCount = extractionSettings.skippedCards?.length || 0;
+                  return skippedCount > 0 ? `${effectiveTotal} (${skippedCount} skipped)` : totalCards;
+                })()}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Output Page Size:</span>

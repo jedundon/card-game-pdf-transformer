@@ -65,7 +65,8 @@ export const DEFAULT_SETTINGS = {
     imageRotation: {
       front: 0,
       back: 0
-    }
+    },
+    skippedCards: []
   },  outputSettings: {
     pageSize: {
       width: 3.5,
