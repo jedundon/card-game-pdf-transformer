@@ -1,138 +1,305 @@
-// TypeScript interfaces for the Card Game PDF Transformer application
+/**
+ * @fileoverview TypeScript interfaces for the Card Game PDF Transformer application
+ * 
+ * This module defines all the core data structures and type definitions used
+ * throughout the application. These interfaces ensure type safety and provide
+ * clear contracts for data flow between components.
+ * 
+ * **Interface Categories:**
+ * - PDF Processing: Types for working with PDF.js and document structure
+ * - Configuration: Settings for extraction, output, and processing modes
+ * - Card Data: Information about individual cards and their properties
+ * - Layout & Positioning: Grid systems, cropping, and spatial configurations
+ * - Color Processing: Color transformation and calibration settings
+ * - Component Interfaces: Props and event handler type definitions
+ * 
+ * **Type Safety:**
+ * All interfaces use strict typing with specific value constraints where
+ * appropriate (e.g., 'front' | 'back' unions) to prevent runtime errors
+ * and provide better IDE support.
+ * 
+ * @author Card Game PDF Transformer
+ */
 
 import { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 
 // PDF-related types
+/** PDF document proxy from PDF.js library */
 export type PdfData = PDFDocumentProxy;
+/** Individual PDF page proxy from PDF.js library */
 export type PdfPage = PDFPageProxy;
 
-// Page settings for PDF processing
+/**
+ * Page settings for PDF processing
+ * 
+ * Configures how individual PDF pages should be processed, including
+ * whether to skip them and their card type designation.
+ */
 export interface PageSettings {
+  /** Whether to skip this page during processing (default: false) */
   skip?: boolean;
+  /** Card type designation for duplex/gutter-fold modes ('front' or 'back') */
   type?: 'front' | 'back';
 }
 
-// PDF mode configuration
+/**
+ * PDF mode configuration
+ * 
+ * Defines how the PDF should be processed based on its layout and intended
+ * printing method. This affects card identification and rotation logic.
+ */
 export interface PdfMode {
+  /** Processing mode type */
   type: 'simplex' | 'duplex' | 'gutter-fold';
+  /** Orientation for gutter-fold mode (vertical = left/right split, horizontal = top/bottom split) */
   orientation?: 'vertical' | 'horizontal';
+  /** Flip edge for duplex printing (short = flip along short edge, long = flip along long edge) */
   flipEdge?: 'short' | 'long';
 }
 
-// Grid configuration for card extraction
+/**
+ * Grid configuration for card extraction
+ * 
+ * Defines the grid layout used to extract individual cards from PDF pages.
+ * The grid divides each page into a rectangular array of card positions.
+ */
 export interface GridSettings {
+  /** Number of card rows per page (must be positive integer) */
   rows: number;
+  /** Number of card columns per page (must be positive integer) */
   columns: number;
 }
 
-// Crop settings (in pixels at 300 DPI)
+/**
+ * Crop settings (in pixels at 300 DPI)
+ * 
+ * Defines how much to crop from each edge of the PDF page before
+ * extracting cards. Values are in pixels at extraction DPI (300).
+ */
 export interface CropSettings {
+  /** Pixels to crop from left edge of page */
   left: number;
+  /** Pixels to crop from right edge of page */
   right: number;
+  /** Pixels to crop from top edge of page */
   top: number;
+  /** Pixels to crop from bottom edge of page */
   bottom: number;
 }
 
-// Card-specific crop settings
+/**
+ * Card-specific crop settings
+ * 
+ * Additional cropping applied to individual cards after extraction
+ * from the page grid. Values are in pixels relative to the extracted card.
+ */
 export interface CardCropSettings {
+  /** Pixels to crop from top edge of individual card */
   top: number;
+  /** Pixels to crop from right edge of individual card */
   right: number;
+  /** Pixels to crop from bottom edge of individual card */
   bottom: number;
+  /** Pixels to crop from left edge of individual card */
   left: number;
 }
 
-// Skipped card position
+/**
+ * Skipped card position
+ * 
+ * Identifies a specific card position that should be excluded from processing.
+ * Used to handle blank spaces, damaged cards, or unwanted content in the PDF.
+ */
 export interface SkippedCard {
-  pageIndex: number;    // Index in activePages array
-  gridRow: number;      // 0-based row in extraction grid
-  gridColumn: number;   // 0-based column in extraction grid
-  cardType?: 'front' | 'back'; // For duplex/gutter-fold modes
+  /** Index in activePages array (0-based) */
+  pageIndex: number;
+  /** Row position in extraction grid (0-based) */
+  gridRow: number;
+  /** Column position in extraction grid (0-based) */
+  gridColumn: number;
+  /** Optional card type filter for duplex/gutter-fold modes */
+  cardType?: 'front' | 'back';
 }
 
-// Image rotation settings
+/**
+ * Image rotation settings
+ * 
+ * Defines rotation angles to apply to card images during extraction.
+ * Useful for correcting orientation issues in source PDFs.
+ */
 export interface ImageRotationSettings {
+  /** Rotation angle for front cards in degrees (0-359) */
   front: number;
+  /** Rotation angle for back cards in degrees (0-359) */
   back: number;
 }
 
-// Complete extraction settings
+/**
+ * Complete extraction settings
+ * 
+ * Comprehensive configuration for the card extraction process,
+ * including grid layout, cropping, and special handling options.
+ */
 export interface ExtractionSettings {
+  /** Grid layout for dividing pages into card positions */
   grid: GridSettings;
+  /** Page-level cropping settings */
   crop: CropSettings;
+  /** Width of gutter between card halves in gutter-fold mode (pixels) */
   gutterWidth?: number;
+  /** Individual card cropping settings */
   cardCrop?: CardCropSettings;
+  /** Rotation settings for extracted card images */
   imageRotation?: ImageRotationSettings;
+  /** Array of card positions to skip during processing */
   skippedCards?: SkippedCard[];
 }
 
-// Color transformation settings
+/**
+ * Color transformation settings
+ * 
+ * Defines color adjustments to apply to card images for print optimization.
+ * Values use professional color correction ranges and terminology.
+ */
 export interface ColorTransformation {
+  /** Brightness adjustment (-100 to +100) */
   brightness: number;
+  /** Contrast multiplier (0.5 to 2.0) */
   contrast: number;
+  /** Saturation adjustment (-100 to +100) */
   saturation: number;
+  /** Hue shift in degrees (-180 to +180) */
   hue: number;
+  /** Gamma correction (0.5 to 2.0) */
   gamma: number;
+  /** Vibrance adjustment (-100 to +100, selective saturation) */
   vibrance: number;
+  /** Highlight recovery (-50 to +50) */
   highlightRecovery: number;
+  /** Shadow recovery (-50 to +50) */
   shadowRecovery: number;
 }
 
-// Color transformation settings per card type
+/**
+ * Color transformation settings per card type
+ * 
+ * Allows different color adjustments for front and back cards,
+ * useful when they have different printing characteristics.
+ */
 export interface ColorTransformationSettings {
+  /** Color transformations for front cards */
   front: ColorTransformation;
+  /** Color transformations for back cards */
   back: ColorTransformation;
 }
 
-// Card size configuration
+/**
+ * Card size configuration
+ * 
+ * Defines the target dimensions for output cards in inches.
+ * These are the final printed card dimensions before any bleed or scaling.
+ */
 export interface CardSizeSettings {
+  /** Card width in inches (e.g., 2.5 for poker cards) */
   widthInches: number;
+  /** Card height in inches (e.g., 3.5 for poker cards) */
   heightInches: number;
 }
 
-// Page size configuration  
+/**
+ * Page size configuration
+ * 
+ * Defines the output page dimensions in inches for the final PDF.
+ * Can be different from card size for layout flexibility.
+ */
 export interface PageSizeSettings {
+  /** Page width in inches */
   width: number;
+  /** Page height in inches */
   height: number;
 }
 
-// Card spacing configuration
+/**
+ * Card spacing configuration
+ * 
+ * Defines spacing between cards when multiple cards are placed on a page.
+ * Currently reserved for future multi-card layout features.
+ */
 export interface CardSpacingSettings {
+  /** Horizontal spacing between cards in inches */
   horizontal: number;
+  /** Vertical spacing between cards in inches */
   vertical: number;
 }
 
-// Layout rotation settings
+/**
+ * Layout rotation settings
+ * 
+ * Defines rotation angles for final card layout in the output PDF.
+ * Applied after image processing and sizing calculations.
+ */
 export interface LayoutRotationSettings {
+  /** Rotation angle for front cards in degrees */
   front: number;
+  /** Rotation angle for back cards in degrees */
   back: number;
 }
 
-// Complete output settings
+/**
+ * Complete output settings
+ * 
+ * Comprehensive configuration for final PDF generation, including
+ * page layout, card sizing, positioning, and print optimization.
+ */
 export interface OutputSettings {
+  /** Output page dimensions */
   pageSize: PageSizeSettings;
+  /** Target card dimensions */
   cardSize: CardSizeSettings;
+  /** Scale percentage applied to cards (1-500) */
   cardScalePercent: number;
+  /** Bleed margin added to each card edge in inches */
   bleedMarginInches: number;
+  /** Spacing between cards (for future multi-card layouts) */
   spacing: CardSpacingSettings;
+  /** Rotation settings for card layout */
   rotation: LayoutRotationSettings;
+  /** How card images should be sized within card boundaries */
   cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
+  /** Card alignment within page (for future positioning options) */
   cardAlignment: 'top-left' | 'center';
+  /** Whether to include color calibration elements in output */
   includeColorCalibration: boolean;
+  /** Position offset from center of page */
   offset: {
+    /** Horizontal offset in inches (positive = right) */
     horizontal: number;
+    /** Vertical offset in inches (positive = down) */
     vertical: number;
   };
+  /** Optional printer calibration adjustments */
   printerCalibration?: {
+    /** X-axis offset in inches */
     offsetX: number;
+    /** Y-axis offset in inches */
     offsetY: number;
+    /** X-axis scale multiplier */
     scaleX: number;
+    /** Y-axis scale multiplier */
     scaleY: number;
   };
 }
 
-// Card information
+/**
+ * Card information
+ * 
+ * Identifies a card's type and unique identifier as determined by
+ * the card identification algorithm based on PDF mode and position.
+ */
 export interface CardInfo {
+  /** Card type ('Front', 'Back', or 'Unknown') */
   type: string;
+  /** Unique card identifier (1-based numbering) */
   id: number;
 }
 

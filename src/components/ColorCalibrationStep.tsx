@@ -1,3 +1,27 @@
+/**
+ * @fileoverview Color calibration component for printer color matching
+ * 
+ * This component provides professional color calibration tools for matching
+ * screen colors to printed output. It generates test grids with varying
+ * color transformations and allows users to compare them with printed samples.
+ * 
+ * **Key Features:**
+ * - Pixel-perfect grid extraction for accurate color comparison
+ * - Professional color transformation controls
+ * - Grid-based calibration with customizable parameters
+ * - Real-time preview of color adjustments
+ * - Export calibration results to PDF for printing
+ * 
+ * **Workflow:**
+ * 1. User selects a region on a card for color calibration
+ * 2. Component generates a grid of color variations
+ * 3. User prints the calibration grid
+ * 4. User compares printed grid with screen preview
+ * 5. User applies optimal color settings to final output
+ * 
+ * @author Card Game PDF Transformer
+ */
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'lucide-react';
 import { PrecisionSliderInput } from './PrecisionSliderInput';
@@ -26,14 +50,24 @@ import {
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
 
-// GridPreview component for showing the actual calibration grid
+/**
+ * GridPreview component for showing the actual calibration grid
+ * 
+ * Generates and displays a grid of color-transformed images for calibration
+ * comparison. Each cell in the grid applies different color transformation
+ * values along two axes (horizontal and vertical).
+ */
 interface GridPreviewProps {
+  /** Function to extract crop region with optional grid configuration for pixel-perfect sizing */
   cropImageUrl: (gridConfig?: { columns: number; rows: number }) => Promise<string | null>;
+  /** Grid configuration defining number of rows and columns */
   gridConfig: { columns: number; rows: number };
+  /** Transformation parameters for horizontal and vertical axes */
   transformations: {
     horizontal: { type: string; min: number; max: number };
     vertical: { type: string; min: number; max: number };
   };
+  /** User's current color settings to apply as base transformation */
   userColorSettings: ColorTransformation;
 }
 
@@ -724,7 +758,30 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     onColorSettingsChange(newSettings);
   }, [colorSettings, onColorSettingsChange]);
 
-  // Extract crop region from card image
+  /**
+   * Extract crop region from card image with pixel-perfect sizing
+   * 
+   * This function implements pixel-perfect extraction for color calibration grids.
+   * It calculates the exact number of pixels needed for each grid cell in the final
+   * printed output and extracts that exact amount from the source image, eliminating
+   * scaling artifacts that could affect color calibration accuracy.
+   * 
+   * **Algorithm:**
+   * 1. Calculate final card dimensions in pixels at print DPI (300)
+   * 2. Determine target grid cell dimensions in print pixels
+   * 3. Calculate source extraction size to match target pixel count
+   * 4. Extract crop region with exact pixel dimensions
+   * 5. Return data URL for grid cell display
+   * 
+   * **Pixel-Perfect Logic:**
+   * When gridConfig is provided, the function calculates precise extraction
+   * dimensions so that each grid cell contains exactly the right number of
+   * pixels for the final output, preventing any interpolation or scaling
+   * artifacts that could alter colors.
+   * 
+   * @param gridConfig - Optional grid configuration for pixel-perfect extraction
+   * @returns Promise resolving to data URL of extracted region, or null if failed
+   */
   const extractCropRegion = useCallback(async (gridConfig?: { columns: number; rows: number }): Promise<string | null> => {
     if (!cardPreviewUrl || !colorSettings?.selectedRegion || !cardRenderData) {
       return null;

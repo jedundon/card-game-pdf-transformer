@@ -1,18 +1,79 @@
+/**
+ * @fileoverview Printer calibration utilities for accurate print alignment
+ * 
+ * This module provides tools for generating calibration PDFs that help users
+ * measure and correct printer offset, scaling, and rotation issues. The calibration
+ * process ensures that printed cards match the expected dimensions and positioning.
+ * 
+ * **Calibration Workflow:**
+ * 1. Generate calibration PDF with known dimensions
+ * 2. Print PDF on target printer with target settings
+ * 3. Measure printed dimensions and compare to expected values
+ * 4. Calculate correction factors for offset, scale, and rotation
+ * 5. Apply corrections to final card output
+ * 
+ * **Key Features:**
+ * - Precision crosshairs with known 1.0" measurements
+ * - Card outline for cutting and positioning reference
+ * - Scale-aware crosshairs that maintain accuracy under printer scaling
+ * - Support for custom card sizes and media dimensions
+ * - Offset and rotation testing capabilities
+ * 
+ * @author Card Game PDF Transformer
+ */
+
 import { jsPDF } from 'jspdf';
 import { ColorTransformation, applyColorTransformation } from './colorUtils';
 import { OutputSettings } from '../types';
 
 /**
  * Generates a calibration PDF for printer offset and scale testing
- * @param cardWidth Width of the card in inches (default: 2.5")
- * @param cardHeight Height of the card in inches (default: 3.5") 
- * @param mediaWidth Width of the media in inches
- * @param mediaHeight Height of the media in inches
- * @param offsetX Horizontal offset in inches
- * @param offsetY Vertical offset in inches
- * @param rotation Rotation angle in degrees
- * @param scalePercent Scale percentage to apply to crosshair (default: 100)
- * @returns Blob PDF blob for download
+ * 
+ * Creates a precision calibration document with measurement crosshairs and
+ * card outline for testing printer accuracy. The crosshairs are designed
+ * to measure exactly 1.0" when printed correctly, allowing users to detect
+ * and measure printer scaling, offset, and rotation issues.
+ * 
+ * **Calibration Elements:**
+ * - Card outline in light gray for cutting reference
+ * - Precision crosshairs with 1.0" measurement arms
+ * - White center gap to improve measurement accuracy
+ * - Scale-aware crosshairs that maintain proportions
+ * - Clear labeling for measurement reference
+ * 
+ * **Usage Workflow:**
+ * 1. Generate calibration PDF with target card dimensions
+ * 2. Print on target printer using exact print settings
+ * 3. Measure printed crosshairs with ruler (should be 1.0")
+ * 4. Measure card outline dimensions
+ * 5. Calculate correction factors from measurements
+ * 6. Apply corrections to printer calibration settings
+ * 
+ * @param cardWidth - Width of the card in inches (default: 2.5" for poker cards)
+ * @param cardHeight - Height of the card in inches (default: 3.5" for poker cards)
+ * @param mediaWidth - Width of the paper/media in inches (e.g., 8.5" for letter)
+ * @param mediaHeight - Height of the paper/media in inches (e.g., 11" for letter)
+ * @param offsetX - Horizontal offset in inches (positive = right)
+ * @param offsetY - Vertical offset in inches (positive = down)
+ * @param rotation - Rotation angle in degrees (for future rotation testing)
+ * @param scalePercent - Scale percentage to apply to crosshair (default: 100)
+ * @returns PDF blob ready for download and printing
+ * 
+ * @example
+ * ```typescript
+ * // Generate standard poker card calibration for letter paper
+ * const calibrationPdf = generateCalibrationPDF(2.5, 3.5, 8.5, 11);
+ * 
+ * // Generate with offset testing
+ * const offsetTestPdf = generateCalibrationPDF(2.5, 3.5, 8.5, 11, 0.1, -0.05);
+ * 
+ * // Download the PDF
+ * const url = URL.createObjectURL(calibrationPdf);
+ * const link = document.createElement('a');
+ * link.href = url;
+ * link.download = 'printer-calibration.pdf';
+ * link.click();
+ * ```
  */
 export function generateCalibrationPDF(
   cardWidth = 2.5,

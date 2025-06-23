@@ -1,11 +1,43 @@
+/**
+ * @fileoverview Card processing utilities for PDF card game extraction
+ * 
+ * This module contains the core business logic for processing card game PDFs,
+ * including card identification, image extraction, and dimension calculations.
+ * 
+ * **Key Responsibilities:**
+ * - Card identification logic for different PDF modes (simplex/duplex/gutter-fold)
+ * - High-resolution image extraction from PDF pages at 300 DPI
+ * - Complex card ID mapping and front/back relationships
+ * - Grid-based card positioning and cropping calculations
+ * - Skip card management and filtering
+ * - DPI conversion and scaling operations
+ * 
+ * **PDF Mode Support:**
+ * - **Simplex**: Each page contains unique cards
+ * - **Duplex**: Alternating front/back pages with flip edge logic
+ * - **Gutter-fold**: Pages split into front/back halves with mirroring
+ * 
+ * **Shared Components:**
+ * Used by ExtractStep, ConfigureStep, and ExportStep components for consistent
+ * card processing across the application workflow.
+ * 
+ * @author Card Game PDF Transformer
+ */
+
 import { DPI_CONSTANTS } from '../constants';
 import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings, SkippedCard } from '../types';
 
-// Utility functions for card calculations and extraction
-// Shared between ExtractStep and ConfigureStep components
-
 /**
  * Calculate active pages (non-skipped pages)
+ * 
+ * @param pageSettings - Array of page settings with optional skip flags
+ * @returns Array of pages that are not marked as skipped
+ * 
+ * @example
+ * ```typescript
+ * const allPages = [{ skip: false }, { skip: true }, { skip: false }];
+ * const activePages = getActivePages(allPages); // Returns [{ skip: false }, { skip: false }]
+ * ```
  */
 export function getActivePages(pageSettings: PageSettings[]): PageSettings[] {
   return pageSettings.filter((page: PageSettings) => !page?.skip);
@@ -13,6 +45,19 @@ export function getActivePages(pageSettings: PageSettings[]): PageSettings[] {
 
 /**
  * Check if a specific card position is skipped
+ * 
+ * @param pageIndex - Index in the active pages array (0-based)
+ * @param gridRow - Row position in the extraction grid (0-based)
+ * @param gridColumn - Column position in the extraction grid (0-based)
+ * @param skippedCards - Array of skipped card positions
+ * @param cardType - Optional card type filter ('front' or 'back')
+ * @returns true if the card position is in the skipped cards list
+ * 
+ * @example
+ * ```typescript
+ * const skipped = [{ pageIndex: 0, gridRow: 1, gridColumn: 2, cardType: 'front' }];
+ * const isSkipped = isCardSkipped(0, 1, 2, skipped, 'front'); // Returns true
+ * ```
  */
 export function isCardSkipped(
   pageIndex: number,
@@ -31,6 +76,20 @@ export function isCardSkipped(
 
 /**
  * Get all skipped cards for a specific page
+ * 
+ * @param pageIndex - Index in the active pages array (0-based)
+ * @param skippedCards - Array of all skipped card positions
+ * @returns Array of skipped cards that belong to the specified page
+ * 
+ * @example
+ * ```typescript
+ * const allSkipped = [
+ *   { pageIndex: 0, gridRow: 1, gridColumn: 2 },
+ *   { pageIndex: 1, gridRow: 0, gridColumn: 1 },
+ *   { pageIndex: 0, gridRow: 2, gridColumn: 0 }
+ * ];
+ * const page0Skipped = getSkippedCardsForPage(0, allSkipped); // Returns 2 items for page 0
+ * ```
  */
 export function getSkippedCardsForPage(pageIndex: number, skippedCards: SkippedCard[] = []): SkippedCard[] {
   return skippedCards.filter(skip => skip.pageIndex === pageIndex);
@@ -38,6 +97,24 @@ export function getSkippedCardsForPage(pageIndex: number, skippedCards: SkippedC
 
 /**
  * Calculate effective card count excluding skipped cards
+ * 
+ * This function computes the total number of unique cards that will be processed,
+ * accounting for the PDF mode and any cards that have been marked as skipped.
+ * 
+ * @param pdfMode - PDF processing mode configuration
+ * @param activePages - Array of non-skipped pages
+ * @param cardsPerPage - Number of cards per page based on grid settings (rows × columns)
+ * @param skippedCards - Array of individual card positions to skip
+ * @returns Total number of cards that will be processed (total - skipped)
+ * 
+ * @example
+ * ```typescript
+ * const pdfMode = { type: 'duplex', orientation: 'vertical', flipEdge: 'short' };
+ * const activePages = [{ type: 'front' }, { type: 'back' }];
+ * const cardsPerPage = 6; // 2×3 grid
+ * const skipped = [{ pageIndex: 0, gridRow: 0, gridColumn: 0 }];
+ * const effective = getEffectiveCardCount(pdfMode, activePages, cardsPerPage, skipped); // 5 cards
+ * ```
  */
 export function getEffectiveCardCount(
   pdfMode: PdfMode,
@@ -52,6 +129,39 @@ export function getEffectiveCardCount(
 
 /**
  * Calculate total unique cards based on PDF mode and settings
+ * 
+ * This is a core function that determines how many unique cards exist in the PDF
+ * based on the processing mode. The algorithm varies significantly by mode:
+ * 
+ * - **Duplex Mode**: Each front page represents unique cards, back pages are duplicates
+ *   Formula: (number of front pages) × (cards per page)
+ * 
+ * - **Gutter-fold Mode**: Each page contains unique cards for both front and back
+ *   Formula: (total pages) × (cards per page)
+ * 
+ * - **Simplex Mode**: Each page is treated as containing unique cards
+ *   Formula: (total pages) × (cards per page)
+ * 
+ * @param pdfMode - PDF processing mode configuration
+ * @param activePages - Array of non-skipped pages with their types
+ * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @returns Total number of unique cards in the PDF
+ * 
+ * @example
+ * ```typescript
+ * // Duplex mode with 2 front pages and 2 back pages, 6 cards per page
+ * const duplexMode = { type: 'duplex', flipEdge: 'short' };
+ * const duplexPages = [
+ *   { type: 'front' }, { type: 'back' }, 
+ *   { type: 'front' }, { type: 'back' }
+ * ];
+ * const total = calculateTotalCards(duplexMode, duplexPages, 6); // Returns 12 (2 front pages × 6)
+ * 
+ * // Gutter-fold mode with 3 pages, 8 cards per page
+ * const gutterMode = { type: 'gutter-fold', orientation: 'vertical' };
+ * const gutterPages = [{}, {}, {}];
+ * const total2 = calculateTotalCards(gutterMode, gutterPages, 8); // Returns 24 (3 pages × 8)
+ * ```
  */
 export function calculateTotalCards(
   pdfMode: PdfMode,
@@ -78,6 +188,15 @@ export function calculateTotalCards(
 
 /**
  * Helper function to count front pages up to a given index
+ * 
+ * Used internally for duplex mode card identification to determine
+ * which front page a given back page corresponds to.
+ * 
+ * @param activePages - Array of active pages with type information
+ * @param pageIndex - Target page index (inclusive)
+ * @returns Number of front pages from index 0 up to and including pageIndex
+ * 
+ * @internal
  */
 function countFrontPagesUpTo(activePages: PageSettings[], pageIndex: number): number {
   let count = 0;
@@ -91,6 +210,15 @@ function countFrontPagesUpTo(activePages: PageSettings[], pageIndex: number): nu
 
 /**
  * Helper function to count back pages up to a given index
+ * 
+ * Used internally for duplex mode card identification to determine
+ * the relative position of back pages.
+ * 
+ * @param activePages - Array of active pages with type information
+ * @param pageIndex - Target page index (inclusive)
+ * @returns Number of back pages from index 0 up to and including pageIndex
+ * 
+ * @internal
  */
 function countBackPagesUpTo(activePages: PageSettings[], pageIndex: number): number {
   let count = 0;
@@ -104,6 +232,15 @@ function countBackPagesUpTo(activePages: PageSettings[], pageIndex: number): num
 
 /**
  * Helper function to get total count of pages of a specific type
+ * 
+ * Used internally for duplex mode calculations to determine the total
+ * number of front or back pages in the document.
+ * 
+ * @param activePages - Array of active pages with type information
+ * @param pageType - Type of pages to count ('front' or 'back')
+ * @returns Total number of pages of the specified type
+ * 
+ * @internal
  */
 function getTotalPagesOfType(activePages: PageSettings[], pageType: 'front' | 'back'): number {
   return activePages.filter(page => page?.type === pageType).length;
@@ -111,7 +248,38 @@ function getTotalPagesOfType(activePages: PageSettings[], pageType: 'front' | 'b
 
 /**
  * Calculate card front/back identification based on PDF mode
- */
+ * 
+ * This is the core algorithm for identifying whether a card is a front or back,
+ * and determining its unique ID. The logic varies significantly by PDF mode:
+ * 
+ * **Duplex Mode:**
+ * - Front pages contain unique cards numbered sequentially
+ * - Back pages map to corresponding front cards based on printing flip edge
+ * - Supports complex scenarios like single back page for multiple front pages
+ * - Applies flip edge logic (short/long edge) for proper back card mapping
+ * 
+ * **Gutter-fold Mode:**
+ * - Each page contains both front and back cards split by a gutter line
+ * - Vertical: left=front, right=back (mirrored across vertical gutter)
+ * - Horizontal: top=front, bottom=back (mirrored across horizontal gutter)
+ * - Front and back cards share the same ID (represent same logical card)
+ * 
+ * **Simplex Mode:**
+ * - Each card is treated as unique with sequential numbering
+ * 
+ * @param cardIndex - Global card index across all pages (0-based)
+ * @param activePages - Array of non-skipped pages with type information
+ * @param extractionSettings - Grid and cropping configuration
+ * @param pdfMode - PDF processing mode and orientation settings
+ * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @param pageWidth - Optional page width for flip edge calculations
+ * @param pageHeight - Optional page height for flip edge calculations
+ * @returns Object containing card type ('Front'/'Back') and unique ID number
+ * 
+ * @example
+ * ```typescript
+ * // Duplex mode example
+ * const duplexMode = { type: 'duplex', flipEdge: 'short' };\n * const pages = [{ type: 'front' }, { type: 'back' }];\n * const grid = { rows: 2, columns: 3 };\n * const settings = { grid, crop: {...}, skippedCards: [] };\n * \n * // Card index 0 = first card on first front page\n * const info1 = getCardInfo(0, pages, settings, duplexMode, 6); // { type: 'Front', id: 1 }\n * \n * // Card index 6 = first card on first back page (maps to front card 1 with flip)\n * const info2 = getCardInfo(6, pages, settings, duplexMode, 6); // { type: 'Back', id: 1 }\n * \n * // Gutter-fold mode example\n * const gutterMode = { type: 'gutter-fold', orientation: 'vertical' };\n * const gutterPages = [{}];\n * const gutterGrid = { rows: 2, columns: 4 }; // 2 columns each side\n * const gutterSettings = { grid: gutterGrid, crop: {...} };\n * \n * // Card index 0 = top-left (front side)\n * const info3 = getCardInfo(0, gutterPages, gutterSettings, gutterMode, 8); // { type: 'Front', id: 1 }\n * \n * // Card index 2 = top-right (back side, maps to front card)\n * const info4 = getCardInfo(2, gutterPages, gutterSettings, gutterMode, 8); // { type: 'Back', id: 2 }\n * ```\n * \n * @throws {Error} When page dimensions are invalid or card index is out of bounds\n */
 export function getCardInfo(
   cardIndex: number,
   activePages: PageSettings[],
@@ -320,6 +488,64 @@ export function getActualPageNumber(
 
 /**
  * Extract individual card from PDF at 300 DPI
+ * 
+ * This is the core image extraction function that converts a card position
+ * into a high-resolution image. The process involves multiple steps:
+ * 
+ * **Extraction Pipeline:**
+ * 1. Validate inputs and calculate page/card positions
+ * 2. Load PDF page at high resolution (300 DPI)
+ * 3. Render page to canvas with error handling and timeouts
+ * 4. Calculate card boundaries based on grid and crop settings
+ * 5. Handle special cases (gutter-fold with gutter width)
+ * 6. Extract card region from rendered page
+ * 7. Apply individual card cropping if specified
+ * 8. Apply image rotation based on card type
+ * 9. Generate final data URL with validation
+ * 
+ * **DPI Handling:**
+ * - PDF.js uses 72 DPI as base, scales to 300 DPI for extraction
+ * - Crop settings are in extraction DPI pixels (300 DPI)
+ * - Final output maintains 300 DPI for print quality
+ * 
+ * **Error Handling:**
+ * - Comprehensive validation of all inputs
+ * - Timeout protection for PDF operations (15s page load, 30s render)
+ * - Canvas size limits to prevent memory issues
+ * - Graceful fallbacks for extraction failures
+ * 
+ * @param cardIndex - Global card index across all pages (0-based)
+ * @param pdfData - PDF document proxy from PDF.js
+ * @param pdfMode - PDF processing mode configuration
+ * @param activePages - Array of non-skipped pages
+ * @param pageSettings - Complete page settings including skipped pages
+ * @param extractionSettings - Grid, crop, rotation, and skip configuration
+ * @returns Promise resolving to data URL of extracted card image, or null if failed
+ * 
+ * @example
+ * ```typescript
+ * const cardImage = await extractCardImage(
+ *   0, // First card
+ *   pdfDocument,
+ *   { type: 'duplex', flipEdge: 'short' },
+ *   activePages,
+ *   allPageSettings,
+ *   {
+ *     grid: { rows: 2, columns: 3 },
+ *     crop: { top: 10, right: 10, bottom: 10, left: 10 },
+ *     cardCrop: { top: 5, right: 5, bottom: 5, left: 5 },
+ *     imageRotation: { front: 0, back: 180 },
+ *     skippedCards: []
+ *   }
+ * );
+ * 
+ * if (cardImage) {
+ *   // Use the data URL for display or processing
+ *   imgElement.src = cardImage;
+ * }
+ * ```
+ * 
+ * @throws {Error} When PDF operations fail, canvas creation fails, or invalid settings provided
  */
 export async function extractCardImage(
   cardIndex: number,
@@ -693,6 +919,36 @@ export async function extractCardImage(
 
 /**
  * Get available card IDs for a specific view mode (front/back)
+ * 
+ * Generates a sorted list of unique card IDs that exist for the specified
+ * card type (front or back), excluding any skipped cards. Used by UI components
+ * to populate card selection dropdowns and navigation.
+ * 
+ * **Algorithm:**
+ * 1. Iterate through all possible card positions
+ * 2. Use getCardInfo() to determine card type and ID
+ * 3. Filter by requested view mode (front/back)
+ * 4. Exclude skipped card positions
+ * 5. Remove duplicates and sort numerically
+ * 
+ * @param viewMode - Card type to filter by ('front' or 'back')
+ * @param totalCards - Total number of unique cards in the document
+ * @param pdfMode - PDF processing mode configuration
+ * @param activePages - Array of non-skipped pages
+ * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @param extractionSettings - Settings including grid config and skipped cards
+ * @returns Sorted array of unique card ID numbers for the specified type
+ * 
+ * @example
+ * ```typescript
+ * const frontIds = getAvailableCardIds(
+ *   'front', 12, duplexMode, activePages, 6, extractionSettings
+ * ); // Returns [1, 2, 3, 4, 5, 6] (excluding any skipped cards)
+ * 
+ * const backIds = getAvailableCardIds(
+ *   'back', 12, duplexMode, activePages, 6, extractionSettings
+ * ); // Returns [1, 2, 3, 4, 5, 6] (same IDs, different card faces)
+ * ```
  */
 export function getAvailableCardIds(
   viewMode: 'front' | 'back',
@@ -744,6 +1000,38 @@ export function getRotationForCardType(
 
 /**
  * Calculate card dimensions using new card size settings
+ * 
+ * Computes final card dimensions in pixels and inches based on the output
+ * configuration. Handles bleed margins, scaling, and DPI conversion.
+ * 
+ * **Calculation Process:**
+ * 1. Start with base card size (e.g., 2.5" × 3.5" for poker cards)
+ * 2. Add bleed margin to each edge (target size = base + 2×bleed)
+ * 3. Apply scale percentage to target size
+ * 4. Convert final dimensions to pixels at extraction DPI (300)
+ * 
+ * @param outputSettings - Output configuration with card size, bleed, and scale
+ * @returns Object containing various dimension calculations:
+ *   - `width`/`height`: Final dimensions in pixels at 300 DPI
+ *   - `scaleFactor`: Applied scale as decimal (e.g., 1.0 for 100%)
+ *   - `aspectRatio`: Width/height ratio
+ *   - `baseCard*Inches`: Original card size without bleed
+ *   - `targetCard*Inches`: Card size with bleed, before scaling
+ *   - `scaledCard*Inches`: Final card size with bleed and scaling
+ *   - `bleedMarginInches`: Applied bleed margin
+ * 
+ * @example
+ * ```typescript
+ * const outputSettings = {
+ *   cardSize: { widthInches: 2.5, heightInches: 3.5 },
+ *   bleedMarginInches: 0.125, // 1/8" bleed
+ *   cardScalePercent: 95
+ * };
+ * 
+ * const dims = calculateCardDimensions(outputSettings);
+ * // dims.scaledCardWidthInches = (2.5 + 0.25) * 0.95 = 2.6125"
+ * // dims.width = 2.6125 * 300 = 783.75 pixels
+ * ```
  */
 export function calculateCardDimensions(
   outputSettings: OutputSettings
@@ -841,6 +1129,46 @@ export function getDpiScaleFactor(): number {
 
 /**
  * Calculate card image dimensions based on sizing mode
+ * 
+ * Determines how a card image should be sized within the target card area
+ * based on the selected sizing mode. Returns both the final image size
+ * and the original image dimensions for reference.
+ * 
+ * **Sizing Modes:**
+ * - `actual-size`: Use image at original extracted size (no scaling)
+ * - `fit-to-card`: Scale to fit entirely within card bounds (letterboxed)
+ * - `fill-card`: Scale to fill entire card area (may crop edges)
+ * 
+ * **Algorithm:**
+ * 1. Load image to get natural pixel dimensions
+ * 2. Convert pixels to inches using extraction DPI (300)
+ * 3. Apply sizing mode calculations:
+ *    - Actual: No change to dimensions
+ *    - Fit: Scale down/up to fit within bounds, preserve aspect ratio
+ *    - Fill: Scale to cover entire area, preserve aspect ratio
+ * 
+ * @param cardImageUrl - Data URL of the extracted card image
+ * @param targetCardWidthInches - Target card width in inches
+ * @param targetCardHeightInches - Target card height in inches
+ * @param sizingMode - How to size the image within the card area
+ * @returns Promise resolving to object with final and original dimensions in inches
+ * 
+ * @example
+ * ```typescript
+ * const result = await calculateCardImageDimensions(
+ *   cardDataUrl,
+ *   2.5, // target width
+ *   3.5, // target height
+ *   'fit-to-card'
+ * );
+ * 
+ * // For an image that's 1.8" × 4.0" original:
+ * // - Fit mode scales down to fit height: 1.575" × 3.5"
+ * // result.width = 1.575, result.height = 3.5
+ * // result.imageWidth = 1.8, result.imageHeight = 4.0
+ * ```
+ * 
+ * @throws {Error} When image fails to load or has invalid dimensions
  */
 export function calculateCardImageDimensions(
   cardImageUrl: string,

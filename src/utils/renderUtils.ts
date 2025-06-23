@@ -3,10 +3,31 @@ import { DEFAULT_SETTINGS } from '../defaults';
 import { OutputSettings } from '../types';
 
 /**
- * Unified rendering utilities for card processing
+ * @fileoverview Unified rendering utilities for card processing
  * 
  * This module provides consistent rendering logic shared between preview (ConfigureStep)
  * and final output (ExportStep) to ensure visual consistency and eliminate duplicate code.
+ * 
+ * **Core Design Principles:**
+ * - **Unified Pipeline**: Same functions used for both preview and final export
+ * - **Card vs Image Separation**: Card container defines clipping; image size handles scaling
+ * - **Canvas-Based Processing**: All rotation and clipping via canvas for pixel-perfect control
+ * - **DPI Consistency**: Proper scaling between extraction (300), screen (72/96), and output
+ * 
+ * **Rendering Pipeline:**
+ * 1. `calculateFinalCardRenderDimensions()` - Determine card container and image sizes
+ * 2. `processCardImageForRendering()` - Apply sizing, rotation, and clipping via canvas
+ * 3. `calculateCardPositioning()` - Handle placement and rotation-aware dimensions
+ * 4. `calculatePreviewScaling()` - Convert to screen display format for UI
+ * 
+ * **Key Features:**
+ * - Support for multiple image sizing modes (actual-size, fit-to-card, fill-card)
+ * - Proper handling of image rotation with dimension swapping
+ * - Canvas-based clipping to card boundaries
+ * - DPI-aware scaling for different contexts
+ * - Comprehensive error handling and validation
+ * 
+ * @author Card Game PDF Transformer
  */
 
 // Types for render calculations
@@ -52,8 +73,47 @@ export interface RotatedImageData {
 /**
  * Calculate final card render dimensions based on sizing mode
  * 
- * This is the unified function that both ConfigureStep and ExportStep should use
+ * This is the unified function that both ConfigureStep and ExportStep use
  * to ensure consistent sizing behavior between preview and final output.
+ * 
+ * **Calculation Process:**
+ * 1. Load image to get natural pixel dimensions
+ * 2. Convert to inches using extraction DPI (300)
+ * 3. Apply bleed margin to card dimensions (base + 2×bleed)
+ * 4. Apply scale percentage to target dimensions
+ * 5. Calculate image size based on sizing mode:
+ *    - `actual-size`: Use original extracted size
+ *    - `fit-to-card`: Scale to fit within card bounds (letterbox)
+ *    - `fill-card`: Scale to fill card area (may crop)
+ * 6. Apply scale percentage to final image dimensions
+ * 
+ * **DPI Handling:**
+ * - Input image assumed to be at extraction DPI (300)
+ * - All calculations done in inches for consistency
+ * - Output dimensions in inches for downstream processing
+ * 
+ * @param cardImageUrl - Data URL of the extracted card image
+ * @param outputSettings - Complete output configuration including card size, bleed, scale, and sizing mode
+ * @returns Promise resolving to CardRenderDimensions with card container and image sizes
+ * 
+ * @example
+ * ```typescript
+ * const dimensions = await calculateFinalCardRenderDimensions(
+ *   cardDataUrl,
+ *   {
+ *     cardSize: { widthInches: 2.5, heightInches: 3.5 },
+ *     bleedMarginInches: 0.125,
+ *     cardScalePercent: 95,
+ *     cardImageSizingMode: 'fit-to-card'
+ *   }
+ * );
+ * 
+ * // For a 2.0" × 4.0" extracted image:
+ * // - Card container: 2.6125" × 3.4625" (with bleed and scale)
+ * // - Image size: 1.73125" × 3.4625" (fit-to-card mode, scaled)
+ * ```
+ * 
+ * @throws {Error} When image fails to load, has invalid dimensions, or settings are invalid
  */
 export async function calculateFinalCardRenderDimensions(
   cardImageUrl: string,
@@ -244,7 +304,46 @@ export async function calculateFinalCardRenderDimensions(
 /**
  * Calculate card positioning on the page
  * 
- * Takes into account page size, offsets, and rotation to determine final positioning.
+ * Determines the final position and dimensions of a card on the output page,
+ * taking into account page size, user offsets, and rotation effects.
+ * 
+ * **Positioning Logic:**
+ * 1. Get rotation value for the specified card type (front/back)
+ * 2. Calculate final dimensions after rotation (swap width/height for 90°/270°)
+ * 3. Center card on page and apply user-specified offsets
+ * 4. Return position and dimensions for rendering
+ * 
+ * **Rotation Handling:**
+ * - 0°/180°: Width and height remain unchanged
+ * - 90°/270°: Width and height are swapped to account for rotation
+ * - Position calculation uses post-rotation dimensions
+ * 
+ * @param renderDimensions - Card container and image dimensions from calculateFinalCardRenderDimensions()
+ * @param outputSettings - Output configuration including page size and offsets
+ * @param cardType - Card type to determine rotation ('front' or 'back')
+ * @returns CardPositioning object with final position, dimensions, and rotation
+ * 
+ * @example
+ * ```typescript
+ * const positioning = calculateCardPositioning(
+ *   renderDimensions,
+ *   {
+ *     pageSize: { width: 8.5, height: 11 },
+ *     offset: { horizontal: 0.25, vertical: -0.125 },
+ *     rotation: { front: 0, back: 180 }
+ *   },
+ *   'front'
+ * );
+ * 
+ * // For a 2.5" × 3.5" card on 8.5" × 11" page with 0.25" right, 0.125" up offset:
+ * // positioning = {
+ * //   x: 3.25,    // (8.5 - 2.5) / 2 + 0.25
+ * //   y: 3.625,   // (11 - 3.5) / 2 - 0.125
+ * //   width: 2.5,
+ * //   height: 3.5,
+ * //   rotation: 0
+ * // }
+ * ```
  */
 export function calculateCardPositioning(
   renderDimensions: CardRenderDimensions,
@@ -286,7 +385,53 @@ export function calculateCardPositioning(
  * Process card image for rendering (handle rotation and clipping)
  * 
  * Creates a processed version of the image with proper sizing, rotation, and clipping
- * to match the card boundaries.
+ * to match the card boundaries. This is the core image processing function that ensures
+ * pixel-perfect output for both preview and final export.
+ * 
+ * **Processing Pipeline:**
+ * 1. Load source image and validate dimensions
+ * 2. Create canvas with card container dimensions (clipping bounds)
+ * 3. Convert all dimensions from inches to pixels at extraction DPI
+ * 4. Apply image rotation using canvas transforms:
+ *    - Center canvas transformation origin
+ *    - Apply rotation in radians
+ *    - Draw image centered in rotated coordinate system
+ * 5. Clip image to card boundaries automatically via canvas size
+ * 6. Generate final data URL for use in rendering
+ * 
+ * **Key Features:**
+ * - **Pixel-Perfect**: All calculations done at extraction DPI (300)
+ * - **Canvas Clipping**: Card container size automatically clips image
+ * - **Rotation Support**: Handles arbitrary rotation angles with proper centering
+ * - **Memory Management**: Validates canvas size to prevent memory issues
+ * - **Error Handling**: Comprehensive validation with helpful error messages
+ * 
+ * @param cardImageUrl - Data URL of the extracted card image
+ * @param renderDimensions - Calculated dimensions from calculateFinalCardRenderDimensions()
+ * @param rotation - Rotation angle in degrees (0-359)
+ * @returns Promise resolving to RotatedImageData with processed image and final dimensions
+ * 
+ * @example
+ * ```typescript
+ * const processed = await processCardImageForRendering(
+ *   cardDataUrl,
+ *   {
+ *     cardWidthInches: 2.5,
+ *     cardHeightInches: 3.5,
+ *     imageWidthInches: 2.8,  // Larger than card (will be clipped)
+ *     imageHeightInches: 3.2,
+ *     // ... other dimensions
+ *   },
+ *   90  // 90-degree rotation
+ * );
+ * 
+ * // Result:
+ * // - Image rotated 90 degrees
+ * // - Clipped to 2.5" × 3.5" card boundaries
+ * // - Ready for placement at calculated position
+ * ```
+ * 
+ * @throws {Error} When image loading fails, canvas creation fails, or invalid parameters provided
  */
 export async function processCardImageForRendering(
   cardImageUrl: string,
@@ -514,7 +659,47 @@ function getRotationForCardType(outputSettings: OutputSettings, cardType: 'front
 /**
  * Calculate preview scaling for ConfigureStep display
  * 
- * Converts render dimensions to screen pixels for preview display
+ * Converts render dimensions and positioning from print inches to screen pixels
+ * for preview display in the UI. Handles DPI conversion and viewport scaling.
+ * 
+ * **Scaling Process:**
+ * 1. Convert page dimensions from inches to screen pixels (72 DPI)
+ * 2. Calculate scale factor to fit within preview constraints
+ * 3. Apply scale to page dimensions
+ * 4. Convert card position and size to preview coordinates
+ * 5. Return all scaled values for UI rendering
+ * 
+ * **DPI Handling:**
+ * - Input dimensions are in print inches
+ * - Converts to screen pixels using SCREEN_DPI (72)
+ * - Applies additional scaling to fit preview area
+ * - Final values ready for CSS pixel display
+ * 
+ * @param _renderDimensions - Card render dimensions (currently unused, reserved for future)
+ * @param positioning - Card position and dimensions from calculateCardPositioning()
+ * @param pageWidth - Page width in inches
+ * @param pageHeight - Page height in inches
+ * @param maxPreviewWidth - Maximum preview width in pixels (default: 400)
+ * @param maxPreviewHeight - Maximum preview height in pixels (default: 500)
+ * @returns Object with scaled dimensions and positions for preview display
+ * 
+ * @example
+ * ```typescript
+ * const preview = calculatePreviewScaling(
+ *   renderDimensions,
+ *   { x: 3, y: 3.75, width: 2.5, height: 3.5, rotation: 0 },
+ *   8.5,  // Letter width
+ *   11,   // Letter height
+ *   400,  // Max preview width
+ *   500   // Max preview height
+ * );
+ * 
+ * // For 8.5" × 11" page:
+ * // - Screen pixels: 612 × 792
+ * // - Scale to fit 400×500: ~0.63
+ * // - Final preview: 386 × 500 pixels
+ * // - Card at: (135, 169) pixels, 112 × 158 pixels
+ * ```
  */
 export function calculatePreviewScaling(
   _renderDimensions: CardRenderDimensions,
