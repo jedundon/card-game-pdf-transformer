@@ -577,7 +577,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   }, []);
 
   // Handle click to select crop region center
-  const handleCardClick = useCallback((_event: React.MouseEvent<HTMLDivElement>) => {
+  const handleCardClick = useCallback(() => {
     if (!cardRenderData || !cropRegionDimensions || !hoverPosition) return;
     
     // Convert hover position to card-relative coordinates (0-1 normalized)

@@ -23,11 +23,11 @@ export interface LastImportedFileInfo {
  * Save current workflow settings to localStorage for auto-recovery
  */
 export const saveSettingsToLocalStorage = (
-  pdfMode: any,
-  pageSettings: any,
-  extractionSettings: any,
-  outputSettings: any,
-  colorSettings: any
+  pdfMode: unknown,
+  pageSettings: unknown,
+  extractionSettings: unknown,
+  outputSettings: unknown,
+  colorSettings: unknown
 ): void => {
   try {
     const autoSaveData: AutoSaveData = {
