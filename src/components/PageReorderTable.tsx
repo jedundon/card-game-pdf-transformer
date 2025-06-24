@@ -123,37 +123,44 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   // Throttled drag over handler for performance
   const throttledDragOver = useCallback(
     throttleDragEvents((event: MouseEvent | TouchEvent) => {
-      if (!tableRef.current || !dragState.isDragging) return;
-      
-      const newState = handleDragOver(event, tableRef.current, ROW_HEIGHT, dragState);
-      setDragState(newState);
+      setDragState(currentDragState => {
+        if (!tableRef.current || !currentDragState.isDragging) return currentDragState;
+        
+        const newState = handleDragOver(event, tableRef.current, ROW_HEIGHT, currentDragState);
+        return newState;
+      });
     }, 16),
-    [dragState]
+    [] // No dependencies - use functional state update
   );
 
   // Handle start of drag operation
   const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent) => {
     event.preventDefault();
-    const newState = handleDragStart(event.nativeEvent, pageIndex, dragState);
-    setDragState(newState);
-  }, [dragState]);
+    setDragState(currentDragState => {
+      const newState = handleDragStart(event.nativeEvent, pageIndex, currentDragState);
+      return newState;
+    });
+  }, []); // No dependencies - use functional state update
 
   // Handle end of drag operation
   const handleDragEndForTable = useCallback(() => {
-    console.log('🔄 Drag end - current dragState:', dragState);
-    const result = handleDragEnd(dragState);
-    console.log('🔄 Drag end result:', result);
-    setDragState(result.newState);
-    
-    if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
-      console.log(`🔄 Reordering pages from ${result.fromIndex} to ${result.toIndex}`);
-      const reorderedPages = reorderPages(pages, result.fromIndex, result.toIndex);
-      console.log('🔄 Reordered pages:', reorderedPages);
-      onPagesReorder(reorderedPages);
-    } else {
-      console.log('🔄 No reordering needed:', { shouldReorder: result.shouldReorder, fromIndex: result.fromIndex, toIndex: result.toIndex });
-    }
-  }, [dragState, pages, onPagesReorder]);
+    setDragState(currentDragState => {
+      console.log('🔄 Drag end - current dragState:', currentDragState);
+      const result = handleDragEnd(currentDragState);
+      console.log('🔄 Drag end result:', result);
+      
+      if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
+        console.log(`🔄 Reordering pages from ${result.fromIndex} to ${result.toIndex}`);
+        const reorderedPages = reorderPages(pages, result.fromIndex, result.toIndex);
+        console.log('🔄 Reordered pages:', reorderedPages);
+        onPagesReorder(reorderedPages);
+      } else {
+        console.log('🔄 No reordering needed:', { shouldReorder: result.shouldReorder, fromIndex: result.fromIndex, toIndex: result.toIndex });
+      }
+      
+      return result.newState;
+    });
+  }, [pages, onPagesReorder]); // Keep pages and onPagesReorder as dependencies
 
   // Set up global mouse/touch event listeners during drag
   useEffect(() => {
