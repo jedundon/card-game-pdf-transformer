@@ -4,9 +4,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
-// import { PageReorderTable } from './PageReorderTable'; // TODO: Integrate in next phase
+import { PageReorderTable } from './PageReorderTable';
 import { SUPPORTED_FILE_TYPES } from '../constants';
-// import { PageSettings, PageSource } from '../types'; // TODO: Use in next phase
+// import { PageSettings, PageSource, PdfMode } from '../types'; // Used only in TypeScript interfaces for PageReorderTable
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -653,76 +653,128 @@ export const ImportStep: React.FC<ImportStepProps> = ({
             </p>
           </div>
           
-          {pageSettings.length > 0 && <div className="mt-6">
+          {pageSettings.length > 0 && (
+            <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-3">
-                Page Settings
+                {isMultiFileMode ? 'Page Reordering & Settings' : 'Page Settings'}
               </h3>
-              <div className="border border-gray-200 rounded-md">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Page
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Preview
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Skip
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {pageSettings.map((page: any, index: number) => <tr key={index}>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                          {index + 1}
-                        </td>
-                        <td className="px-2 py-2 whitespace-nowrap">
-                          <div className="relative inline-block">
-                            {thumbnailLoading[index] ? (
-                              <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
-                                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                              </div>
-                            ) : thumbnailErrors[index] ? (
-                              <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
-                                <span className="text-xs text-gray-400">Error</span>
-                              </div>
-                            ) : thumbnails[index] ? (
-                              <img
-                                src={thumbnails[index]}
-                                alt={`Page ${index + 1} preview`}
-                                className="w-12 h-16 border border-gray-200 rounded cursor-pointer hover:border-blue-300 transition-colors"
-                                onClick={() => setHoveredThumbnail(index)}
-                                title={`Click to view larger preview of page ${index + 1}`}
-                              />
-                            ) : (
-                              <div className="w-12 h-16 bg-gray-50 border border-gray-200 rounded flex items-center justify-center">
-                                <span className="text-xs text-gray-400">...</span>
-                              </div>
+              
+              {isMultiFileMode ? (
+                <PageReorderTable
+                  pages={pageSettings.map((page: any, index: number) => ({
+                    ...page,
+                    sourceFile: fileName || 'Unknown',
+                    originalPageIndex: index,
+                    displayOrder: index
+                  }))}
+                  pdfMode={pdfMode}
+                  gridSettings={{ rows: 2, columns: 2 }} // Default grid - will be updated when extraction settings are available
+                  onPagesReorder={(reorderedPages) => {
+                    // Update page settings with reordered data
+                    onPageSettingsChange(reorderedPages);
+                  }}
+                  onPageSettingsChange={(pageIndex, settings) => {
+                    const updatedSettings = [...pageSettings];
+                    updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
+                    onPageSettingsChange(updatedSettings);
+                  }}
+                  onPageRemove={(pageIndex) => {
+                    const updatedSettings = [...pageSettings];
+                    updatedSettings.splice(pageIndex, 1);
+                    onPageSettingsChange(updatedSettings);
+                  }}
+                  thumbnails={thumbnails}
+                  thumbnailLoading={thumbnailLoading}
+                  thumbnailErrors={thumbnailErrors}
+                  onThumbnailLoad={(_pageIndex) => {
+                    // Thumbnail loading is handled automatically in ImportStep
+                    // This is a placeholder for compatibility
+                  }}
+                />
+              ) : (
+                <div className="border border-gray-200 rounded-md">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Page
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Preview
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Skip
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {pageSettings.map((page: any, index: number) => (
+                        <tr key={index}>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                            {index + 1}
+                          </td>
+                          <td className="px-2 py-2 whitespace-nowrap">
+                            <div className="relative inline-block">
+                              {thumbnailLoading[index] ? (
+                                <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                                </div>
+                              ) : thumbnailErrors[index] ? (
+                                <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                                  <span className="text-xs text-gray-400">Error</span>
+                                </div>
+                              ) : thumbnails[index] ? (
+                                <img
+                                  src={thumbnails[index]}
+                                  alt={`Page ${index + 1} preview`}
+                                  className="w-12 h-16 border border-gray-200 rounded cursor-pointer hover:border-blue-300 transition-colors"
+                                  onClick={() => setHoveredThumbnail(index)}
+                                  title={`Click to view larger preview of page ${index + 1}`}
+                                />
+                              ) : (
+                                <div className="w-12 h-16 bg-gray-50 border border-gray-200 rounded flex items-center justify-center">
+                                  <span className="text-xs text-gray-400">...</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm">
+                            {pdfMode.type === 'duplex' && !page?.skip && (
+                              <select 
+                                value={page?.type || 'front'} 
+                                onChange={e => handlePageTypeChange(index, e.target.value)} 
+                                className="border border-gray-300 rounded px-2 py-1 text-sm"
+                              >
+                                <option value="front">Front</option>
+                                <option value="back">Back</option>
+                              </select>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm">
-                          {pdfMode.type === 'duplex' && !page?.skip && <select value={page?.type || 'front'} onChange={e => handlePageTypeChange(index, e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm">
-                              <option value="front">Front</option>
-                              <option value="back">Back</option>
-                            </select>}
-                          {pdfMode.type === 'gutter-fold' && !page?.skip && <span className="text-gray-600">Front & Back</span>}
-                          {page?.skip && <span className="text-gray-400 italic">
-                              Skipped
-                            </span>}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm">
-                          <input type="checkbox" checked={page?.skip || false} onChange={e => handlePageSkipChange(index, e.target.checked)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                        </td>
-                      </tr>)}
-                  </tbody>
-                </table>
-              </div>
-            </div>}
+                            {pdfMode.type === 'gutter-fold' && !page?.skip && (
+                              <span className="text-gray-600">Front & Back</span>
+                            )}
+                            {page?.skip && (
+                              <span className="text-gray-400 italic">Skipped</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 whitespace-nowrap text-sm">
+                            <input 
+                              type="checkbox" 
+                              checked={page?.skip || false} 
+                              onChange={e => handlePageSkipChange(index, e.target.checked)} 
+                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Thumbnail Popup */}
           {hoveredThumbnail !== null && thumbnails[hoveredThumbnail] && (
