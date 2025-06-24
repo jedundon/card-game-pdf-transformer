@@ -632,24 +632,30 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               </h3>
               
               <PageReorderTable
-                pages={pageSettings.map((page: any, index: number) => ({
-                  ...page,
-                  fileName: fileName || 'Unknown',
-                  fileType: 'pdf' as const, // Currently only handling PDF files
-                  originalPageIndex: index,
-                  displayOrder: index
-                }))}
+                pages={pageSettings.map((page: any, index: number) => {
+                  const mappedPage = {
+                    ...page,
+                    fileName: fileName || 'Unknown',
+                    fileType: 'pdf' as const, // Currently only handling PDF files
+                    originalPageIndex: page.originalPageIndex ?? index, // Use existing originalPageIndex or fallback to index for initial load
+                    displayOrder: index
+                  };
+                  console.log(`🔍 Mapping pageSettings[${index}]:`, page, '→', mappedPage);
+                  return mappedPage;
+                })}
                 pdfMode={pdfMode}
                 // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
                 onPagesReorder={(reorderedPages) => {
-                  console.log('📥 ImportStep: Received reordered pages:', reorderedPages);
-                  // Extract core page settings from reordered pages
+                  console.log('📥 ImportStep: onPagesReorder called with:', reorderedPages);
+                  // Extract core page settings from reordered pages, preserving originalPageIndex
                   const corePageSettings = reorderedPages.map(page => ({
                     skip: page.skip || false,
-                    type: page.type || 'front'
+                    type: page.type || 'front',
+                    originalPageIndex: page.originalPageIndex // Preserve original page number!
                   }));
                   console.log('📤 ImportStep: Calling onPageSettingsChange with:', corePageSettings);
                   onPageSettingsChange(corePageSettings);
+                  console.log('✅ ImportStep: onPageSettingsChange completed');
                 }}
                 onPageSettingsChange={(pageIndex, settings) => {
                   const updatedSettings = [...pageSettings];

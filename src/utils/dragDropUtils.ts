@@ -34,18 +34,20 @@ import { PageReorderState } from '../types';
  * @param clientY - Current Y coordinate of the cursor/touch
  * @param containerElement - Container element for the drop operation
  * @param itemHeight - Height of individual items in pixels
+ * @param maxItems - Maximum number of items (to clamp the result)
  * @returns Index where the item should be dropped (0-based)
  * 
  * @example
  * ```typescript
- * const dropIndex = calculateDropPosition(mouseEvent.clientY, tableElement, 50);
+ * const dropIndex = calculateDropPosition(mouseEvent.clientY, tableElement, 50, pages.length);
  * // Returns the row index where the dragged item should be dropped
  * ```
  */
 export function calculateDropPosition(
   clientY: number,
   containerElement: HTMLElement,
-  itemHeight: number
+  itemHeight: number,
+  maxItems: number
 ): number {
   const containerRect = containerElement.getBoundingClientRect();
   const relativeY = clientY - containerRect.top;
@@ -53,9 +55,8 @@ export function calculateDropPosition(
   // Calculate which item position the cursor is over
   const dropIndex = Math.floor(relativeY / itemHeight);
   
-  // Clamp to valid range
-  const maxIndex = Math.floor(containerRect.height / itemHeight);
-  return Math.max(0, Math.min(dropIndex, maxIndex));
+  // Clamp to valid range (0 to maxItems-1)
+  return Math.max(0, Math.min(dropIndex, maxItems - 1));
 }
 
 /**
@@ -234,11 +235,12 @@ export function handleDragStart(
  * @param containerElement - Container element for the drag operation
  * @param itemHeight - Height of individual items
  * @param currentState - Current drag state
+ * @param maxItems - Maximum number of items (to clamp hover index)
  * @returns Updated drag state with new hover position
  * 
  * @example
  * ```typescript
- * const newState = handleDragOver(mouseEvent, tableElement, 50, currentState);
+ * const newState = handleDragOver(mouseEvent, tableElement, 50, currentState, pages.length);
  * // Updates hoverIndex based on mouse position
  * ```
  */
@@ -246,7 +248,8 @@ export function handleDragOver(
   event: MouseEvent | TouchEvent,
   containerElement: HTMLElement,
   itemHeight: number,
-  currentState: PageReorderState
+  currentState: PageReorderState,
+  maxItems: number
 ): PageReorderState {
   if (!currentState.isDragging) {
     return currentState;
@@ -256,7 +259,7 @@ export function handleDragOver(
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
   
   // Calculate new hover index
-  const hoverIndex = calculateDropPosition(clientY, containerElement, itemHeight);
+  const hoverIndex = calculateDropPosition(clientY, containerElement, itemHeight, maxItems);
   
   // Only update if hover index changed
   if (hoverIndex !== currentState.hoverIndex) {
