@@ -140,12 +140,18 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle end of drag operation
   const handleDragEndForTable = useCallback(() => {
+    console.log('🔄 Drag end - current dragState:', dragState);
     const result = handleDragEnd(dragState);
+    console.log('🔄 Drag end result:', result);
     setDragState(result.newState);
     
     if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
+      console.log(`🔄 Reordering pages from ${result.fromIndex} to ${result.toIndex}`);
       const reorderedPages = reorderPages(pages, result.fromIndex, result.toIndex);
+      console.log('🔄 Reordered pages:', reorderedPages);
       onPagesReorder(reorderedPages);
+    } else {
+      console.log('🔄 No reordering needed:', { shouldReorder: result.shouldReorder, fromIndex: result.fromIndex, toIndex: result.toIndex });
     }
   }, [dragState, pages, onPagesReorder]);
 
@@ -398,9 +404,13 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center space-x-2">
                       {renderFileTypeIcon(page.fileType)}
-                      <div>
-                        <div className="text-gray-900 font-medium truncate max-w-32" title={page.fileName}>
-                          {page.fileName}
+                      <div className="min-w-0">
+                        <div className="text-gray-900 font-medium truncate max-w-48" title={`${page.fileName} - Page ${page.originalPageIndex + 1}`}>
+                          {/* Show abbreviated filename for multi-file clarity */}
+                          {page.fileName.length > 20 
+                            ? `${page.fileName.substring(0, 15)}...${page.fileName.slice(-4)}`
+                            : page.fileName
+                          }
                         </div>
                         <div className="text-gray-500 text-xs">
                           Page {page.originalPageIndex + 1}
@@ -445,8 +455,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
+                          console.log(`⬆️ Arrow up clicked for page ${index}`);
                           if (index > 0) {
                             const reorderedPages = reorderPages(pages, index, index - 1);
+                            console.log('⬆️ Arrow up reordered pages:', reorderedPages);
                             onPagesReorder(reorderedPages);
                           }
                         }}
@@ -458,8 +470,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       </button>
                       <button
                         onClick={() => {
+                          console.log(`⬇️ Arrow down clicked for page ${index}`);
                           if (index < pages.length - 1) {
                             const reorderedPages = reorderPages(pages, index, index + 1);
+                            console.log('⬇️ Arrow down reordered pages:', reorderedPages);
                             onPagesReorder(reorderedPages);
                           }
                         }}
