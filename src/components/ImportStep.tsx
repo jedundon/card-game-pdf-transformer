@@ -668,7 +668,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     displayOrder: index
                   }))}
                   pdfMode={pdfMode}
-                  gridSettings={{ rows: 2, columns: 2 }} // Default grid - will be updated when extraction settings are available
+                  // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
                   onPagesReorder={(reorderedPages) => {
                     // Update page settings with reordered data
                     onPageSettingsChange(reorderedPages);

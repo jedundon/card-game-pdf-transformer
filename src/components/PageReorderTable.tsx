@@ -32,7 +32,7 @@ import {
   PageReorderState
 } from '../types';
 import { 
-  calculateCardNumbersForReorderedPages
+  // calculateCardNumbersForReorderedPages // Removed - card numbers not available until extraction settings
 } from '../utils/cardUtils';
 import { 
   reorderPages,
@@ -52,7 +52,7 @@ interface PageReorderTableProps {
   /** Current PDF processing mode affecting card numbering */
   pdfMode: PdfMode;
   /** Grid settings for calculating cards per page */
-  gridSettings: { rows: number; columns: number };
+  // gridSettings: { rows: number; columns: number }; // Not needed until extraction step
   /** Callback when pages are reordered */
   onPagesReorder: (newPages: (PageSettings & PageSource)[]) => void;
   /** Callback when a page's settings are changed */
@@ -78,7 +78,7 @@ interface PageReorderTableProps {
 export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   pages,
   pdfMode,
-  gridSettings,
+  // gridSettings, // Not needed until extraction step
   onPagesReorder,
   onPageSettingsChange,
   onPageRemove,
@@ -104,13 +104,13 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   // Row height for drop position calculations
   const ROW_HEIGHT = 64; // Approximate height of table rows in pixels
 
-  // Calculate card numbers based on current page order
-  const cardsPerPage = gridSettings.rows * gridSettings.columns;
-  const cardNumbers = calculateCardNumbersForReorderedPages(
-    pages,
-    pdfMode,
-    cardsPerPage
-  );
+  // Card numbers not available until extraction settings are configured
+  // const cardsPerPage = gridSettings.rows * gridSettings.columns;
+  // const cardNumbers = calculateCardNumbersForReorderedPages(
+  //   pages,
+  //   pdfMode,
+  //   cardsPerPage
+  // );
 
   // Update drag state when pages array changes
   useEffect(() => {
@@ -238,21 +238,21 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     }
   };
 
-  // Render card numbers for a page
-  const renderCardNumbers = (pageIndex: number) => {
-    const pageCardNumbers = cardNumbers.get(pageIndex) || [];
-    if (pageCardNumbers.length === 0) {
-      return <span className="text-gray-400 italic">Skipped</span>;
-    }
-    
-    if (pageCardNumbers.length === 1) {
-      return <span className="text-gray-900 font-medium">Card {pageCardNumbers[0]}</span>;
-    }
-    
-    const first = pageCardNumbers[0];
-    const last = pageCardNumbers[pageCardNumbers.length - 1];
-    return <span className="text-gray-900 font-medium">Cards {first}-{last}</span>;
-  };
+  // Card numbers removed - not available until extraction settings are configured
+  // const renderCardNumbers = (pageIndex: number) => {
+  //   const pageCardNumbers = cardNumbers.get(pageIndex) || [];
+  //   if (pageCardNumbers.length === 0) {
+  //     return <span className="text-gray-400 italic">Skipped</span>;
+  //   }
+  //   
+  //   if (pageCardNumbers.length === 1) {
+  //     return <span className="text-gray-900 font-medium">Card {pageCardNumbers[0]}</span>;
+  //   }
+  //   
+  //   const first = pageCardNumbers[0];
+  //   const last = pageCardNumbers[pageCardNumbers.length - 1];
+  //   return <span className="text-gray-900 font-medium">Cards {first}-{last}</span>;
+  // };
 
   // Render thumbnail cell
   const renderThumbnail = (pageIndex: number) => {
@@ -341,9 +341,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                 Source
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Card Numbers
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Type
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -412,10 +409,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Card numbers */}
-                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                    {renderCardNumbers(index)}
-                  </td>
 
                   {/* Page type */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -497,11 +490,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         <p>
           {pages.length} pages total • 
           {' '}{pages.filter(p => !p.skip).length} active • 
-          {' '}{pages.filter(p => p.skip).length} skipped •
-          {' '}{cardNumbers.size > 0 ? Math.max(...Array.from(cardNumbers.values()).flat()) : 0} cards
+          {' '}{pages.filter(p => p.skip).length} skipped
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          Drag pages to reorder them. Card numbers update automatically based on the new order.
+          Drag pages to reorder them. Card numbering will be calculated during extraction.
         </p>
       </div>
 
