@@ -569,7 +569,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               <h3 className="text-lg font-medium text-gray-800 mb-3">
                 Page Settings
               </h3>
-              <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-md">
+              <div className="border border-gray-200 rounded-md">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
