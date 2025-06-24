@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon, PlusIcon } from 'lucide-react';
+import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
-import { SUPPORTED_FILE_TYPES } from '../constants';
+// import { SUPPORTED_FILE_TYPES } from '../constants'; // Removed for Phase 1 - single PDF only
 // import { PageSettings, PageSource, PdfMode } from '../types'; // Used only in TypeScript interfaces for PageReorderTable
 
 // Configure PDF.js worker for Vite
@@ -52,8 +52,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   
-  // Multi-file support state (optional enhancement)
-  const [isMultiFileMode, setIsMultiFileMode] = useState<boolean>(false);
+  // Multi-file support removed for Phase 1 - focusing on single PDF page reordering
+  // const [isMultiFileMode, setIsMultiFileMode] = useState<boolean>(false);
   // const [multiFilePages, setMultiFilePages] = useState<(PageSettings & PageSource)[]>([]); // TODO: Use in next phase
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -62,13 +62,13 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     }
   };
 
-  // Multi-file change handler
-  const handleMultiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      await processMultipleFiles(files);
-    }
-  };
+  // Multi-file change handler removed for Phase 1 - single PDF only
+  // const handleMultiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const files = Array.from(e.target.files || []);
+  //   if (files.length > 0) {
+  //     await processMultipleFiles(files);
+  //   }
+  // };
   const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const type = e.target.value as 'duplex' | 'gutter-fold';
     onModeSelect({
@@ -90,22 +90,23 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       flipEdge
     });
   };
-  const handlePageTypeChange = (index: number, type: string) => {
-    const newSettings = [...pageSettings];
-    newSettings[index] = {
-      ...newSettings[index],
-      type
-    };
-    onPageSettingsChange(newSettings);
-  };
-  const handlePageSkipChange = (index: number, skip: boolean) => {
-    const newSettings = [...pageSettings];
-    newSettings[index] = {
-      ...newSettings[index],
-      skip
-    };
-    onPageSettingsChange(newSettings);
-  };
+  // Page settings handlers moved to PageReorderTable for Phase 1
+  // const handlePageTypeChange = (index: number, type: string) => {
+  //   const newSettings = [...pageSettings];
+  //   newSettings[index] = {
+  //     ...newSettings[index],
+  //     type
+  //   };
+  //   onPageSettingsChange(newSettings);
+  // };
+  // const handlePageSkipChange = (index: number, skip: boolean) => {
+  //   const newSettings = [...pageSettings];
+  //   newSettings[index] = {
+  //     ...newSettings[index],
+  //     skip
+  //   };
+  //   onPageSettingsChange(newSettings);
+  // };
   
   // Thumbnail loading function
   const loadThumbnail = useCallback(async (pageIndex: number) => {
@@ -248,47 +249,47 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     }
   };
 
-  // Multi-file processing function
-  const processMultipleFiles = async (files: File[]) => {
-    setIsLoading(true);
-    setLoadingError('');
-    setDragError('');
-    
-    try {
-      // Basic validation - this is a simplified version
-      // In a real implementation, you'd use the validation functions from multiFileUtils
-      const pdfFiles: File[] = [];
-      const imageFiles: File[] = [];
-      
-      for (const file of files) {
-        if (file.type === 'application/pdf') {
-          pdfFiles.push(file);
-        } else if (file.type.startsWith('image/')) {
-          imageFiles.push(file);
-        }
-      }
-      
-      if (pdfFiles.length === 0 && imageFiles.length === 0) {
-        throw new Error('No valid PDF or image files found');
-      }
-      
-      // For now, just process the first PDF file to maintain compatibility
-      // TODO: Implement full multi-file processing
-      if (pdfFiles.length > 0) {
-        await processFile(pdfFiles[0]);
-        setFileName(`${pdfFiles[0].name} + ${files.length - 1} more files`);
-      } else if (imageFiles.length > 0) {
-        // For image files, we'd need to implement image processing
-        throw new Error('Image file processing not yet fully implemented');
-      }
-      
-    } catch (error) {
-      console.error('Error processing multiple files:', error);
-      setLoadingError(error instanceof Error ? error.message : 'Failed to process multiple files');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Multi-file processing function removed for Phase 1 - single PDF only
+  // const processMultipleFiles = async (files: File[]) => {
+  //   setIsLoading(true);
+  //   setLoadingError('');
+  //   setDragError('');
+  //   
+  //   try {
+  //     // Basic validation - this is a simplified version
+  //     // In a real implementation, you'd use the validation functions from multiFileUtils
+  //     const pdfFiles: File[] = [];
+  //     const imageFiles: File[] = [];
+  //     
+  //     for (const file of files) {
+  //       if (file.type === 'application/pdf') {
+  //         pdfFiles.push(file);
+  //       } else if (file.type.startsWith('image/')) {
+  //         imageFiles.push(file);
+  //       }
+  //     }
+  //     
+  //     if (pdfFiles.length === 0 && imageFiles.length === 0) {
+  //       throw new Error('No valid PDF or image files found');
+  //     }
+  //     
+  //     // For now, just process the first PDF file to maintain compatibility
+  //     // TODO: Implement full multi-file processing
+  //     if (pdfFiles.length > 0) {
+  //       await processFile(pdfFiles[0]);
+  //       setFileName(`${pdfFiles[0].name} + ${files.length - 1} more files`);
+  //     } else if (imageFiles.length > 0) {
+  //       // For image files, we'd need to implement image processing
+  //       throw new Error('Image file processing not yet fully implemented');
+  //     }
+  //     
+  //   } catch (error) {
+  //     console.error('Error processing multiple files:', error);
+  //     setLoadingError(error instanceof Error ? error.message : 'Failed to process multiple files');
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // };
   
   // Validate if file is a PDF
   const isValidPdfFile = (file: File): boolean => {
@@ -440,11 +441,10 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       >
         <input 
           type="file" 
-          accept={isMultiFileMode ? `${SUPPORTED_FILE_TYPES.PDF_EXTENSIONS.join(',')},${SUPPORTED_FILE_TYPES.IMAGE_EXTENSIONS.join(',')}` : ".pdf"}
-          multiple={isMultiFileMode}
+          accept=".pdf"
           className="hidden" 
           ref={fileInputRef} 
-          onChange={isMultiFileMode ? handleMultiFileChange : handleFileChange}
+          onChange={handleFileChange}
           disabled={isLoading}
         />
         
@@ -542,35 +542,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         )}
       </div>
 
-      {/* Multi-file mode toggle */}
-      {!isLoading && !pdfData && (
-        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-md">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-gray-800">
-                Import Mode
-              </h4>
-              <p className="text-xs text-gray-600 mt-1">
-                {isMultiFileMode 
-                  ? 'Multi-file mode: Import multiple PDFs and images together' 
-                  : 'Single file mode: Import one PDF file'
-                }
-              </p>
-            </div>
-            <button
-              onClick={() => setIsMultiFileMode(!isMultiFileMode)}
-              className={`flex items-center px-3 py-1 text-xs rounded-md transition-colors ${
-                isMultiFileMode 
-                  ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              <PlusIcon size={12} className="mr-1" />
-              {isMultiFileMode ? 'Multi-file' : 'Single file'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Multi-file mode toggle removed for Phase 1 - focusing on single PDF page reordering */}
       
       {/* Auto-restored Settings Notification */}
       {autoRestoredSettings && (
@@ -656,124 +628,41 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           {pageSettings.length > 0 && (
             <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-3">
-                {isMultiFileMode ? 'Page Reordering & Settings' : 'Page Settings'}
+                Page Reordering & Settings
               </h3>
               
-              {isMultiFileMode ? (
-                <PageReorderTable
-                  pages={pageSettings.map((page: any, index: number) => ({
-                    ...page,
-                    fileName: fileName || 'Unknown',
-                    fileType: 'pdf' as const, // Currently only handling PDF files in single file mode
-                    originalPageIndex: index,
-                    displayOrder: index
-                  }))}
-                  pdfMode={pdfMode}
-                  // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
-                  onPagesReorder={(reorderedPages) => {
-                    // Update page settings with reordered data
-                    onPageSettingsChange(reorderedPages);
-                  }}
-                  onPageSettingsChange={(pageIndex, settings) => {
-                    const updatedSettings = [...pageSettings];
-                    updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
-                    onPageSettingsChange(updatedSettings);
-                  }}
-                  onPageRemove={(pageIndex) => {
-                    const updatedSettings = [...pageSettings];
-                    updatedSettings.splice(pageIndex, 1);
-                    onPageSettingsChange(updatedSettings);
-                  }}
-                  thumbnails={thumbnails}
-                  thumbnailLoading={thumbnailLoading}
-                  thumbnailErrors={thumbnailErrors}
-                  onThumbnailLoad={(_pageIndex) => {
-                    // Thumbnail loading is handled automatically in ImportStep
-                    // This is a placeholder for compatibility
-                  }}
-                />
-              ) : (
-                <div className="border border-gray-200 rounded-md">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Page
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Preview
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Skip
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {pageSettings.map((page: any, index: number) => (
-                        <tr key={index}>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                            {index + 1}
-                          </td>
-                          <td className="px-2 py-2 whitespace-nowrap">
-                            <div className="relative inline-block">
-                              {thumbnailLoading[index] ? (
-                                <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
-                                  <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                                </div>
-                              ) : thumbnailErrors[index] ? (
-                                <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
-                                  <span className="text-xs text-gray-400">Error</span>
-                                </div>
-                              ) : thumbnails[index] ? (
-                                <img
-                                  src={thumbnails[index]}
-                                  alt={`Page ${index + 1} preview`}
-                                  className="w-12 h-16 border border-gray-200 rounded cursor-pointer hover:border-blue-300 transition-colors"
-                                  onClick={() => setHoveredThumbnail(index)}
-                                  title={`Click to view larger preview of page ${index + 1}`}
-                                />
-                              ) : (
-                                <div className="w-12 h-16 bg-gray-50 border border-gray-200 rounded flex items-center justify-center">
-                                  <span className="text-xs text-gray-400">...</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm">
-                            {pdfMode.type === 'duplex' && !page?.skip && (
-                              <select 
-                                value={page?.type || 'front'} 
-                                onChange={e => handlePageTypeChange(index, e.target.value)} 
-                                className="border border-gray-300 rounded px-2 py-1 text-sm"
-                              >
-                                <option value="front">Front</option>
-                                <option value="back">Back</option>
-                              </select>
-                            )}
-                            {pdfMode.type === 'gutter-fold' && !page?.skip && (
-                              <span className="text-gray-600">Front & Back</span>
-                            )}
-                            {page?.skip && (
-                              <span className="text-gray-400 italic">Skipped</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap text-sm">
-                            <input 
-                              type="checkbox" 
-                              checked={page?.skip || false} 
-                              onChange={e => handlePageSkipChange(index, e.target.checked)} 
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <PageReorderTable
+                pages={pageSettings.map((page: any, index: number) => ({
+                  ...page,
+                  fileName: fileName || 'Unknown',
+                  fileType: 'pdf' as const, // Currently only handling PDF files
+                  originalPageIndex: index,
+                  displayOrder: index
+                }))}
+                pdfMode={pdfMode}
+                // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
+                onPagesReorder={(reorderedPages) => {
+                  // Update page settings with reordered data
+                  onPageSettingsChange(reorderedPages);
+                }}
+                onPageSettingsChange={(pageIndex, settings) => {
+                  const updatedSettings = [...pageSettings];
+                  updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
+                  onPageSettingsChange(updatedSettings);
+                }}
+                onPageRemove={(pageIndex) => {
+                  const updatedSettings = [...pageSettings];
+                  updatedSettings.splice(pageIndex, 1);
+                  onPageSettingsChange(updatedSettings);
+                }}
+                thumbnails={thumbnails}
+                thumbnailLoading={thumbnailLoading}
+                thumbnailErrors={thumbnailErrors}
+                onThumbnailLoad={(_pageIndex) => {
+                  // Thumbnail loading is handled automatically in ImportStep
+                  // This is a placeholder for compatibility
+                }}
+              />
             </div>
           )}
           
