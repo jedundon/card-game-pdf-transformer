@@ -67,3 +67,67 @@ export const PREVIEW_CONSTRAINTS = {
   /** Maximum scale factor for PDF preview rendering */
   PDF_PREVIEW_MAX_SCALE: 2.0
 } as const;
+
+/**
+ * Supported file types for multi-file import
+ * 
+ * Defines the accepted MIME types and file extensions for both PDF and image files.
+ * These constants are used for file validation and user interface feedback.
+ */
+export const SUPPORTED_FILE_TYPES = {
+  /** Supported image MIME types */
+  IMAGE_MIME_TYPES: [
+    'image/png',
+    'image/jpeg',
+    'image/jpg'
+  ] as const,
+  /** Supported image file extensions */
+  IMAGE_EXTENSIONS: [
+    '.png',
+    '.jpg',
+    '.jpeg'
+  ] as const,
+  /** Supported PDF MIME types */
+  PDF_MIME_TYPES: [
+    'application/pdf'
+  ] as const,
+  /** Supported PDF file extensions */
+  PDF_EXTENSIONS: [
+    '.pdf'
+  ] as const
+} as const;
+
+/**
+ * File size limits for different file types
+ * 
+ * These limits prevent memory issues and ensure reasonable processing times.
+ * Values are in bytes for precise size checking.
+ */
+export const FILE_SIZE_LIMITS = {
+  /** Maximum size for PDF files in bytes (100MB) */
+  PDF_MAX_SIZE: 100 * 1024 * 1024,
+  /** Maximum size for individual image files in bytes (50MB) */
+  IMAGE_MAX_SIZE: 50 * 1024 * 1024,
+  /** Maximum total size for all files in a multi-file session (500MB) */
+  TOTAL_MAX_SIZE: 500 * 1024 * 1024,
+  /** Maximum number of files that can be imported simultaneously */
+  MAX_FILES: 50,
+  /** Maximum total number of pages across all files */
+  MAX_TOTAL_PAGES: 1000
+} as const;
+
+/**
+ * Drag and drop operation constants
+ * 
+ * Used for page reordering and multi-file drag-and-drop functionality.
+ */
+export const DRAG_DROP_CONSTANTS = {
+  /** Delay before drag operation starts (milliseconds) */
+  DRAG_START_DELAY: 150,
+  /** Distance threshold for drag detection (pixels) */
+  DRAG_THRESHOLD: 5,
+  /** Animation duration for drag operations (milliseconds) */
+  DRAG_ANIMATION_DURATION: 200,
+  /** Z-index for dragged elements */
+  DRAG_Z_INDEX: 1000
+} as const;

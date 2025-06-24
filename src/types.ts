@@ -40,6 +40,12 @@ export interface PageSettings {
   skip?: boolean;
   /** Card type designation for duplex/gutter-fold modes ('front' or 'back') */
   type?: 'front' | 'back';
+  /** Source file information for multi-file support */
+  sourceFile?: string;
+  /** Original page index within the source file (0-based) */
+  originalPageIndex?: number;
+  /** Display order for page reordering (0-based) */
+  displayOrder?: number;
 }
 
 /**
@@ -291,6 +297,93 @@ export interface OutputSettings {
 }
 
 /**
+ * File source information for multi-file support
+ * 
+ * Tracks metadata about imported files including their type and page count.
+ */
+export interface FileSource {
+  /** File name including extension */
+  name: string;
+  /** File type - 'pdf' for PDF files, 'image' for image files */
+  type: 'pdf' | 'image';
+  /** Original number of pages in the file (1 for image files) */
+  originalPageCount: number;
+  /** File size in bytes */
+  size: number;
+  /** Import timestamp */
+  importTimestamp: number;
+}
+
+/**
+ * Page source information
+ * 
+ * Links each page to its source file and original position for tracking
+ * during page reordering operations.
+ */
+export interface PageSource {
+  /** Name of the source file */
+  fileName: string;
+  /** Original page index within the source file (0-based) */
+  originalPageIndex: number;
+  /** File type */
+  fileType: 'pdf' | 'image';
+  /** Current display order in the page list (0-based) */
+  displayOrder: number;
+}
+
+/**
+ * Image file data for processing
+ * 
+ * Contains the processed image data that can be used in the same workflow
+ * as PDF pages. Images are converted to canvas data for consistent processing.
+ */
+export interface ImageFileData {
+  /** Canvas element containing the image data */
+  canvas: HTMLCanvasElement;
+  /** Original image dimensions */
+  width: number;
+  height: number;
+  /** File name for display purposes */
+  fileName: string;
+}
+
+/**
+ * Page reorder state management
+ * 
+ * Manages the state during drag-and-drop reordering operations including
+ * tracking of source positions and target positions.
+ */
+export interface PageReorderState {
+  /** Index of the page being dragged */
+  dragIndex: number | null;
+  /** Index where the page will be dropped */
+  hoverIndex: number | null;
+  /** Whether a drag operation is currently active */
+  isDragging: boolean;
+  /** Array of page indices representing the current order */
+  pageOrder: number[];
+}
+
+/**
+ * Multi-file import state
+ * 
+ * Comprehensive state management for handling multiple imported files
+ * and their combined page list with reordering capabilities.
+ */
+export interface MultiFileImportState {
+  /** Array of imported file sources */
+  files: FileSource[];
+  /** Combined list of all pages from all files with source tracking */
+  pages: (PageSettings & PageSource)[];
+  /** Current page reordering state */
+  reorderState: PageReorderState;
+  /** Whether any files are currently being processed */
+  isProcessing: boolean;
+  /** Error messages for failed file imports */
+  errors: Record<string, string>;
+}
+
+/**
  * Card information
  * 
  * Identifies a card's type and unique identifier as determined by
@@ -344,3 +437,10 @@ export type ExtractionSettingsChangeHandler = (settings: ExtractionSettings) => 
 export type OutputSettingsChangeHandler = (settings: OutputSettings) => void;
 export type ColorTransformationChangeHandler = (settings: ColorTransformationSettings) => void;
 export type CardDimensionsChangeHandler = (dimensions: CardDimensions | null) => void;
+
+// Multi-file and page reordering event handler types
+export type MultiFileSelectHandler = (files: File[]) => void;
+export type PageReorderHandler = (oldIndex: number, newIndex: number) => void;
+export type PageRemoveHandler = (pageIndex: number) => void;
+export type FileRemoveHandler = (fileName: string) => void;
+export type MultiFileImportStateChangeHandler = (state: MultiFileImportState) => void;
