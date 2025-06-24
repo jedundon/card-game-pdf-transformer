@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon, PrinterIcon, RulerIcon } from 'lucide-react';
 import { 
   getActivePages, 
@@ -51,12 +51,24 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<string>('');
+  const [progressMessage, setProgressMessage] = useState<string>('');
   const [cardRenderData, setCardRenderData] = useState<{
     renderDimensions: any;
     positioning: any;
     previewScaling: any;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
+  
+  // Debouncing and caching
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previewCacheRef = useRef<Map<string, {
+    cardPreviewUrl: string | null;
+    processedPreviewUrl: string | null;
+    cardRenderData: any;
+    timestamp: number;
+  }>>(new Map());
+  const settingsChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSettingsRef = useRef<any>(null);
   const [showCalibrationWizard, setShowCalibrationWizard] = useState(false);
   const [calibrationMeasurements, setCalibrationMeasurements] = useState({
     rightDistance: '',
@@ -125,6 +137,38 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
   }, [pdfData, pdfMode, activePages, pageSettings, extractionSettings]);
 
+  // Cache management (available but not used in current implementation)
+  // const clearCache = useCallback(() => {
+  //   previewCacheRef.current.clear();
+  // }, []);
+
+  const getCacheKey = useCallback((cardId: number, mode: 'front' | 'back', settings: any) => {
+    return JSON.stringify({ cardId, mode, settings: {
+      cardSize: settings.cardSize,
+      cardScalePercent: settings.cardScalePercent,
+      rotation: settings.rotation,
+      offset: settings.offset,
+      cardImageSizingMode: settings.cardImageSizingMode,
+      bleedMarginInches: settings.bleedMarginInches
+    }});
+  }, []);
+
+  // Debounced settings change handler
+  const debouncedSettingsChange = useCallback((newSettings: any) => {
+    if (settingsChangeTimeoutRef.current) {
+      clearTimeout(settingsChangeTimeoutRef.current);
+    }
+    
+    pendingSettingsRef.current = newSettings;
+    
+    settingsChangeTimeoutRef.current = setTimeout(() => {
+      if (pendingSettingsRef.current) {
+        onSettingsChange(pendingSettingsRef.current);
+        pendingSettingsRef.current = null;
+      }
+    }, 500); // 500ms debounce delay
+  }, [onSettingsChange]);
+
   // Update card preview when current card changes
   useEffect(() => {
     let isCancelled = false;
@@ -136,14 +180,33 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         setProcessedPreviewUrl(null);
         setPreviewError('');
         setPreviewLoading(false);
+        setProgressMessage('');
+        return;
+      }
+
+      // Check cache first
+      const cacheKey = getCacheKey(currentCardId, viewMode, outputSettings);
+      const cached = previewCacheRef.current.get(cacheKey);
+      const cacheAge = cached ? Date.now() - cached.timestamp : Infinity;
+      
+      // Use cache if it's less than 5 minutes old
+      if (cached && cacheAge < 300000) {
+        setCardPreviewUrl(cached.cardPreviewUrl);
+        setProcessedPreviewUrl(cached.processedPreviewUrl);
+        setCardRenderData(cached.cardRenderData);
+        setPreviewLoading(false);
+        setPreviewError('');
+        setProgressMessage('');
         return;
       }
 
       setPreviewLoading(true);
       setPreviewError('');
+      setProgressMessage('Initializing preview...');
       
       try {
         // Extract card image with timeout
+        setProgressMessage('Extracting card image...');
         const extractPromise = extractCardImage(currentCardIndex);
         const timeoutPromise = new Promise<null>((_, reject) => 
           setTimeout(() => reject(new Error('Card extraction timed out')), 15000)
@@ -160,6 +223,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         }
 
         // Calculate render dimensions with timeout
+        setProgressMessage('Calculating render dimensions...');
         const renderPromise = calculateFinalCardRenderDimensions(cardUrl, outputSettings);
         const renderTimeoutPromise = new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Render calculation timed out')), 10000)
@@ -170,6 +234,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         if (isCancelled) return;
         
         // Calculate positioning
+        setProgressMessage('Calculating card positioning...');
         const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
         const previewScaling = calculatePreviewScaling(
           renderDimensions,
@@ -182,13 +247,15 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         
         if (isCancelled) return;
         
-        setCardRenderData({
+        const cardRenderData = {
           renderDimensions,
           positioning,
           previewScaling
-        });
+        };
+        setCardRenderData(cardRenderData);
         
         // Process the image for preview with timeout
+        setProgressMessage('Processing image for preview...');
         const processPromise = processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
         const processTimeoutPromise = new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Image processing timed out')), 10000)
@@ -199,6 +266,27 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         if (isCancelled) return;
         
         setProcessedPreviewUrl(processedImage.imageUrl);
+        
+        // Cache the result for future use
+        if (!isCancelled) {
+          setProgressMessage('Finalizing preview...');
+          previewCacheRef.current.set(cacheKey, {
+            cardPreviewUrl: cardUrl,
+            processedPreviewUrl: processedImage.imageUrl,
+            cardRenderData,
+            timestamp: Date.now()
+          });
+          
+          // Limit cache size to prevent memory issues
+          if (previewCacheRef.current.size > 50) {
+            const entries = Array.from(previewCacheRef.current.entries());
+            entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+            // Remove oldest 10 entries
+            for (let i = 0; i < 10; i++) {
+              previewCacheRef.current.delete(entries[i][0]);
+            }
+          }
+        }
         
       } catch (error) {
         if (isCancelled) return;
@@ -227,6 +315,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       } finally {
         if (!isCancelled) {
           setPreviewLoading(false);
+          setProgressMessage('');
         }
       }
     };
@@ -244,7 +333,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     totalFilteredCards,
     currentCardExists,
     currentCardIndex,
-    outputSettings // Add outputSettings as dependency so preview updates when settings change
+    outputSettings, // Add outputSettings as dependency so preview updates when settings change
+    getCacheKey
   ]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
@@ -253,7 +343,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         ...outputSettings,
         pageSize: value
       };
-      onSettingsChange(newSettings);
+      debouncedSettingsChange(newSettings);
     } else if (typeof value === 'number') {
       const newSettings = {
         ...outputSettings,
@@ -262,7 +352,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           [dimension]: value
         }
       };
-      onSettingsChange(newSettings);
+      debouncedSettingsChange(newSettings);
     }
   };
   const handleOffsetChange = (direction: string, value: number) => {
@@ -273,7 +363,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         [direction]: value
       }
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
   const handleCardSizeChange = (dimension: 'widthInches' | 'heightInches', value: number) => {
     const newSettings = {
@@ -283,7 +373,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         [dimension]: value
       }
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
 
   const handleCardScalePercentChange = (value: number) => {
@@ -291,7 +381,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       ...outputSettings,
       cardScalePercent: value
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
 
   const handleBleedMarginChange = (value: number) => {
@@ -299,7 +389,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       ...outputSettings,
       bleedMarginInches: value
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
 
   const handleRotationChange = (cardType: 'front' | 'back', value: number) => {
@@ -310,19 +400,85 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         [cardType]: value
       }
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
   const handlePreviousCard = () => {
     const currentIndex = availableCardIds.indexOf(currentCardId);
     if (currentIndex > 0) {
-      setCurrentCardId(availableCardIds[currentIndex - 1]);
+      const newCardId = availableCardIds[currentIndex - 1];
+      setCurrentCardId(newCardId);
+      // Preload adjacent cards after a short delay
+      setTimeout(() => preloadAdjacentCards(newCardId), 100);
     }
   };
+  
+  // Preload adjacent cards for better navigation performance
+  const preloadAdjacentCards = useCallback(async (cardId: number) => {
+    const currentIndex = availableCardIds.indexOf(cardId);
+    const adjacentCards = [
+      currentIndex > 0 ? availableCardIds[currentIndex - 1] : null,
+      currentIndex < availableCardIds.length - 1 ? availableCardIds[currentIndex + 1] : null
+    ].filter(id => id !== null) as number[];
+
+    for (const adjacentCardId of adjacentCards) {
+      const cacheKey = getCacheKey(adjacentCardId, viewMode, outputSettings);
+      if (!previewCacheRef.current.has(cacheKey)) {
+        // Find the card index for the adjacent card ID
+        const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+          ? activePages.length * cardsPerPage 
+          : totalCards;
+        
+        let cardIndex = null;
+        for (let i = 0; i < maxIndex; i++) {
+          const cardInfo = getCardInfoCallback(i);
+          if (cardInfo.id === adjacentCardId && cardInfo.type.toLowerCase() === viewMode) {
+            cardIndex = i;
+            break;
+          }
+        }
+        
+        if (cardIndex !== null) {
+          // Start preloading in background (don't await to avoid blocking)
+          extractCardImage(cardIndex).then(async (cardUrl) => {
+            if (cardUrl) {
+              const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, outputSettings);
+              const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+              const processedImage = await processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
+              
+              // Cache the preloaded result
+              previewCacheRef.current.set(cacheKey, {
+                cardPreviewUrl: cardUrl,
+                processedPreviewUrl: processedImage.imageUrl,
+                cardRenderData: {
+                  renderDimensions,
+                  positioning,
+                  previewScaling: calculatePreviewScaling(
+                    renderDimensions,
+                    positioning,
+                    outputSettings.pageSize.width,
+                    outputSettings.pageSize.height,
+                    PREVIEW_CONSTRAINTS.MAX_WIDTH,
+                    PREVIEW_CONSTRAINTS.MAX_HEIGHT
+                  )
+                },
+                timestamp: Date.now()
+              });
+            }
+          }).catch(() => {
+            // Silently fail preloading - not critical
+          });
+        }
+      }
+    }
+  }, [availableCardIds, viewMode, outputSettings, getCacheKey, getCardInfoCallback, extractCardImage, pdfMode.type, activePages.length, cardsPerPage, totalCards]);
   
   const handleNextCard = () => {
     const currentIndex = availableCardIds.indexOf(currentCardId);
     if (currentIndex < availableCardIds.length - 1) {
-      setCurrentCardId(availableCardIds[currentIndex + 1]);
+      const newCardId = availableCardIds[currentIndex + 1];
+      setCurrentCardId(newCardId);
+      // Preload adjacent cards after a short delay
+      setTimeout(() => preloadAdjacentCards(newCardId), 100);
     }
   };
 
@@ -340,6 +496,29 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       setCurrentCardId(availableCardIds[0]);
     }
   }, [currentCardExists, totalFilteredCards, availableCardIds]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      const settingsTimeout = settingsChangeTimeoutRef.current;
+      const debounceTimeout = debounceTimeoutRef.current;
+      if (settingsTimeout) {
+        clearTimeout(settingsTimeout);
+      }
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout);
+      }
+    };
+  }, []);
+
+  // Initial preload of adjacent cards when current card changes
+  useEffect(() => {
+    if (currentCardExists && totalFilteredCards > 1) {
+      // Delay initial preload to not interfere with current card loading
+      const timer = setTimeout(() => preloadAdjacentCards(currentCardId), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentCardId, currentCardExists, totalFilteredCards, preloadAdjacentCards]);
 
   // Handle calibration PDF generation
   const handlePrintCalibration = useCallback(() => {
@@ -467,7 +646,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       topDistance: '',
       crosshairLength: ''
     });
-  }, [calibrationMeasurements, outputSettings, onSettingsChange]);
+  }, [calibrationMeasurements, onSettingsChange]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({
@@ -481,7 +660,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       ...outputSettings,
       cardSize: size
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
 
   const handleCardImageSizingModeChange = (mode: 'actual-size' | 'fit-to-card' | 'fill-card') => {
@@ -489,7 +668,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       ...outputSettings,
       cardImageSizingMode: mode
     };
-    onSettingsChange(newSettings);
+    debouncedSettingsChange(newSettings);
   };
 
   return <div className="space-y-6">
@@ -983,7 +1162,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   {previewLoading ? (
                     <div className="w-full h-full flex flex-col items-center justify-center text-gray-500 text-sm">
                       <div className="animate-spin w-8 h-8 border-2 border-gray-300 border-t-blue-600 rounded-full mb-2"></div>
-                      <span>Loading preview...</span>
+                      <span className="text-center">{progressMessage || 'Loading preview...'}</span>
+                      {pendingSettingsRef.current && (
+                        <span className="text-xs text-gray-400 mt-1">Settings pending...</span>
+                      )}
                     </div>
                   ) : previewError ? (
                     <div className="w-full h-full flex flex-col items-center justify-center p-4">
@@ -994,6 +1176,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                         <button
                           onClick={() => {
                             setPreviewError('');
+                            // Clear cache for current card to force fresh render
+                            const cacheKey = getCacheKey(currentCardId, viewMode, outputSettings);
+                            previewCacheRef.current.delete(cacheKey);
                             // Force re-render by updating a dependency
                             setCurrentCardId(prev => prev);
                           }}
