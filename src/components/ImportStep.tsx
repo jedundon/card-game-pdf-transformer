@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
+import { renderPageThumbnail } from '../utils/cardUtils';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -41,6 +42,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [dragError, setDragError] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingError, setLoadingError] = useState<string>('');
+  
+  // Thumbnail state management
+  const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
+  const [thumbnailLoading, setThumbnailLoading] = useState<Record<number, boolean>>({});
+  const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
+  const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -85,6 +92,45 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     onPageSettingsChange(newSettings);
   };
   
+  // Thumbnail loading function
+  const loadThumbnail = useCallback(async (pageIndex: number) => {
+    if (!pdfData || thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
+      return;
+    }
+    
+    setThumbnailLoading(prev => ({ ...prev, [pageIndex]: true }));
+    
+    try {
+      const thumbnailUrl = await renderPageThumbnail(pdfData, pageIndex + 1);
+      setThumbnails(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
+    } catch (error) {
+      console.error(`Failed to load thumbnail for page ${pageIndex + 1}:`, error);
+      setThumbnailErrors(prev => ({ ...prev, [pageIndex]: true }));
+    } finally {
+      setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
+    }
+  }, [pdfData, thumbnails, thumbnailLoading, thumbnailErrors]);
+
+  // Effect to start loading thumbnails when page settings are available
+  useEffect(() => {
+    if (pdfData && pageSettings.length > 0) {
+      // Start loading thumbnails progressively - load first few immediately
+      const immediateLoadCount = Math.min(5, pageSettings.length);
+      for (let i = 0; i < immediateLoadCount; i++) {
+        loadThumbnail(i);
+      }
+      
+      // Load remaining thumbnails with a delay to avoid overwhelming the browser
+      if (pageSettings.length > immediateLoadCount) {
+        setTimeout(() => {
+          for (let i = immediateLoadCount; i < pageSettings.length; i++) {
+            setTimeout(() => loadThumbnail(i), i * 100); // Stagger loading by 100ms
+          }
+        }, 500);
+      }
+    }
+  }, [pdfData, pageSettings.length, loadThumbnail]);
+
   // File processing helper function (shared between drag/drop and file input)
   const processFile = async (file: File) => {
     // Reset all state
@@ -94,6 +140,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     setLoadingError('');
     setIsLoading(true);
     onPageSettingsChange([]);
+    
+    // Reset thumbnail state
+    setThumbnails({});
+    setThumbnailLoading({});
+    setThumbnailErrors({});
+    setHoveredThumbnail(null);
     
     try {
       // Validate file size (limit to 100MB)
@@ -525,6 +577,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                         Page
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Preview
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Type
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -536,6 +591,31 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     {pageSettings.map((page: any, index: number) => <tr key={index}>
                         <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                           {index + 1}
+                        </td>
+                        <td className="px-2 py-2 whitespace-nowrap">
+                          <div className="relative inline-block">
+                            {thumbnailLoading[index] ? (
+                              <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                                <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                              </div>
+                            ) : thumbnailErrors[index] ? (
+                              <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
+                                <span className="text-xs text-gray-400">Error</span>
+                              </div>
+                            ) : thumbnails[index] ? (
+                              <img
+                                src={thumbnails[index]}
+                                alt={`Page ${index + 1} preview`}
+                                className="w-12 h-16 border border-gray-200 rounded cursor-pointer hover:border-blue-300 transition-colors"
+                                onClick={() => setHoveredThumbnail(index)}
+                                title={`Click to view larger preview of page ${index + 1}`}
+                              />
+                            ) : (
+                              <div className="w-12 h-16 bg-gray-50 border border-gray-200 rounded flex items-center justify-center">
+                                <span className="text-xs text-gray-400">...</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2 whitespace-nowrap text-sm">
                           {pdfMode.type === 'duplex' && !page?.skip && <select value={page?.type || 'front'} onChange={e => handlePageTypeChange(index, e.target.value)} className="border border-gray-300 rounded px-2 py-1 text-sm">
@@ -555,6 +635,42 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                 </table>
               </div>
             </div>}
+          
+          {/* Thumbnail Popup */}
+          {hoveredThumbnail !== null && thumbnails[hoveredThumbnail] && (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
+              onClick={() => setHoveredThumbnail(null)}
+            >
+              <div 
+                className="bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-[95vw] max-h-[95vh] overflow-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-800">
+                    Page {hoveredThumbnail + 1} Preview
+                  </h4>
+                  <button
+                    onClick={() => setHoveredThumbnail(null)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <XIcon size={16} />
+                  </button>
+                </div>
+                <img
+                  src={thumbnails[hoveredThumbnail]}
+                  alt={`Page ${hoveredThumbnail + 1} preview`}
+                  className="w-auto h-auto border border-gray-200 rounded"
+                  style={{
+                    maxWidth: 'min(600px, 90vw)',
+                    maxHeight: 'min(600px, 90vh)'
+                  }}
+                />
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-end mt-6">
             <button onClick={onNext} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
               Next Step

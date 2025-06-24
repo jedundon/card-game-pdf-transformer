@@ -1348,3 +1348,129 @@ export function skipAllInColumn(
 export function clearAllSkips(): SkippedCard[] {
   return [];
 }
+
+/**
+ * Render a page thumbnail for display in the Import Step
+ * 
+ * Creates a high-quality thumbnail preview of a PDF page for use in the page designation
+ * interface. Generates larger images that can be scaled down in the table but displayed
+ * at full resolution in the popup preview.
+ * 
+ * **Rendering Details:**
+ * - Target size: 480x600px (roughly 4:5 aspect ratio) for high quality popup display
+ * - Uses 200 DPI for good quality while maintaining reasonable performance
+ * - Maintains aspect ratio with padding if needed
+ * - Returns data URL for direct use in img elements
+ * 
+ * @param pdfData - PDF document object from PDF.js
+ * @param pageNumber - 1-based page number to render
+ * @param maxWidth - Maximum thumbnail width in pixels (default: 480)
+ * @param maxHeight - Maximum thumbnail height in pixels (default: 600)
+ * @returns Promise resolving to data URL of the thumbnail image
+ * 
+ * @throws {Error} When page loading or rendering fails
+ * 
+ * @example
+ * ```typescript
+ * const thumbnailUrl = await renderPageThumbnail(pdfData, 1, 480, 600);
+ * setThumbnailState(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
+ * ```
+ */
+export async function renderPageThumbnail(
+  pdfData: PdfData,
+  pageNumber: number,
+  maxWidth = 480,
+  maxHeight = 600
+): Promise<string> {
+  try {
+    // Get PDF page with timeout
+    const pagePromise = pdfData.getPage(pageNumber);
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Thumbnail loading timed out for page ${pageNumber}`)), 10000)
+    );
+    
+    const page: PdfPage = await Promise.race([pagePromise, timeoutPromise]);
+    
+    if (!page) {
+      throw new Error(`Failed to load PDF page ${pageNumber} for thumbnail`);
+    }
+
+    // Calculate scale for thumbnail rendering (use 200 DPI for better quality thumbnails)
+    const thumbnailDPI = 200;
+    const thumbnailScale = thumbnailDPI / DPI_CONSTANTS.SCREEN_DPI; // ~2.78 scale for higher quality
+    
+    // Get viewport at thumbnail scale
+    const viewport = page.getViewport({ scale: thumbnailScale });
+    
+    if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+      throw new Error(`Invalid viewport dimensions for page ${pageNumber}: ${viewport?.width} x ${viewport?.height}`);
+    }
+    
+    // Calculate thumbnail dimensions maintaining aspect ratio
+    const aspectRatio = viewport.width / viewport.height;
+    let thumbnailWidth = maxWidth;
+    let thumbnailHeight = maxHeight;
+    
+    if (aspectRatio > maxWidth / maxHeight) {
+      // Page is wider - fit to width
+      thumbnailHeight = Math.round(maxWidth / aspectRatio);
+    } else {
+      // Page is taller - fit to height  
+      thumbnailWidth = Math.round(maxHeight * aspectRatio);
+    }
+    
+    // Create canvas for rendering
+    const canvas = document.createElement('canvas');
+    canvas.width = thumbnailWidth;
+    canvas.height = thumbnailHeight;
+    
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Failed to get 2D rendering context for thumbnail');
+    }
+    
+    // Scale viewport to fit thumbnail size
+    const scaleToThumbnail = Math.min(thumbnailWidth / viewport.width, thumbnailHeight / viewport.height);
+    const scaledViewport = page.getViewport({ scale: thumbnailScale * scaleToThumbnail });
+    
+    // Center the page in the canvas if there's padding
+    const offsetX = (thumbnailWidth - scaledViewport.width) / 2;
+    const offsetY = (thumbnailHeight - scaledViewport.height) / 2;
+    
+    // Clear canvas with white background
+    context.fillStyle = 'white';
+    context.fillRect(0, 0, thumbnailWidth, thumbnailHeight);
+    
+    // Render the page with proper positioning
+    context.save();
+    context.translate(offsetX, offsetY);
+    
+    const renderContext = {
+      canvasContext: context,
+      viewport: scaledViewport
+    };
+    
+    // Render with timeout
+    const renderPromise = page.render(renderContext).promise;
+    const renderTimeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Thumbnail rendering timed out for page ${pageNumber}`)), 8000)
+    );
+    
+    await Promise.race([renderPromise, renderTimeout]);
+    
+    context.restore();
+    
+    // Generate and return data URL
+    const dataUrl = canvas.toDataURL('image/png', 0.8); // Slightly compressed for better performance
+    
+    if (!dataUrl || dataUrl === 'data:,') {
+      throw new Error('Failed to generate thumbnail data URL');
+    }
+    
+    return dataUrl;
+    
+  } catch (error) {
+    console.error(`Thumbnail generation failed for page ${pageNumber}:`, error);
+    throw new Error(`Failed to generate thumbnail for page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
