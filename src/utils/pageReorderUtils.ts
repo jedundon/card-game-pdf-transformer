@@ -21,7 +21,7 @@
  * @author Card Game PDF Transformer
  */
 
-import { PageSettings, PageSource, PageReorderState, MultiFileImportState, PdfMode } from '../types';
+import { PageSettings, PageSource, MultiFileImportState, PdfMode } from '../types';
 
 /**
  * Reorder pages by moving a page from one position to another

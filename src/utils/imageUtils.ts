@@ -21,7 +21,7 @@
  * @author Card Game PDF Transformer
  */
 
-import { SUPPORTED_FILE_TYPES, FILE_SIZE_LIMITS, DPI_CONSTANTS } from '../constants';
+import { SUPPORTED_FILE_TYPES, FILE_SIZE_LIMITS } from '../constants';
 import { ImageFileData, FileSource } from '../types';
 
 /**

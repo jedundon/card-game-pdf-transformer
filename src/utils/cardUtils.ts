@@ -25,7 +25,7 @@
  */
 
 import { DPI_CONSTANTS } from '../constants';
-import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings, SkippedCard } from '../types';
+import { PdfData, PdfPage, PageSettings, PdfMode, ExtractionSettings, CardInfo, OutputSettings, SkippedCard, ImageFileData, PageSource } from '../types';
 
 /**
  * Calculate active pages (non-skipped pages)
@@ -1472,5 +1472,301 @@ export async function renderPageThumbnail(
   } catch (error) {
     console.error(`Thumbnail generation failed for page ${pageNumber}:`, error);
     throw new Error(`Failed to generate thumbnail for page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Render thumbnail for image file
+ * 
+ * Creates a thumbnail for an image file that matches the styling and format
+ * of PDF page thumbnails. This ensures consistent appearance in the UI
+ * regardless of whether the source is a PDF or image file.
+ * 
+ * @param imageData - Processed image file data
+ * @param maxWidth - Maximum thumbnail width in pixels (default: 480)
+ * @param maxHeight - Maximum thumbnail height in pixels (default: 600)
+ * @returns Promise that resolves to a data URL for the thumbnail
+ * 
+ * @throws {Error} When thumbnail generation fails
+ * 
+ * @example
+ * ```typescript
+ * const imageData = await processImageFile(file);
+ * const thumbnailUrl = await renderImageThumbnail(imageData, 480, 600);
+ * setThumbnailState(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
+ * ```
+ */
+export async function renderImageThumbnail(
+  imageData: ImageFileData,
+  maxWidth = 480,
+  maxHeight = 600
+): Promise<string> {
+  try {
+    const { canvas: sourceCanvas, width, height } = imageData;
+    
+    // Calculate thumbnail dimensions maintaining aspect ratio
+    const aspectRatio = width / height;
+    let thumbnailWidth = maxWidth;
+    let thumbnailHeight = maxHeight;
+    
+    if (aspectRatio > maxWidth / maxHeight) {
+      // Image is wider - fit to width
+      thumbnailHeight = Math.round(maxWidth / aspectRatio);
+    } else {
+      // Image is taller - fit to height  
+      thumbnailWidth = Math.round(maxHeight * aspectRatio);
+    }
+    
+    // Create thumbnail canvas
+    const thumbnailCanvas = document.createElement('canvas');
+    thumbnailCanvas.width = thumbnailWidth;
+    thumbnailCanvas.height = thumbnailHeight;
+    
+    const context = thumbnailCanvas.getContext('2d');
+    if (!context) {
+      throw new Error('Failed to get 2D rendering context for image thumbnail');
+    }
+    
+    // Clear canvas with white background (consistent with PDF thumbnails)
+    context.fillStyle = 'white';
+    context.fillRect(0, 0, thumbnailWidth, thumbnailHeight);
+    
+    // Calculate scaling and positioning to center the image
+    const scale = Math.min(thumbnailWidth / width, thumbnailHeight / height);
+    const scaledWidth = width * scale;
+    const scaledHeight = height * scale;
+    const offsetX = (thumbnailWidth - scaledWidth) / 2;
+    const offsetY = (thumbnailHeight - scaledHeight) / 2;
+    
+    // Draw the scaled image centered on the canvas
+    context.drawImage(sourceCanvas, offsetX, offsetY, scaledWidth, scaledHeight);
+    
+    // Generate and return data URL (same format as PDF thumbnails)
+    const dataUrl = thumbnailCanvas.toDataURL('image/png', 0.8);
+    
+    if (!dataUrl || dataUrl === 'data:,') {
+      throw new Error('Failed to generate image thumbnail data URL');
+    }
+    
+    return dataUrl;
+    
+  } catch (error) {
+    console.error(`Image thumbnail generation failed for ${imageData.fileName}:`, error);
+    throw new Error(`Failed to generate thumbnail for image ${imageData.fileName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Universal thumbnail renderer for mixed content
+ * 
+ * Renders thumbnails for either PDF pages or image files, automatically
+ * detecting the content type and using the appropriate rendering method.
+ * This is the main function used by UI components for multi-file support.
+ * 
+ * @param pdfData - PDF document data (null for image files)
+ * @param imageData - Image file data (null for PDF pages)
+ * @param pageNumber - Page number for PDF files (1-based, ignored for images)
+ * @param maxWidth - Maximum thumbnail width in pixels (default: 480)
+ * @param maxHeight - Maximum thumbnail height in pixels (default: 600)
+ * @returns Promise that resolves to a data URL for the thumbnail
+ * 
+ * @throws {Error} When neither PDF nor image data is provided, or when rendering fails
+ * 
+ * @example
+ * ```typescript
+ * // For PDF page
+ * const pdfThumbnail = await renderUniversalThumbnail(pdfData, null, 1);
+ * 
+ * // For image file
+ * const imageThumbnail = await renderUniversalThumbnail(null, imageData, 0);
+ * ```
+ */
+export async function renderUniversalThumbnail(
+  pdfData: PdfData | null,
+  imageData: ImageFileData | null,
+  pageNumber: number,
+  maxWidth = 480,
+  maxHeight = 600
+): Promise<string> {
+  if (pdfData && !imageData) {
+    // Render PDF page thumbnail
+    return renderPageThumbnail(pdfData, pageNumber, maxWidth, maxHeight);
+  } else if (imageData && !pdfData) {
+    // Render image thumbnail
+    return renderImageThumbnail(imageData, maxWidth, maxHeight);
+  } else {
+    throw new Error('Invalid thumbnail request: must provide either PDF data or image data, but not both');
+  }
+}
+
+/**
+ * Calculate card numbers for reordered pages
+ * 
+ * This is the critical function that ensures card numbering follows the
+ * user's intended page order rather than the original file order. It extends
+ * the existing card calculation logic to work with reordered page sequences.
+ * 
+ * @param pages - Pages array in display order (with PageSource information)
+ * @param pdfMode - PDF processing mode affecting card counting
+ * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @param skippedCards - Array of skipped card positions
+ * @returns Map of display order index to card numbers for that page
+ * 
+ * @example
+ * ```typescript
+ * const reorderedPages = getReorderedPages(); // [page2, page0, page1]
+ * const cardNumbers = calculateCardNumbersForReorderedPages(
+ *   reorderedPages, 
+ *   pdfMode, 
+ *   9, // 3x3 grid
+ *   []
+ * );
+ * // Returns: Map { 0 => [1,2,3,4,5,6,7,8,9], 1 => [10,11,12,...], ... }
+ * ```
+ */
+export function calculateCardNumbersForReorderedPages(
+  pages: (PageSettings & PageSource)[],
+  pdfMode: PdfMode,
+  cardsPerPage: number,
+  _skippedCards: SkippedCard[] = []
+): Map<number, number[]> {
+  const cardNumberMap = new Map<number, number[]>();
+  let currentCardId = 1;
+  
+  // Process pages in their display order (not original file order)
+  pages.forEach((page, displayIndex) => {
+    if (page.skip) {
+      // Skipped pages don't get card numbers
+      cardNumberMap.set(displayIndex, []);
+      return;
+    }
+    
+    const pageCardNumbers: number[] = [];
+    
+    // Calculate card numbers based on PDF mode
+    switch (pdfMode.type) {
+      case 'simplex':
+        // Simplex mode: each page has unique cards
+        for (let i = 0; i < cardsPerPage; i++) {
+          pageCardNumbers.push(currentCardId++);
+        }
+        break;
+        
+      case 'duplex':
+        // Duplex mode: fronts and backs are on alternating pages
+        if (page.type === 'front') {
+          // Front pages get new card IDs
+          for (let i = 0; i < cardsPerPage; i++) {
+            pageCardNumbers.push(currentCardId++);
+          }
+        } else if (page.type === 'back') {
+          // Back pages use the same IDs as the previous front page in display order
+          const previousFrontPageIndex = findPreviousFrontPageInDisplayOrder(pages, displayIndex);
+          if (previousFrontPageIndex !== -1) {
+            const frontCardNumbers = cardNumberMap.get(previousFrontPageIndex) || [];
+            pageCardNumbers.push(...frontCardNumbers);
+          }
+        }
+        break;
+        
+      case 'gutter-fold':
+        // Gutter-fold mode: each page contains both fronts and backs
+        const cardsPerSide = cardsPerPage / 2;
+        for (let i = 0; i < cardsPerSide; i++) {
+          pageCardNumbers.push(currentCardId++);
+        }
+        break;
+    }
+    
+    cardNumberMap.set(displayIndex, pageCardNumbers);
+  });
+  
+  return cardNumberMap;
+}
+
+/**
+ * Find the previous front page in display order for duplex mode
+ * 
+ * Helper function for duplex mode card numbering. Finds the most recent
+ * front page before the current back page in the display order to determine
+ * which card IDs the back page should use.
+ * 
+ * @param pages - Array of pages in display order
+ * @param currentDisplayIndex - Display index of the current back page
+ * @returns Display index of the previous front page, or -1 if not found
+ */
+function findPreviousFrontPageInDisplayOrder(
+  pages: (PageSettings & PageSource)[],
+  currentDisplayIndex: number
+): number {
+  for (let i = currentDisplayIndex - 1; i >= 0; i--) {
+    if (!pages[i].skip && pages[i].type === 'front') {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Get active pages with source tracking
+ * 
+ * Extended version of getActivePages that maintains source tracking information
+ * for multi-file workflows. This ensures that source file information is
+ * preserved when filtering out skipped pages.
+ * 
+ * @param pageSettings - Array of page settings with source information
+ * @returns Array of non-skipped pages with source tracking preserved
+ * 
+ * @example
+ * ```typescript
+ * const allPages = [
+ *   { skip: false, sourceFile: 'file1.pdf', ... },
+ *   { skip: true, sourceFile: 'file2.pdf', ... },
+ *   { skip: false, sourceFile: 'file1.pdf', ... }
+ * ];
+ * const activePages = getActivePagesWithSource(allPages); // Returns 2 pages
+ * ```
+ */
+export function getActivePagesWithSource(
+  pageSettings: (PageSettings & PageSource)[]
+): (PageSettings & PageSource)[] {
+  return pageSettings.filter(page => !page?.skip);
+}
+
+/**
+ * Calculate total cards for mixed content with reordering
+ * 
+ * Extended version of calculateTotalCards that works with reordered pages
+ * and mixed PDF/image content. This function properly handles the complexity
+ * of card counting when pages have been reordered by the user.
+ * 
+ * @param pages - Pages in display order with source tracking
+ * @param pdfMode - PDF processing mode configuration  
+ * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @returns Total number of unique cards across all pages
+ * 
+ * @example
+ * ```typescript
+ * const reorderedPages = getReorderedPages();
+ * const total = calculateTotalCardsForMixedContent(reorderedPages, pdfMode, 9);
+ * ```
+ */
+export function calculateTotalCardsForMixedContent(
+  pages: (PageSettings & PageSource)[],
+  pdfMode: PdfMode,
+  cardsPerPage: number
+): number {
+  const activePages = getActivePagesWithSource(pages);
+  
+  if (pdfMode.type === 'duplex') {
+    // In duplex mode, only front pages contribute to unique card count
+    const frontPages = activePages.filter(page => page.type === 'front').length;
+    return frontPages * cardsPerPage;
+  } else if (pdfMode.type === 'gutter-fold') {
+    // In gutter-fold mode, each page contains unique cards
+    return activePages.length * cardsPerPage;
+  } else {
+    // Simplex mode or images: each page is unique
+    return activePages.length * cardsPerPage;
   }
 }

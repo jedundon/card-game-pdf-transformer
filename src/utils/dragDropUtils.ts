@@ -22,7 +22,7 @@
  * @author Card Game PDF Transformer
  */
 
-import { DRAG_DROP_CONSTANTS } from '../constants';
+// import { DRAG_DROP_CONSTANTS } from '../constants'; // Reserved for future use
 import { PageReorderState } from '../types';
 
 /**
@@ -168,7 +168,7 @@ export function updateDragState(
  */
 export function calculateDragFeedback(
   dragState: PageReorderState,
-  cursorY: number,
+  _cursorY: number,
   itemHeight: number
 ): {
   showDropLine: boolean;
