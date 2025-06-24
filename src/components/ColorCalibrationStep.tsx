@@ -418,6 +418,42 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     };
   }, [cardRenderData, colorSettings?.gridConfig]);
 
+  // Update selected region preview coordinates when grid configuration changes
+  useEffect(() => {
+    if (!colorSettings?.selectedRegion || !cardRenderData || !cropRegionDimensions) {
+      return;
+    }
+
+    // Recalculate preview coordinates based on the stored real-world coordinates
+    const centerXPreview = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * cardRenderData.previewScaling.previewCardWidth + cardRenderData.previewScaling.previewX;
+    const centerYPreview = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * cardRenderData.previewScaling.previewCardHeight + cardRenderData.previewScaling.previewY;
+
+    // Check if preview coordinates need updating
+    const needsUpdate = 
+      Math.abs(colorSettings.selectedRegion.previewCenterX - centerXPreview) > 0.1 ||
+      Math.abs(colorSettings.selectedRegion.previewCenterY - centerYPreview) > 0.1 ||
+      Math.abs(colorSettings.selectedRegion.previewWidth - cropRegionDimensions.widthPreview) > 0.1 ||
+      Math.abs(colorSettings.selectedRegion.previewHeight - cropRegionDimensions.heightPreview) > 0.1;
+
+    if (needsUpdate) {
+      const updatedSettings = {
+        ...colorSettings,
+        selectedRegion: {
+          ...colorSettings.selectedRegion,
+          // Update preview coordinates based on current grid configuration
+          previewCenterX: centerXPreview,
+          previewCenterY: centerYPreview,
+          previewWidth: cropRegionDimensions.widthPreview,
+          previewHeight: cropRegionDimensions.heightPreview,
+          // Update real-world dimensions to match current grid configuration
+          width: cropRegionDimensions.widthInches,
+          height: cropRegionDimensions.heightInches
+        }
+      };
+      onColorSettingsChange(updatedSettings);
+    }
+  }, [colorSettings?.gridConfig, cardRenderData, cropRegionDimensions, colorSettings, onColorSettingsChange]);
+
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
     getActivePages(pageSettings), 

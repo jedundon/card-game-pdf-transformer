@@ -25,7 +25,7 @@
  * ```
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 /**
  * File import state
@@ -105,7 +105,7 @@ export type FileImportHook = FileImportState & FileImportActions;
  */
 export function useFileImport(): FileImportHook {
   // State management
-  const [triggerImportSettings, setTriggerImportSettings] = useState<(() => void) | null>(null);
+  const triggerImportRef = useRef<(() => void) | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -116,11 +116,13 @@ export function useFileImport(): FileImportHook {
    * Used to programmatically initiate the settings import workflow.
    */
   const handleTriggerImportSettings = useCallback((): void => {
-    if (triggerImportSettings) {
+    if (triggerImportRef.current) {
       try {
         setIsImporting(true);
         setImportError(null);
-        triggerImportSettings();
+        triggerImportRef.current();
+        // Reset importing status immediately since file dialog opens synchronously
+        setIsImporting(false);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown import error';
         console.error('Import trigger failed:', error);
@@ -131,7 +133,7 @@ export function useFileImport(): FileImportHook {
       console.warn('Import trigger not available - ImportExportManager may not be properly initialized');
       setImportError('Import functionality not available');
     }
-  }, [triggerImportSettings]);
+  }, []);
 
   /**
    * Set the import trigger callback reference
@@ -143,7 +145,7 @@ export function useFileImport(): FileImportHook {
    * @param trigger - Callback function to trigger import dialog, or null to clear
    */
   const setTriggerImportRef = useCallback((trigger: (() => void) | null): void => {
-    setTriggerImportSettings(trigger);
+    triggerImportRef.current = trigger;
     
     // Clear any existing errors when trigger is updated
     if (trigger) {
@@ -197,7 +199,7 @@ export function useFileImport(): FileImportHook {
 
   return {
     // State
-    triggerImportSettings,
+    triggerImportSettings: triggerImportRef.current,
     isImporting,
     importError,
     

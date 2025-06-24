@@ -37,7 +37,15 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   // Expose the trigger function to parent components
   useEffect(() => {
     if (onTriggerImportRef) {
-      onTriggerImportRef(() => fileInputRef.current?.click());
+      const triggerFn = () => {
+        // Must call click() synchronously to maintain user activation
+        if (fileInputRef.current) {
+          fileInputRef.current.click();
+        } else {
+          console.warn('File input ref not available when triggering import');
+        }
+      };
+      onTriggerImportRef(triggerFn);
     }
   }, [onTriggerImportRef]);
 
@@ -137,6 +145,15 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
 
   return (
     <div className="border border-gray-200 rounded-lg bg-gray-50">
+      {/* Hidden file input - always rendered for external triggers */}
+      <input
+        type="file"
+        accept=".json"
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleLoadSettings}
+      />
+      
       <div 
         className="p-3 cursor-pointer hover:bg-gray-100 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -203,22 +220,13 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
                   Export Settings
                 </button>
                 
-                <div className="relative">
-                  <input
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    ref={fileInputRef}
-                    onChange={handleLoadSettings}
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full flex items-center justify-center bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 text-xs"
-                  >
-                    <UploadIcon size={12} className="mr-1.5" />
-                    Import Settings
-                  </button>
-                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center bg-green-600 text-white px-2 py-1.5 rounded-md hover:bg-green-700 text-xs"
+                >
+                  <UploadIcon size={12} className="mr-1.5" />
+                  Import Settings
+                </button>
               </div>
             </div>
             

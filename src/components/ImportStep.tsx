@@ -338,29 +338,36 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           disabled={isLoading}
         />
         
-        {/* Loading spinner or upload icon */}
-        <div className={`flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full transition-colors ${
-          isLoading
-            ? 'bg-yellow-100 text-yellow-700'
-            : isDragOver 
-              ? 'bg-blue-100 text-blue-700' 
-              : (dragError || loadingError)
-                ? 'bg-red-100 text-red-600' 
-                : 'bg-blue-50 text-blue-600'
-        }`}>
-          {isLoading ? (
+        {/* Loading spinner or clickable upload icon */}
+        {isLoading ? (
+          <div className="flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full bg-yellow-100 text-yellow-700">
             <div className="animate-spin w-6 h-6 border-2 border-yellow-600 border-t-transparent rounded-full"></div>
-          ) : (
+          </div>
+        ) : (
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isLoading}
+            className={`flex items-center justify-center mx-auto mb-4 w-16 h-16 rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed ${
+              isDragOver 
+                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                : (dragError || loadingError)
+                  ? 'bg-red-100 text-red-600' 
+                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+            }`}
+            aria-label="Select PDF file to import"
+            title="Click to select PDF file"
+          >
             <UploadIcon size={24} />
-          )}
-        </div>
+          </button>
+        )}
 
         <button 
           onClick={() => !isLoading && fileInputRef.current?.click()} 
           disabled={isLoading}
-          className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline"
+          className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+          aria-label="Select PDF file to import"
         >
-          {isLoading ? 'Processing...' : 'Click to browse files'}
+          {isLoading ? 'Processing...' : 'Select PDF file'}
         </button>
 
         <p className={`mb-2 ${
