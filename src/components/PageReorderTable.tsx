@@ -145,17 +145,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   // Handle end of drag operation
   const handleDragEndForTable = useCallback(() => {
     setDragState(currentDragState => {
-      console.log('🔄 Drag end - current dragState:', currentDragState);
       const result = handleDragEnd(currentDragState);
-      console.log('🔄 Drag end result:', result);
       
       if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
-        console.log(`🔄 Reordering pages from ${result.fromIndex} to ${result.toIndex}`);
         const reorderedPages = reorderPages(pages, result.fromIndex, result.toIndex);
-        console.log('🔄 Reordered pages:', reorderedPages);
         onPagesReorder(reorderedPages);
-      } else {
-        console.log('🔄 No reordering needed:', { shouldReorder: result.shouldReorder, fromIndex: result.fromIndex, toIndex: result.toIndex });
       }
       
       return result.newState;
@@ -462,10 +456,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
-                          console.log(`⬆️ Arrow up clicked for page ${index}`);
                           if (index > 0) {
                             const reorderedPages = reorderPages(pages, index, index - 1);
-                            console.log('⬆️ Arrow up reordered pages:', reorderedPages);
                             onPagesReorder(reorderedPages);
                           }
                         }}
@@ -477,10 +469,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          console.log(`⬇️ Arrow down clicked for page ${index}`);
                           if (index < pages.length - 1) {
                             const reorderedPages = reorderPages(pages, index, index + 1);
-                            console.log('⬇️ Arrow down reordered pages:', reorderedPages);
                             onPagesReorder(reorderedPages);
                           }
                         }}

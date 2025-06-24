@@ -671,10 +671,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                   pdfMode={pdfMode}
                   // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
                   onPagesReorder={(reorderedPages) => {
-                    console.log('📥 ImportStep received reordered pages:', reorderedPages);
                     // Update page settings with reordered data
                     onPageSettingsChange(reorderedPages);
-                    console.log('📤 ImportStep called onPageSettingsChange with reordered pages');
                   }}
                   onPageSettingsChange={(pageIndex, settings) => {
                     const updatedSettings = [...pageSettings];
