@@ -444,7 +444,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                   {/* Preview thumbnail */}
                   <td className="px-2 py-2 whitespace-nowrap">
                     <div className="relative inline-block">
-                      {renderThumbnail(page.originalPageIndex)}
+                      {renderThumbnail(index)}
                     </div>
                   </td>
 
@@ -503,16 +503,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
-                          console.log(`⬆️ UP arrow clicked - index: ${index}, pages.length: ${pages.length}`);
                           if (index > 0) {
-                            console.log(`⬆️ Moving page from ${index} to ${index - 1}`);
-                            console.log(`⬆️ Current pages:`, pages);
                             const reorderedPages = reorderPages(pages, index, index - 1);
-                            console.log(`⬆️ Reordered pages:`, reorderedPages);
-                            console.log(`⬆️ Calling onPagesReorder...`);
                             onPagesReorder(reorderedPages);
-                          } else {
-                            console.log(`⬆️ Cannot move up - already at top`);
                           }
                         }}
                         disabled={index === 0}
@@ -523,16 +516,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          console.log(`⬇️ DOWN arrow clicked - index: ${index}, pages.length: ${pages.length}`);
                           if (index < pages.length - 1) {
-                            console.log(`⬇️ Moving page from ${index} to ${index + 1}`);
-                            console.log(`⬇️ Current pages:`, pages);
                             const reorderedPages = reorderPages(pages, index, index + 1);
-                            console.log(`⬇️ Reordered pages:`, reorderedPages);
-                            console.log(`⬇️ Calling onPagesReorder...`);
                             onPagesReorder(reorderedPages);
-                          } else {
-                            console.log(`⬇️ Cannot move down - already at bottom`);
                           }
                         }}
                         disabled={index === pages.length - 1}

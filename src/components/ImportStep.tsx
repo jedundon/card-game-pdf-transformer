@@ -58,7 +58,18 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (multiFileImport.isMultiFileMode) {
+    // Check if any files are images - if so, automatically enable multi-file mode
+    const hasImageFiles = files.some(file => isValidImageFile(file));
+    const hasMultipleFiles = files.length > 1;
+    
+    if (hasImageFiles || hasMultipleFiles) {
+      // Auto-enable multi-file mode for images or multiple files
+      if (!multiFileImport.isMultiFileMode) {
+        multiFileImport.setMultiFileMode(true);
+      }
+      // Process multiple files
+      await processMultipleFiles(files);
+    } else if (multiFileImport.isMultiFileMode) {
       // Multi-file mode: process all files (including single files and mixed file types)
       await processMultipleFiles(files);
     } else {
@@ -157,7 +168,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   
   // Thumbnail loading function
   const loadThumbnail = useCallback(async (pageIndex: number) => {
-    if (!pdfData || thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
+    if (!pdfData) {
       return;
     }
     
@@ -172,15 +183,14 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     } finally {
       setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
     }
-  }, [pdfData, thumbnails, thumbnailLoading, thumbnailErrors]);
+  }, [pdfData]);
 
   // Load thumbnail for image files
   const loadImageThumbnail = useCallback(async (pageIndex: number, fileName: string) => {
-    if (thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
-      return;
-    }
-    
-    setThumbnailLoading(prev => ({ ...prev, [pageIndex]: true }));
+    setThumbnailLoading(prev => ({ 
+      ...prev, 
+      [pageIndex]: true 
+    }));
     
     try {
       const imageData = multiFileImport.getImageData(fileName);
@@ -197,11 +207,11 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     } finally {
       setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
     }
-  }, [thumbnails, thumbnailLoading, thumbnailErrors, multiFileImport]);
+  }, [multiFileImport]);
 
   // Load thumbnail for PDF pages in multi-file context
   const loadPdfThumbnailForPage = useCallback(async (pageIndex: number, pdfPageNumber: number) => {
-    if (!pdfData || thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
+    if (!pdfData) {
       return;
     }
     
@@ -216,7 +226,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     } finally {
       setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
     }
-  }, [pdfData, thumbnails, thumbnailLoading, thumbnailErrors]);
+  }, [pdfData]);
 
   // Effect to start loading thumbnails when page settings are available
   useEffect(() => {
@@ -236,7 +246,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         }, 500);
       }
     }
-  }, [pdfData, pageSettings.length, loadThumbnail]);
+  }, [pdfData, pageSettings.length]);
 
   // Effect to start loading thumbnails for multi-file imports
   useEffect(() => {
@@ -270,7 +280,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         }, 500);
       }
     }
-  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages.length, loadImageThumbnail, loadPdfThumbnailForPage, pdfData]);
+  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages.length, pdfData]);
 
   // File processing helper function (shared between drag/drop and file input)
   const processFile = async (file: File) => {
@@ -445,33 +455,38 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         return;
       }
       
-      // Validate files based on mode
-      if (multiFileImport.isMultiFileMode) {
-        // Multi-file mode: accept PDFs and images
-        const invalidFiles = files.filter(file => !isValidFile(file));
-        if (invalidFiles.length > 0) {
-          setDragError('Only PDF and image files (PNG, JPG, JPEG) are supported in multi-file mode.');
-          return;
-        }
-      } else {
-        // Single-file mode: only PDFs
-        const invalidFiles = files.filter(file => !isValidPdfFile(file));
-        if (invalidFiles.length > 0) {
-          setDragError('Only PDF files are supported in single-file mode.');
-          return;
-        }
-      }
+      // Check if any files are images - if so, automatically enable multi-file mode
+      const hasImageFiles = files.some(file => isValidImageFile(file));
+      const hasMultipleFiles = files.length > 1;
       
-      if (files.length > 1) {
+      if (hasImageFiles || hasMultipleFiles) {
+        // Auto-enable multi-file mode for images or multiple files
         if (!multiFileImport.isMultiFileMode) {
-          setDragError('Multiple files detected. Enable multi-file mode to import multiple PDFs.');
-          return;
+          multiFileImport.setMultiFileMode(true);
         }
         // Process multiple files
         await processMultipleFiles(files);
       } else {
-        // Process single file
-        await processFile(files[0]);
+        // Validate files based on mode
+        if (multiFileImport.isMultiFileMode) {
+          // Multi-file mode: accept PDFs and images
+          const invalidFiles = files.filter(file => !isValidFile(file));
+          if (invalidFiles.length > 0) {
+            setDragError('Only PDF and image files (PNG, JPG, JPEG) are supported in multi-file mode.');
+            return;
+          }
+          // Process multiple files
+          await processMultipleFiles(files);
+        } else {
+          // Single-file mode: only PDFs
+          const invalidFiles = files.filter(file => !isValidPdfFile(file));
+          if (invalidFiles.length > 0) {
+            setDragError('Only PDF files are supported in single-file mode.');
+            return;
+          }
+          // Process single file
+          await processFile(files[0]);
+        }
       }
     } catch (error) {
       console.error('Error handling file drop:', error);
@@ -721,13 +736,13 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           </div>
         </div>
       )}
-      {/* PDF Mode Configuration - Only show for PDFs */}
-      {pdfData && (
+      {/* PDF Mode Configuration - Show for PDFs and images */}
+      {(pdfData || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                PDF Mode
+                Processing Mode
               </label>
               <select value={pdfMode.type} onChange={handleModeChange} className="w-full border border-gray-300 rounded-md px-3 py-2">
                 <option value="duplex">
@@ -774,56 +789,65 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         </>
       )}
 
-      {/* Image Mode Information - Show for image-only imports */}
-      {!pdfData && multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0 && 
-       multiFileImport.multiFileState.pages.every(page => page.fileType === 'image') && (
-        <div className="p-4 bg-green-50 rounded-md">
-          <h4 className="text-sm font-medium text-green-800 mb-2">
-            Image Import Mode
-          </h4>
-          <div className="text-sm text-green-700">
-            Images will be processed as individual cards. You can extract multiple cards from each image by adjusting the grid settings in the next step.
-          </div>
-          <p className="text-xs text-green-600 mt-1">
-            Default: 1 row × 1 column (1 card per image)
-          </p>
-        </div>
-      )}
       
       {/* Page Reordering Table - Show for any imported content */}
       {(pageSettings.length > 0 || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
-            <div className="mt-6">
-              <h3 className="text-lg font-medium text-gray-800 mb-3">
-                Page Reordering & Settings
-              </h3>
-              
               <PageReorderTable
                 pages={multiFileImport.isMultiFileMode 
-                  ? multiFileImport.multiFileState.pages.map((page, index) => {
-                      const mappedPage = {
-                        ...page,
-                        displayOrder: index
-                      };
-                      console.log(`🔍 Multi-file mapping pages[${index}]:`, page, '→', mappedPage);
-                      return mappedPage;
-                    })
-                  : pageSettings.map((page: any, index: number) => {
-                      const mappedPage = {
-                        ...page,
-                        fileName: fileName || 'Unknown',
-                        fileType: 'pdf' as const,
-                        originalPageIndex: page.originalPageIndex ?? index,
-                        displayOrder: index
-                      };
-                      console.log(`🔍 Single-file mapping pageSettings[${index}]:`, page, '→', mappedPage);
-                      return mappedPage;
-                    })
+                  ? multiFileImport.multiFileState.pages.map((page, index) => ({
+                      ...page,
+                      displayOrder: index
+                    }))
+                  : pageSettings.map((page: any, index: number) => ({
+                      ...page,
+                      fileName: fileName || 'Unknown',
+                      fileType: 'pdf' as const,
+                      originalPageIndex: page.originalPageIndex ?? index,
+                      displayOrder: index
+                    }))
                 }
                 pdfMode={pdfMode}
                 onPagesReorder={(reorderedPages) => {
-                  console.log('📥 ImportStep: onPagesReorder called with:', reorderedPages);
-                  
                   if (multiFileImport.isMultiFileMode) {
+                    // Get the current pages before reordering to determine the mapping
+                    const currentPages = multiFileImport.multiFileState.pages;
+                    
+                    // Create a mapping from new position to old position for thumbnails
+                    const thumbnailMapping: Record<number, number> = {};
+                    reorderedPages.forEach((reorderedPage, newIndex) => {
+                      // Find the old index of this page
+                      const oldIndex = currentPages.findIndex(
+                        currentPage => currentPage.fileName === reorderedPage.fileName && 
+                        currentPage.originalPageIndex === reorderedPage.originalPageIndex
+                      );
+                      if (oldIndex !== -1) {
+                        thumbnailMapping[newIndex] = oldIndex;
+                      }
+                    });
+                    
+                    // Reorder thumbnails to match the new page order
+                    const newThumbnails: Record<number, string> = {};
+                    const newThumbnailLoading: Record<number, boolean> = {};
+                    const newThumbnailErrors: Record<number, boolean> = {};
+                    
+                    Object.entries(thumbnailMapping).forEach(([newIndexStr, oldIndex]) => {
+                      const newIndex = parseInt(newIndexStr);
+                      if (thumbnails[oldIndex]) {
+                        newThumbnails[newIndex] = thumbnails[oldIndex];
+                      }
+                      if (thumbnailLoading[oldIndex]) {
+                        newThumbnailLoading[newIndex] = thumbnailLoading[oldIndex];
+                      }
+                      if (thumbnailErrors[oldIndex]) {
+                        newThumbnailErrors[newIndex] = thumbnailErrors[oldIndex];
+                      }
+                    });
+                    
+                    // Update thumbnail states
+                    setThumbnails(newThumbnails);
+                    setThumbnailLoading(newThumbnailLoading);
+                    setThumbnailErrors(newThumbnailErrors);
+                    
                     // Update multi-file state with complete page objects (preserves reordering)
                     multiFileImport.updateAllPageSettings(reorderedPages);
                     
@@ -841,10 +865,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                       type: page.type || 'front',
                       originalPageIndex: page.originalPageIndex
                     }));
-                    console.log('📤 ImportStep: Calling onPageSettingsChange with:', corePageSettings);
                     onPageSettingsChange(corePageSettings);
                   }
-                  console.log('✅ ImportStep: onPagesReorder completed');
                 }}
                 onPageSettingsChange={(pageIndex, settings) => {
                   if (multiFileImport.isMultiFileMode) {
@@ -890,7 +912,6 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                   }
                 }}
               />
-            </div>
           )}
 
       {/* Thumbnail Popup - Show for any imported content */}

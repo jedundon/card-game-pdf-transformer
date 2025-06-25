@@ -139,13 +139,14 @@ export function recalculateCardNumbers(
         }
         break;
         
-      case 'gutter-fold':
+      case 'gutter-fold': {
         // Gutter-fold mode: each page contains both fronts and backs
         const cardsPerSide = cardsPerPage / 2;
         for (let i = 0; i < cardsPerSide; i++) {
           pageCardNumbers.push(currentCardId++);
         }
         break;
+      }
     }
     
     cardNumberMap.set(pageIndex, pageCardNumbers);
