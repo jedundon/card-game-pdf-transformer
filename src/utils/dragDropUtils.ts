@@ -85,7 +85,7 @@ export function isWithinDropZone(
   clientX: number,
   clientY: number,
   dropZoneElement: HTMLElement,
-  margin: number = 0
+  margin = 0
 ): boolean {
   const rect = dropZoneElement.getBoundingClientRect();
   
@@ -464,7 +464,7 @@ export function createKeyboardHandlers(
  */
 export function throttleDragEvents<T extends (...args: any[]) => any>(
   handler: T,
-  delay: number = 16
+  delay = 16
 ): T {
   let lastCall = 0;
   let timeoutId: NodeJS.Timeout | null = null;

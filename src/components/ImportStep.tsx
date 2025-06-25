@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon } from 'lucide-react';
+import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon, FilesIcon, FileIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
-// import { SUPPORTED_FILE_TYPES } from '../constants'; // Removed for Phase 1 - single PDF only
-// import { PageSettings, PageSource, PdfMode } from '../types'; // Used only in TypeScript interfaces for PageReorderTable
+import { useMultiFileImport } from '../hooks/useMultiFileImport';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -52,23 +51,70 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   
-  // Multi-file support removed for Phase 1 - focusing on single PDF page reordering
-  // const [isMultiFileMode, setIsMultiFileMode] = useState<boolean>(false);
-  // const [multiFilePages, setMultiFilePages] = useState<(PageSettings & PageSource)[]>([]); // TODO: Use in next phase
+  // Multi-file support - Phase 2 implementation
+  const multiFileImport = useMultiFileImport();
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      await processFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (multiFileImport.isMultiFileMode && files.length > 1) {
+      // Multi-file mode: process all files
+      await processMultipleFiles(files);
+    } else {
+      // Single-file mode: process only the first file
+      await processFile(files[0]);
     }
   };
 
-  // Multi-file change handler removed for Phase 1 - single PDF only
-  // const handleMultiFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   const files = Array.from(e.target.files || []);
-  //   if (files.length > 0) {
-  //     await processMultipleFiles(files);
-  //   }
-  // };
+  // Process multiple files using the multi-file import hook
+  const processMultipleFiles = async (files: File[]) => {
+    // Reset single-file state when switching to multi-file
+    setFileName('');
+    setPageCount(0);
+    setDragError('');
+    setLoadingError('');
+    setIsLoading(true);
+    onPageSettingsChange([]);
+    
+    // Reset thumbnail state
+    setThumbnails({});
+    setThumbnailLoading({});
+    setThumbnailErrors({});
+    setHoveredThumbnail(null);
+
+    try {
+      const result = await multiFileImport.processFiles(files);
+      
+      if (result.files.length > 0) {
+        const totalPages = result.pages.length;
+        setFileName(`${result.files.length} files (${totalPages} pages total)`);
+        setPageCount(totalPages);
+        
+        // Use the first successful PDF for onFileSelect compatibility
+        if (result.firstPdf) {
+          onFileSelect(result.firstPdf, `Multi-file import`, undefined);
+        }
+        
+        // Set combined page settings
+        const corePageSettings = result.pages.map(page => ({
+          skip: page.skip || false,
+          type: page.type || 'front',
+          originalPageIndex: page.originalPageIndex
+        }));
+        onPageSettingsChange(corePageSettings);
+        
+        console.log(`Successfully processed ${result.files.length} files with ${totalPages} total pages`);
+      } else {
+        throw new Error('No files were successfully processed');
+      }
+      
+    } catch (error) {
+      console.error('Error processing multiple files:', error);
+      setLoadingError(error instanceof Error ? error.message : 'Failed to process multiple files');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const handleModeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const type = e.target.value as 'duplex' | 'gutter-fold';
     onModeSelect({
@@ -163,44 +209,17 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     setThumbnailErrors({});
     setHoveredThumbnail(null);
     
+    // Reset multi-file state when processing single file
+    if (!multiFileImport.isMultiFileMode) {
+      multiFileImport.reset();
+    }
+    
     try {
-      // Validate file size (limit to 100MB)
-      const maxSize = 100 * 1024 * 1024; // 100MB
-      if (file.size > maxSize) {
-        throw new Error('File is too large. Please select a PDF file smaller than 100MB.');
-      }
-
-      // Read the file as ArrayBuffer with timeout
-      const arrayBuffer = await Promise.race([
-        file.arrayBuffer(),
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('File reading timed out. Please try a smaller file.')), 30000)
-        )
-      ]);
-
-      // Load PDF using pdfjs-dist with timeout
-      const loadingTask = pdfjsLib.getDocument({ 
-        data: arrayBuffer,
-        // Disable workers for better error handling
-        useWorkerFetch: false,
-        // Set memory limits
-        maxImageSize: 50 * 1024 * 1024 // 50MB max image size
-      });
-
-      const pdf = await Promise.race([
-        loadingTask.promise,
-        new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('PDF loading timed out. The file may be corrupted or too complex.')), 45000)
-        )
-      ]);
-
-      // Validate PDF
-      if (!pdf || pdf.numPages === 0) {
-        throw new Error('Invalid PDF file. The file appears to be empty or corrupted.');
-      }
-
-      if (pdf.numPages > 1000) {
-        throw new Error('PDF has too many pages. Please select a PDF with fewer than 1000 pages.');
+      // Use the multi-file import hook for consistency
+      const pdf = await multiFileImport.processSingleFile(file);
+      
+      if (!pdf) {
+        throw new Error('Failed to process PDF file.');
       }
 
       // Success - update state
@@ -210,7 +229,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       // Initialize page settings with default values
       const initialPageSettings = Array(pdf.numPages).fill(null).map((_, i) => ({
         skip: false,
-        type: i % 2 === 0 ? 'front' : 'back' // Default alternating front/back for duplex
+        type: i % 2 === 0 ? 'front' : 'back', // Default alternating front/back for duplex
+        originalPageIndex: i // Initialize originalPageIndex for consistency
       }));
       onPageSettingsChange(initialPageSettings);
       
@@ -249,47 +269,6 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     }
   };
 
-  // Multi-file processing function removed for Phase 1 - single PDF only
-  // const processMultipleFiles = async (files: File[]) => {
-  //   setIsLoading(true);
-  //   setLoadingError('');
-  //   setDragError('');
-  //   
-  //   try {
-  //     // Basic validation - this is a simplified version
-  //     // In a real implementation, you'd use the validation functions from multiFileUtils
-  //     const pdfFiles: File[] = [];
-  //     const imageFiles: File[] = [];
-  //     
-  //     for (const file of files) {
-  //       if (file.type === 'application/pdf') {
-  //         pdfFiles.push(file);
-  //       } else if (file.type.startsWith('image/')) {
-  //         imageFiles.push(file);
-  //       }
-  //     }
-  //     
-  //     if (pdfFiles.length === 0 && imageFiles.length === 0) {
-  //       throw new Error('No valid PDF or image files found');
-  //     }
-  //     
-  //     // For now, just process the first PDF file to maintain compatibility
-  //     // TODO: Implement full multi-file processing
-  //     if (pdfFiles.length > 0) {
-  //       await processFile(pdfFiles[0]);
-  //       setFileName(`${pdfFiles[0].name} + ${files.length - 1} more files`);
-  //     } else if (imageFiles.length > 0) {
-  //       // For image files, we'd need to implement image processing
-  //       throw new Error('Image file processing not yet fully implemented');
-  //     }
-  //     
-  //   } catch (error) {
-  //     console.error('Error processing multiple files:', error);
-  //     setLoadingError(error instanceof Error ? error.message : 'Failed to process multiple files');
-  //   } finally {
-  //     setIsLoading(false);
-  //   }
-  // };
   
   // Validate if file is a PDF
   const isValidPdfFile = (file: File): boolean => {
@@ -322,14 +301,19 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     
     // Validate dragged files
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      const item = e.dataTransfer.items[0];
-      if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (file && !isValidPdfFile(file)) {
-          setDragError('Only PDF files are supported');
-        } else {
-          setDragError('');
-        }
+      const files = Array.from(e.dataTransfer.items)
+        .filter(item => item.kind === 'file')
+        .map(item => item.getAsFile())
+        .filter((file): file is File => file !== null);
+      
+      const invalidFiles = files.filter(file => !isValidPdfFile(file));
+      
+      if (invalidFiles.length > 0) {
+        setDragError('Only PDF files are supported');
+      } else if (files.length > 1 && !multiFileImport.isMultiFileMode) {
+        setDragError('Multiple files detected. Enable multi-file mode to import multiple PDFs');
+      } else {
+        setDragError('');
       }
     }
   };
@@ -367,28 +351,84 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         return;
       }
       
+      // Validate all files are PDFs
+      const invalidFiles = files.filter(file => !isValidPdfFile(file));
+      if (invalidFiles.length > 0) {
+        setDragError('Only PDF files are supported. Please drop valid PDF files.');
+        return;
+      }
+      
       if (files.length > 1) {
-        setDragError('Please drop only one PDF file at a time');
-        return;
+        if (!multiFileImport.isMultiFileMode) {
+          setDragError('Multiple files detected. Enable multi-file mode to import multiple PDFs.');
+          return;
+        }
+        // Process multiple files
+        await processMultipleFiles(files);
+      } else {
+        // Process single file
+        await processFile(files[0]);
       }
-      
-      const file = files[0];
-      
-      if (!isValidPdfFile(file)) {
-        setDragError('Only PDF files are supported. Please drop a valid PDF file.');
-        return;
-      }
-      
-      // Process the dropped PDF file
-      await processFile(file);
     } catch (error) {
       console.error('Error handling file drop:', error);
-      setDragError('Failed to process dropped file. Please try again.');
+      setDragError('Failed to process dropped file(s). Please try again.');
     }
   };
   
   return <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-800">Import PDF File</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-800">Import PDF File{multiFileImport.isMultiFileMode ? 's' : ''}</h2>
+        
+        {/* Multi-file Mode Toggle */}
+        <div className="flex items-center space-x-3">
+          <label className="flex items-center space-x-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={multiFileImport.isMultiFileMode}
+              onChange={(e) => multiFileImport.setMultiFileMode(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              disabled={isLoading}
+            />
+            <span className="flex items-center">
+              <FilesIcon size={16} className="mr-1" />
+              Multi-file mode
+            </span>
+          </label>
+        </div>
+      </div>
+      
+      {/* Multi-file Status Display */}
+      {multiFileImport.isMultiFileMode && multiFileImport.getFileList().length > 0 && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-green-800 mb-2">
+                Multi-file Import Status
+              </h4>
+              <div className="space-y-1">
+                {multiFileImport.getFileList().map((file, index) => (
+                  <div key={index} className="flex items-center justify-between text-sm">
+                    <span className="text-green-700">
+                      <FileIcon size={14} className="inline mr-1" />
+                      {file.name} ({file.originalPageCount} pages)
+                    </span>
+                    <button
+                      onClick={() => multiFileImport.removeFile(file.name)}
+                      className="text-green-600 hover:text-green-800 ml-2"
+                      title="Remove file"
+                    >
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-green-600 mt-2">
+                Total: {multiFileImport.multiFileState.pages.length} pages across {multiFileImport.getFileList().length} files
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Previously Imported File Display */}
       {lastImportedFileInfo && !pdfData && (
@@ -442,6 +482,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         <input 
           type="file" 
           accept=".pdf"
+          multiple={multiFileImport.isMultiFileMode}
           className="hidden" 
           ref={fileInputRef} 
           onChange={handleFileChange}
@@ -475,9 +516,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           onClick={() => !isLoading && fileInputRef.current?.click()} 
           disabled={isLoading}
           className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
-          aria-label="Select PDF file to import"
+          aria-label={multiFileImport.isMultiFileMode ? "Select PDF files to import" : "Select PDF file to import"}
         >
-          {isLoading ? 'Processing...' : 'Select PDF file'}
+          {isLoading ? 'Processing...' : multiFileImport.isMultiFileMode ? 'Select PDF files' : 'Select PDF file'}
         </button>
 
         <p className={`mb-2 ${
@@ -492,12 +533,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           {isLoading
             ? `Processing ${fileName}...`
             : isDragOver 
-              ? 'Drop your PDF file here' 
+              ? multiFileImport.isMultiFileMode ? 'Drop your PDF files here' : 'Drop your PDF file here'
               : fileName && !dragError && !loadingError
                 ? `Successfully loaded: ${fileName} (${pageCount} pages)`
                 : lastImportedFileInfo 
-                  ? `Drag & drop or click to upload a PDF file (last: ${lastImportedFileInfo.name})` 
-                  : 'Drag & drop your PDF file here or click to browse'
+                  ? `Drag & drop or click to upload PDF ${multiFileImport.isMultiFileMode ? 'files' : 'file'} (last: ${lastImportedFileInfo.name})` 
+                  : `Drag & drop your PDF ${multiFileImport.isMultiFileMode ? 'files' : 'file'} here or click to browse`
           }
         </p>
 
@@ -625,52 +666,89 @@ export const ImportStep: React.FC<ImportStepProps> = ({
             </p>
           </div>
           
-          {pageSettings.length > 0 && (
+          {(pageSettings.length > 0 || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
             <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-3">
                 Page Reordering & Settings
               </h3>
               
               <PageReorderTable
-                pages={pageSettings.map((page: any, index: number) => {
-                  const mappedPage = {
-                    ...page,
-                    fileName: fileName || 'Unknown',
-                    fileType: 'pdf' as const, // Currently only handling PDF files
-                    originalPageIndex: page.originalPageIndex ?? index, // Use existing originalPageIndex or fallback to index for initial load
-                    displayOrder: index
-                  };
-                  console.log(`🔍 Mapping pageSettings[${index}]:`, page, '→', mappedPage);
-                  return mappedPage;
-                })}
+                pages={multiFileImport.isMultiFileMode 
+                  ? multiFileImport.multiFileState.pages.map((page, index) => {
+                      const mappedPage = {
+                        ...page,
+                        displayOrder: index
+                      };
+                      console.log(`🔍 Multi-file mapping pages[${index}]:`, page, '→', mappedPage);
+                      return mappedPage;
+                    })
+                  : pageSettings.map((page: any, index: number) => {
+                      const mappedPage = {
+                        ...page,
+                        fileName: fileName || 'Unknown',
+                        fileType: 'pdf' as const,
+                        originalPageIndex: page.originalPageIndex ?? index,
+                        displayOrder: index
+                      };
+                      console.log(`🔍 Single-file mapping pageSettings[${index}]:`, page, '→', mappedPage);
+                      return mappedPage;
+                    })
+                }
                 pdfMode={pdfMode}
-                // gridSettings={{ rows: 2, columns: 2 }} // Not needed until extraction step
                 onPagesReorder={(reorderedPages) => {
                   console.log('📥 ImportStep: onPagesReorder called with:', reorderedPages);
-                  // Extract core page settings from reordered pages, preserving originalPageIndex
-                  const corePageSettings = reorderedPages.map(page => ({
-                    skip: page.skip || false,
-                    type: page.type || 'front',
-                    originalPageIndex: page.originalPageIndex // Preserve original page number!
-                  }));
-                  console.log('📤 ImportStep: Calling onPageSettingsChange with:', corePageSettings);
-                  onPageSettingsChange(corePageSettings);
-                  console.log('✅ ImportStep: onPageSettingsChange completed');
+                  
+                  if (multiFileImport.isMultiFileMode) {
+                    // Update multi-file state with complete page objects (preserves reordering)
+                    multiFileImport.updateAllPageSettings(reorderedPages);
+                    
+                    // Also update the main page settings for compatibility
+                    const corePageSettings = reorderedPages.map(page => ({
+                      skip: page.skip || false,
+                      type: page.type || 'front',
+                      originalPageIndex: page.originalPageIndex
+                    }));
+                    onPageSettingsChange(corePageSettings);
+                  } else {
+                    // Single-file mode - preserve existing logic
+                    const corePageSettings = reorderedPages.map(page => ({
+                      skip: page.skip || false,
+                      type: page.type || 'front',
+                      originalPageIndex: page.originalPageIndex
+                    }));
+                    console.log('📤 ImportStep: Calling onPageSettingsChange with:', corePageSettings);
+                    onPageSettingsChange(corePageSettings);
+                  }
+                  console.log('✅ ImportStep: onPagesReorder completed');
                 }}
                 onPageSettingsChange={(pageIndex, settings) => {
-                  const updatedSettings = [...pageSettings];
-                  updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
-                  onPageSettingsChange(updatedSettings);
+                  if (multiFileImport.isMultiFileMode) {
+                    // Update specific page in multi-file state
+                    const currentPages = multiFileImport.multiFileState.pages;
+                    const updatedPages = currentPages.map((page, index) => 
+                      index === pageIndex ? { ...page, ...settings } : page
+                    );
+                    multiFileImport.updateAllPageSettings(updatedPages);
+                  } else {
+                    // Single-file mode
+                    const updatedSettings = [...pageSettings];
+                    updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
+                    onPageSettingsChange(updatedSettings);
+                  }
                 }}
                 onPageRemove={(pageIndex) => {
-                  const updatedSettings = [...pageSettings];
-                  updatedSettings.splice(pageIndex, 1);
-                  onPageSettingsChange(updatedSettings);
+                  if (multiFileImport.isMultiFileMode) {
+                    multiFileImport.removePage(pageIndex);
+                  } else {
+                    const updatedSettings = [...pageSettings];
+                    updatedSettings.splice(pageIndex, 1);
+                    onPageSettingsChange(updatedSettings);
+                  }
                 }}
                 thumbnails={thumbnails}
                 thumbnailLoading={thumbnailLoading}
                 thumbnailErrors={thumbnailErrors}
-                onThumbnailLoad={(_pageIndex) => {
+                onThumbnailLoad={() => {
                   // Thumbnail loading is handled automatically in ImportStep
                   // This is a placeholder for compatibility
                 }}

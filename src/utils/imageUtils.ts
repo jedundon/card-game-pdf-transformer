@@ -207,8 +207,8 @@ export async function processImageFile(file: File): Promise<ImageFileData> {
  */
 export function createImageThumbnail(
   imageData: ImageFileData,
-  maxWidth: number = 200,
-  maxHeight: number = 150
+  maxWidth = 200,
+  maxHeight = 150
 ): string {
   const { canvas, width, height } = imageData;
   
