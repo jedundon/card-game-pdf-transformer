@@ -30,8 +30,16 @@ import {
   FileSource, 
   PageSettings, 
   PageSource, 
-  PdfData
+  PdfData,
+  ImageFileData
 } from '../types';
+import { 
+  isValidImageFile, 
+  processImageFile, 
+  createImageFileSource, 
+  validateImageFileSize 
+} from '../utils/imageUtils';
+import { SUPPORTED_FILE_TYPES } from '../constants';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -46,12 +54,13 @@ interface UseMultiFileImportReturn {
   isMultiFileMode: boolean;
   /** Enable/disable multi-file mode */
   setMultiFileMode: (enabled: boolean) => void;
-  /** Process multiple files */
+  /** Process multiple files (PDFs and images) */
   processFiles: (files: File[]) => Promise<{
     files: FileSource[];
     pages: (PageSettings & PageSource)[];
     errors: Record<string, string>;
     firstPdf: PdfData | null;
+    imageData: Map<string, ImageFileData>;
   }>;
   /** Process a single file (backward compatibility) */
   processSingleFile: (file: File) => Promise<PdfData | null>;
@@ -73,6 +82,10 @@ interface UseMultiFileImportReturn {
   getFileList: () => FileSource[];
   /** Get error for a specific file */
   getFileError: (fileName: string) => string | undefined;
+  /** Get image data for a specific file */
+  getImageData: (fileName: string) => ImageFileData | undefined;
+  /** Get all image data */
+  getAllImageData: () => Map<string, ImageFileData>;
 }
 
 /**
@@ -98,32 +111,38 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
 
   // Single PDF reference for backward compatibility
   const [singlePdfData, setSinglePdfData] = useState<PdfData | null>(null);
+  
+  // Image data storage for processed images
+  const [imageDataStore, setImageDataStore] = useState<Map<string, ImageFileData>>(new Map());
 
   /**
-   * Validate if file is a PDF
+   * Validate if file is a supported file type (PDF or image)
    */
-  const isValidPdfFile = useCallback((file: File): boolean => {
-    const validTypes = ['application/pdf'];
-    const validExtensions = ['.pdf'];
+  const isValidFile = useCallback((file: File): { isValid: boolean; type: 'pdf' | 'image' | null } => {
+    // Check for PDF
+    const isPdf = SUPPORTED_FILE_TYPES.PDF_MIME_TYPES.includes(file.type as any) &&
+                  SUPPORTED_FILE_TYPES.PDF_EXTENSIONS.some(ext => file.name.toLowerCase().endsWith(ext));
     
-    // Check MIME type
-    if (!validTypes.includes(file.type)) {
-      return false;
+    if (isPdf) {
+      return { isValid: true, type: 'pdf' };
     }
     
-    // Check file extension
-    const fileName = file.name.toLowerCase();
-    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+    // Check for image
+    const isImage = isValidImageFile(file);
+    if (isImage) {
+      return { isValid: true, type: 'image' };
+    }
     
-    return hasValidExtension;
+    return { isValid: false, type: null };
   }, []);
 
   /**
    * Process a single PDF file and return PDF data
    */
   const processSingleFile = useCallback(async (file: File): Promise<PdfData | null> => {
-    if (!isValidPdfFile(file)) {
-      throw new Error('Invalid file type. Only PDF files are supported.');
+    const validation = isValidFile(file);
+    if (!validation.isValid || validation.type !== 'pdf') {
+      throw new Error('Invalid file type. Only PDF files are supported for single file processing.');
     }
 
     try {
@@ -169,16 +188,17 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
       console.error('Error processing PDF file:', error);
       throw error;
     }
-  }, [isValidPdfFile]);
+  }, [isValidFile]);
 
   /**
-   * Process multiple PDF files for multi-file mode
+   * Process multiple files (PDFs and images) for multi-file mode
    */
   const processFiles = useCallback(async (files: File[]): Promise<{
     files: FileSource[];
     pages: (PageSettings & PageSource)[];
     errors: Record<string, string>;
     firstPdf: PdfData | null;
+    imageData: Map<string, ImageFileData>;
   }> => {
     setMultiFileState(prev => ({ ...prev, isProcessing: true, errors: {} }));
 
@@ -186,45 +206,81 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     const newPages: (PageSettings & PageSource)[] = [];
     const errors: Record<string, string> = {};
     let firstPdf: PdfData | null = null;
+    const newImageData = new Map<string, ImageFileData>();
 
     try {
       for (const file of files) {
         try {
-          if (!isValidPdfFile(file)) {
-            errors[file.name] = 'Invalid file type. Only PDF files are supported.';
+          const validation = isValidFile(file);
+          if (!validation.isValid) {
+            errors[file.name] = `Unsupported file type. Supported formats: PDF, PNG, JPG, JPEG.`;
             continue;
           }
 
-          const pdf = await processSingleFile(file);
-          if (!pdf) {
-            errors[file.name] = 'Failed to process PDF file.';
-            continue;
-          }
+          if (validation.type === 'pdf') {
+            // Process PDF file
+            const pdf = await processSingleFile(file);
+            if (!pdf) {
+              errors[file.name] = 'Failed to process PDF file.';
+              continue;
+            }
 
-          // Store first successful PDF for single-file compatibility
-          if (!firstPdf) {
-            firstPdf = pdf;
-            setSinglePdfData(pdf);
-          }
+            // Store first successful PDF for single-file compatibility
+            if (!firstPdf) {
+              firstPdf = pdf;
+              setSinglePdfData(pdf);
+            }
 
-          // Create file source entry
-          const fileSource: FileSource = {
-            name: file.name,
-            type: 'pdf',
-            originalPageCount: pdf.numPages,
-            size: file.size,
-            importTimestamp: Date.now()
-          };
-          newFiles.push(fileSource);
+            // Create file source entry
+            const fileSource: FileSource = {
+              name: file.name,
+              type: 'pdf',
+              originalPageCount: pdf.numPages,
+              size: file.size,
+              importTimestamp: Date.now()
+            };
+            newFiles.push(fileSource);
 
-          // Create page entries for this file
-          for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+            // Create page entries for this PDF file
+            for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+              const page: PageSettings & PageSource = {
+                skip: false,
+                type: pageIndex % 2 === 0 ? 'front' : 'back', // Default alternating
+                fileName: file.name,
+                originalPageIndex: pageIndex,
+                fileType: 'pdf',
+                displayOrder: newPages.length // Global display order across all files
+              };
+              newPages.push(page);
+            }
+
+          } else if (validation.type === 'image') {
+            // Process image file
+            if (!validateImageFileSize(file)) {
+              errors[file.name] = `Image file too large. Maximum size: 50MB.`;
+              continue;
+            }
+
+            const imageData = await processImageFile(file);
+            if (!imageData) {
+              errors[file.name] = 'Failed to process image file.';
+              continue;
+            }
+
+            // Store image data for later access
+            newImageData.set(file.name, imageData);
+
+            // Create file source entry
+            const fileSource: FileSource = createImageFileSource(file);
+            newFiles.push(fileSource);
+
+            // Create single page entry for this image file
             const page: PageSettings & PageSource = {
               skip: false,
-              type: pageIndex % 2 === 0 ? 'front' : 'back', // Default alternating
+              type: 'front', // Images default to front type
               fileName: file.name,
-              originalPageIndex: pageIndex,
-              fileType: 'pdf',
+              originalPageIndex: 0, // Images are always single "page"
+              fileType: 'image',
               displayOrder: newPages.length // Global display order across all files
             };
             newPages.push(page);
@@ -250,6 +306,15 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         errors
       }));
 
+      // Update image data store
+      setImageDataStore(prev => {
+        const updated = new Map(prev);
+        newImageData.forEach((data, fileName) => {
+          updated.set(fileName, data);
+        });
+        return updated;
+      });
+
       console.log(`Successfully processed ${newFiles.length} of ${files.length} files`);
       if (Object.keys(errors).length > 0) {
         console.warn('Some files failed to process:', errors);
@@ -260,7 +325,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         files: newFiles,
         pages: newPages,
         errors,
-        firstPdf
+        firstPdf,
+        imageData: newImageData
       };
 
     } catch (error) {
@@ -276,10 +342,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         files: [],
         pages: [],
         errors: { ...errors, _general: 'Failed to process files. Please try again.' },
-        firstPdf: null
+        firstPdf: null,
+        imageData: new Map()
       };
     }
-  }, [isValidPdfFile, processSingleFile, singlePdfData]);
+  }, [isValidFile, processSingleFile, singlePdfData]);
 
   /**
    * Remove a file from the multi-file list
@@ -307,6 +374,13 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
           Object.entries(prev.errors).filter(([key]) => key !== fileName)
         )
       };
+    });
+    
+    // Remove image data if it exists
+    setImageDataStore(prev => {
+      const updated = new Map(prev);
+      updated.delete(fileName);
+      return updated;
     });
   }, []);
 
@@ -452,6 +526,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
       errors: {}
     });
     setSinglePdfData(null);
+    setImageDataStore(new Map());
   }, []);
 
   /**
@@ -467,6 +542,20 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
   const getFileError = useCallback((fileName: string): string | undefined => {
     return multiFileState.errors[fileName];
   }, [multiFileState.errors]);
+
+  /**
+   * Get image data for a specific file
+   */
+  const getImageData = useCallback((fileName: string): ImageFileData | undefined => {
+    return imageDataStore.get(fileName);
+  }, [imageDataStore]);
+
+  /**
+   * Get all image data
+   */
+  const getAllImageData = useCallback((): Map<string, ImageFileData> => {
+    return new Map(imageDataStore);
+  }, [imageDataStore]);
 
   /**
    * Set multi-file mode and handle state transitions
@@ -488,6 +577,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         },
         errors: {}
       }));
+      // Clear image data when switching to single-file mode
+      setImageDataStore(new Map());
     }
   }, []);
 
@@ -505,6 +596,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     getCombinedPageSettings,
     reset,
     getFileList,
-    getFileError
+    getFileError,
+    getImageData,
+    getAllImageData
   };
 };

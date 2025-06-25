@@ -6,6 +6,7 @@ import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
 import { useMultiFileImport } from '../hooks/useMultiFileImport';
+import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -57,11 +58,11 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    if (multiFileImport.isMultiFileMode && files.length > 1) {
-      // Multi-file mode: process all files
+    if (multiFileImport.isMultiFileMode) {
+      // Multi-file mode: process all files (including single files and mixed file types)
       await processMultipleFiles(files);
     } else {
-      // Single-file mode: process only the first file
+      // Single-file mode: process only the first file (must be PDF)
       await processFile(files[0]);
     }
   };
@@ -173,6 +174,50 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     }
   }, [pdfData, thumbnails, thumbnailLoading, thumbnailErrors]);
 
+  // Load thumbnail for image files
+  const loadImageThumbnail = useCallback(async (pageIndex: number, fileName: string) => {
+    if (thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
+      return;
+    }
+    
+    setThumbnailLoading(prev => ({ ...prev, [pageIndex]: true }));
+    
+    try {
+      const imageData = multiFileImport.getImageData(fileName);
+      if (imageData) {
+        // Use the existing createImageThumbnail function from imageUtils
+        const thumbnailUrl = createImageThumbnail(imageData, 200, 150);
+        setThumbnails(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
+      } else {
+        throw new Error(`Image data not found for ${fileName}`);
+      }
+    } catch (error) {
+      console.error(`Failed to load image thumbnail for ${fileName}:`, error);
+      setThumbnailErrors(prev => ({ ...prev, [pageIndex]: true }));
+    } finally {
+      setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
+    }
+  }, [thumbnails, thumbnailLoading, thumbnailErrors, multiFileImport]);
+
+  // Load thumbnail for PDF pages in multi-file context
+  const loadPdfThumbnailForPage = useCallback(async (pageIndex: number, pdfPageNumber: number) => {
+    if (!pdfData || thumbnails[pageIndex] || thumbnailLoading[pageIndex] || thumbnailErrors[pageIndex]) {
+      return;
+    }
+    
+    setThumbnailLoading(prev => ({ ...prev, [pageIndex]: true }));
+    
+    try {
+      const thumbnailUrl = await renderPageThumbnail(pdfData, pdfPageNumber);
+      setThumbnails(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
+    } catch (error) {
+      console.error(`Failed to load thumbnail for PDF page ${pdfPageNumber}:`, error);
+      setThumbnailErrors(prev => ({ ...prev, [pageIndex]: true }));
+    } finally {
+      setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
+    }
+  }, [pdfData, thumbnails, thumbnailLoading, thumbnailErrors]);
+
   // Effect to start loading thumbnails when page settings are available
   useEffect(() => {
     if (pdfData && pageSettings.length > 0) {
@@ -192,6 +237,40 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       }
     }
   }, [pdfData, pageSettings.length, loadThumbnail]);
+
+  // Effect to start loading thumbnails for multi-file imports
+  useEffect(() => {
+    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
+      const pages = multiFileImport.multiFileState.pages;
+      
+      // Start loading thumbnails progressively
+      const immediateLoadCount = Math.min(5, pages.length);
+      for (let i = 0; i < immediateLoadCount; i++) {
+        const page = pages[i];
+        if (page.fileType === 'image') {
+          loadImageThumbnail(i, page.fileName);
+        } else if (page.fileType === 'pdf' && pdfData) {
+          loadPdfThumbnailForPage(i, page.originalPageIndex + 1);
+        }
+      }
+      
+      // Load remaining thumbnails with a delay
+      if (pages.length > immediateLoadCount) {
+        setTimeout(() => {
+          for (let i = immediateLoadCount; i < pages.length; i++) {
+            setTimeout(() => {
+              const page = pages[i];
+              if (page.fileType === 'image') {
+                loadImageThumbnail(i, page.fileName);
+              } else if (page.fileType === 'pdf' && pdfData) {
+                loadPdfThumbnailForPage(i, page.originalPageIndex + 1);
+              }
+            }, i * 100);
+          }
+        }, 500);
+      }
+    }
+  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages.length, loadImageThumbnail, loadPdfThumbnailForPage, pdfData]);
 
   // File processing helper function (shared between drag/drop and file input)
   const processFile = async (file: File) => {
@@ -286,6 +365,11 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     
     return hasValidExtension;
   };
+
+  // Validate if file is supported (PDF or image)
+  const isValidFile = (file: File): boolean => {
+    return isValidPdfFile(file) || isValidImageFile(file);
+  };
   
   // Drag and drop event handlers
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
@@ -306,14 +390,24 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         .map(item => item.getAsFile())
         .filter((file): file is File => file !== null);
       
-      const invalidFiles = files.filter(file => !isValidPdfFile(file));
-      
-      if (invalidFiles.length > 0) {
-        setDragError('Only PDF files are supported');
-      } else if (files.length > 1 && !multiFileImport.isMultiFileMode) {
-        setDragError('Multiple files detected. Enable multi-file mode to import multiple PDFs');
+      if (multiFileImport.isMultiFileMode) {
+        // Multi-file mode: accept PDFs and images
+        const invalidFiles = files.filter(file => !isValidFile(file));
+        if (invalidFiles.length > 0) {
+          setDragError('Only PDF and image files (PNG, JPG, JPEG) are supported in multi-file mode');
+        } else {
+          setDragError('');
+        }
       } else {
-        setDragError('');
+        // Single-file mode: only PDFs
+        const invalidFiles = files.filter(file => !isValidPdfFile(file));
+        if (invalidFiles.length > 0) {
+          setDragError('Only PDF files are supported in single-file mode');
+        } else if (files.length > 1) {
+          setDragError('Multiple files detected. Enable multi-file mode to import multiple files');
+        } else {
+          setDragError('');
+        }
       }
     }
   };
@@ -351,11 +445,21 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         return;
       }
       
-      // Validate all files are PDFs
-      const invalidFiles = files.filter(file => !isValidPdfFile(file));
-      if (invalidFiles.length > 0) {
-        setDragError('Only PDF files are supported. Please drop valid PDF files.');
-        return;
+      // Validate files based on mode
+      if (multiFileImport.isMultiFileMode) {
+        // Multi-file mode: accept PDFs and images
+        const invalidFiles = files.filter(file => !isValidFile(file));
+        if (invalidFiles.length > 0) {
+          setDragError('Only PDF and image files (PNG, JPG, JPEG) are supported in multi-file mode.');
+          return;
+        }
+      } else {
+        // Single-file mode: only PDFs
+        const invalidFiles = files.filter(file => !isValidPdfFile(file));
+        if (invalidFiles.length > 0) {
+          setDragError('Only PDF files are supported in single-file mode.');
+          return;
+        }
       }
       
       if (files.length > 1) {
@@ -481,7 +585,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       >
         <input 
           type="file" 
-          accept=".pdf"
+          accept={multiFileImport.isMultiFileMode ? ".pdf,.png,.jpg,.jpeg" : ".pdf"}
           multiple={multiFileImport.isMultiFileMode}
           className="hidden" 
           ref={fileInputRef} 
@@ -505,8 +609,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                   ? 'bg-red-100 text-red-600' 
                   : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
             }`}
-            aria-label="Select PDF file to import"
-            title="Click to select PDF file"
+            aria-label={multiFileImport.isMultiFileMode ? "Select PDF or image files to import" : "Select PDF file to import"}
+            title={multiFileImport.isMultiFileMode ? "Click to select PDF or image files" : "Click to select PDF file"}
           >
             <UploadIcon size={24} />
           </button>
@@ -516,9 +620,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           onClick={() => !isLoading && fileInputRef.current?.click()} 
           disabled={isLoading}
           className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
-          aria-label={multiFileImport.isMultiFileMode ? "Select PDF files to import" : "Select PDF file to import"}
+          aria-label={multiFileImport.isMultiFileMode ? "Select PDF or image files to import" : "Select PDF file to import"}
         >
-          {isLoading ? 'Processing...' : multiFileImport.isMultiFileMode ? 'Select PDF files' : 'Select PDF file'}
+          {isLoading ? 'Processing...' : multiFileImport.isMultiFileMode ? 'Select PDF or image files' : 'Select PDF file'}
         </button>
 
         <p className={`mb-2 ${
@@ -533,12 +637,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           {isLoading
             ? `Processing ${fileName}...`
             : isDragOver 
-              ? multiFileImport.isMultiFileMode ? 'Drop your PDF files here' : 'Drop your PDF file here'
+              ? multiFileImport.isMultiFileMode ? 'Drop your PDF or image files here' : 'Drop your PDF file here'
               : fileName && !dragError && !loadingError
                 ? `Successfully loaded: ${fileName} (${pageCount} pages)`
                 : lastImportedFileInfo 
-                  ? `Drag & drop or click to upload PDF ${multiFileImport.isMultiFileMode ? 'files' : 'file'} (last: ${lastImportedFileInfo.name})` 
-                  : `Drag & drop your PDF ${multiFileImport.isMultiFileMode ? 'files' : 'file'} here or click to browse`
+                  ? `Drag & drop or click to upload ${multiFileImport.isMultiFileMode ? 'PDF or image files' : 'PDF file'} (last: ${lastImportedFileInfo.name})` 
+                  : `Drag & drop your ${multiFileImport.isMultiFileMode ? 'PDF or image files' : 'PDF file'} here or click to browse`
           }
         </p>
 
@@ -617,7 +721,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           </div>
         </div>
       )}
-      {pdfData && <>
+      {/* PDF Mode Configuration - Only show for PDFs */}
+      {pdfData && (
+        <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -665,8 +771,27 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               You can adjust these settings in the next step if needed.
             </p>
           </div>
-          
-          {(pageSettings.length > 0 || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
+        </>
+      )}
+
+      {/* Image Mode Information - Show for image-only imports */}
+      {!pdfData && multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0 && 
+       multiFileImport.multiFileState.pages.every(page => page.fileType === 'image') && (
+        <div className="p-4 bg-green-50 rounded-md">
+          <h4 className="text-sm font-medium text-green-800 mb-2">
+            Image Import Mode
+          </h4>
+          <div className="text-sm text-green-700">
+            Images will be processed as individual cards. You can extract multiple cards from each image by adjusting the grid settings in the next step.
+          </div>
+          <p className="text-xs text-green-600 mt-1">
+            Default: 1 row × 1 column (1 card per image)
+          </p>
+        </div>
+      )}
+      
+      {/* Page Reordering Table - Show for any imported content */}
+      {(pageSettings.length > 0 || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
             <div className="mt-6">
               <h3 className="text-lg font-medium text-gray-800 mb-3">
                 Page Reordering & Settings
@@ -748,55 +873,69 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                 thumbnails={thumbnails}
                 thumbnailLoading={thumbnailLoading}
                 thumbnailErrors={thumbnailErrors}
-                onThumbnailLoad={() => {
-                  // Thumbnail loading is handled automatically in ImportStep
-                  // This is a placeholder for compatibility
+                onThumbnailLoad={(pageIndex) => {
+                  // Load thumbnail based on file type
+                  if (multiFileImport.isMultiFileMode) {
+                    const page = multiFileImport.multiFileState.pages[pageIndex];
+                    if (page && page.fileType === 'image') {
+                      // Load image thumbnail
+                      loadImageThumbnail(pageIndex, page.fileName);
+                    } else if (page && page.fileType === 'pdf' && pdfData) {
+                      // Load PDF thumbnail
+                      loadPdfThumbnailForPage(pageIndex, page.originalPageIndex + 1);
+                    }
+                  } else if (pdfData) {
+                    // Single PDF mode
+                    loadThumbnail(pageIndex);
+                  }
                 }}
               />
             </div>
           )}
-          
-          {/* Thumbnail Popup */}
-          {hoveredThumbnail !== null && thumbnails[hoveredThumbnail] && (
-            <div 
-              className="fixed inset-0 z-50 flex items-center justify-center"
-              style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
-              onClick={() => setHoveredThumbnail(null)}
-            >
-              <div 
-                className="bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-[95vw] max-h-[95vh] overflow-auto"
-                onClick={(e) => e.stopPropagation()}
+
+      {/* Thumbnail Popup - Show for any imported content */}
+      {hoveredThumbnail !== null && thumbnails[hoveredThumbnail] && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
+          onClick={() => setHoveredThumbnail(null)}
+        >
+          <div 
+            className="bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-[95vw] max-h-[95vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-gray-800">
+                Page {hoveredThumbnail + 1} Preview
+              </h4>
+              <button
+                onClick={() => setHoveredThumbnail(null)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-gray-800">
-                    Page {hoveredThumbnail + 1} Preview
-                  </h4>
-                  <button
-                    onClick={() => setHoveredThumbnail(null)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <XIcon size={16} />
-                  </button>
-                </div>
-                <img
-                  src={thumbnails[hoveredThumbnail]}
-                  alt={`Page ${hoveredThumbnail + 1} preview`}
-                  className="w-auto h-auto border border-gray-200 rounded"
-                  style={{
-                    maxWidth: 'min(600px, 90vw)',
-                    maxHeight: 'min(600px, 90vh)'
-                  }}
-                />
-              </div>
+                <XIcon size={16} />
+              </button>
             </div>
-          )}
-          
-          <div className="flex justify-end mt-6">
-            <button onClick={onNext} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
-              Next Step
-              <ChevronRightIcon size={16} className="ml-2" />
-            </button>
+            <img
+              src={thumbnails[hoveredThumbnail]}
+              alt={`Page ${hoveredThumbnail + 1} preview`}
+              className="w-auto h-auto border border-gray-200 rounded"
+              style={{
+                maxWidth: 'min(600px, 90vw)',
+                maxHeight: 'min(600px, 90vh)'
+              }}
+            />
           </div>
-        </>}
+        </div>
+      )}
+
+      {/* Next Button - Show when any content is imported */}
+      {(pdfData || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && (
+        <div className="flex justify-end mt-6">
+          <button onClick={onNext} className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+            Next Step
+            <ChevronRightIcon size={16} className="ml-2" />
+          </button>
+        </div>
+      )}
     </div>;
 };
