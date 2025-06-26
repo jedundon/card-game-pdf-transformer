@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { 
-  getActivePages, 
+  getActivePagesWithSource,
   calculateTotalCards,
   getAvailableCardIds,
   getCardInfo,
   extractCardImage as extractCardImageUtil,
+  extractCardImageFromCanvas,
   calculateCardDimensions,
   getRotationForCardType
 } from '../utils/cardUtils';
@@ -30,6 +31,7 @@ interface ExportStepProps {
   outputSettings: any;
   colorSettings: any;
   currentPdfFileName?: string;
+  multiFileImport: any; // Add multiFileImport as a prop
   onPrevious: () => void;
 }
 
@@ -41,6 +43,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   outputSettings,
   colorSettings,
   currentPdfFileName,
+  multiFileImport,
   onPrevious
 }) => {
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
@@ -64,10 +67,30 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     return hasNonDefaultColorSettings(currentColorTransformation);
   }, [currentColorTransformation]);
 
-  // Calculate total cards
+  // Unified page data handling for both single PDF and multi-file sources
+  const unifiedPages = useMemo(() => {
+    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
+      // Multi-file mode: use pages from multi-file import with source information
+      return multiFileImport.multiFileState.pages;
+    } else if (pageSettings.length > 0) {
+      // Single PDF mode: convert pageSettings to unified format
+      return pageSettings.map((page: any, index: number) => ({
+        ...page,
+        fileName: 'current.pdf', // Default filename for single PDF mode
+        fileType: 'pdf' as const,
+        originalPageIndex: index,
+        displayOrder: index
+      }));
+    } else {
+      // No data available
+      return [];
+    }
+  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages, pageSettings]);
+
+  // Calculate total cards using unified pages
   const activePages = useMemo(() => 
-    getActivePages(pageSettings), 
-    [pageSettings]
+    getActivePagesWithSource(unifiedPages), 
+    [unifiedPages]
   );
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
@@ -100,9 +123,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
     
-    // Check if PDF data is available
-    if (!pdfData) {
+    // Check if PDF data is available for single PDF mode, or multi-file data for multi-file mode
+    if (!multiFileImport.isMultiFileMode && !pdfData) {
       errors.push('No PDF data available for export');
+    } else if (multiFileImport.isMultiFileMode && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
+      errors.push('No files available for export in multi-file mode');
     }
     
     // Check if there are active pages
@@ -168,8 +193,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
   // Generate a PDF with all cards of a specific type
   const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
-    if (!pdfData) {
+    // Validate data availability for both modes
+    if (!multiFileImport.isMultiFileMode && !pdfData) {
       throw new Error('No PDF data available for export');
+    } else if (multiFileImport.isMultiFileMode && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
+      throw new Error('No files available for export in multi-file mode');
     }
 
     try {
@@ -223,8 +251,26 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           
           console.log(`Processing ${cardType} card ${cardId} at index ${cardIndex}...`);
           
-          // Extract the card image with timeout
-          const extractPromise = extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
+          // Extract the card image with source-aware logic and timeout
+          let extractPromise: Promise<string | null>;
+          
+          // Get current page info to determine extraction method
+          const pageIndex = Math.floor(cardIndex / cardsPerPage);
+          const currentPageInfo = activePages[pageIndex];
+          
+          if (currentPageInfo && currentPageInfo.fileType === 'image') {
+            // Extract from image file
+            const imageData = multiFileImport.getImageData(currentPageInfo.fileName);
+            if (!imageData) {
+              console.error(`No image data found for file: ${currentPageInfo.fileName}`);
+              failedCards.push(cardId);
+              continue;
+            }
+            extractPromise = extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
+          } else {
+            // Extract from PDF (original logic)
+            extractPromise = extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, unifiedPages, extractionSettings);
+          }
           const extractTimeout = new Promise<null>((_, reject) => 
             setTimeout(() => reject(new Error(`Card ${cardId} extraction timed out`)), 30000)
           );
@@ -531,6 +577,26 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           Export Summary
         </h3>        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Source Type:</span>
+              <span className="font-medium text-gray-800">
+                {(() => {
+                  if (multiFileImport.isMultiFileMode) {
+                    if (multiFileImport.multiFileState.files.length === 0) {
+                      return 'No files';
+                    }
+                    const fileTypes = [...new Set(multiFileImport.multiFileState.files.map((f: any) => f.type))];
+                    if (fileTypes.length === 1) {
+                      return fileTypes[0] === 'pdf' ? 'PDF Only' : 'Images Only';
+                    } else {
+                      return 'Mixed (PDF + Images)';
+                    }
+                  } else {
+                    return 'Single PDF';
+                  }
+                })()}
+              </span>
+            </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">PDF Mode:</span>
               <span className="font-medium text-gray-800">{pdfMode.type}</span>

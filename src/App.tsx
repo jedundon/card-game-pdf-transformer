@@ -138,6 +138,7 @@ export function App() {
           outputSettings={settingsManager.outputSettings} 
           colorSettings={settingsManager.colorSettings} 
           currentPdfFileName={pdfDataManager.currentPdfFileName} 
+          multiFileImport={multiFileImport}
           onPrevious={stepNavigation.previousStep} 
         />
       </ExportErrorBoundary>
