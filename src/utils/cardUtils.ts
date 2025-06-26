@@ -918,6 +918,250 @@ export async function extractCardImage(
 }
 
 /**
+ * Extract a card image from a canvas source (for image files)
+ * 
+ * This function extracts individual cards from image files loaded into canvas elements.
+ * It handles grid-based card extraction similar to PDF extraction but operates on
+ * canvas data instead of PDF pages.
+ * 
+ * @param cardIndex - Global card index to extract
+ * @param imageData - Image data containing the source canvas
+ * @param pdfMode - PDF mode configuration for card layout
+ * @param activePages - Array of active page settings
+ * @param extractionSettings - Grid and cropping settings
+ * @returns Promise<string | null> - Data URL of the extracted card or null on error
+ */
+export async function extractCardImageFromCanvas(
+  cardIndex: number,
+  imageData: ImageFileData,
+  pdfMode: PdfMode,
+  activePages: (PageSettings & PageSource)[],
+  extractionSettings: ExtractionSettings
+): Promise<string | null> {
+  // Validate inputs
+  if (!imageData || !imageData.canvas) {
+    console.error('Card extraction failed: No image data or canvas provided');
+    return null;
+  }
+  
+  if (!activePages || activePages.length === 0) {
+    console.error('Card extraction failed: No active pages available');
+    return null;
+  }
+  
+  if (!extractionSettings || !extractionSettings.grid) {
+    console.error('Card extraction failed: Invalid extraction settings');
+    return null;
+  }
+  
+  if (cardIndex < 0) {
+    console.error(`Card extraction failed: Invalid card index ${cardIndex}`);
+    return null;
+  }
+
+  try {
+    const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    
+    if (cardsPerPage <= 0) {
+      throw new Error('Invalid grid configuration: cards per page must be greater than 0');
+    }
+    
+    // Calculate which page and card position this cardIndex represents
+    const pageIndex = Math.floor(cardIndex / cardsPerPage);
+    const cardOnPage = cardIndex % cardsPerPage;
+
+    if (pageIndex >= activePages.length) {
+      console.warn(`Card extraction failed: Page index ${pageIndex} exceeds active pages (${activePages.length})`);
+      return null;
+    }
+
+    const sourceCanvas = imageData.canvas;
+    const sourceWidth = sourceCanvas.width;
+    const sourceHeight = sourceCanvas.height;
+    
+    // Calculate cropped dimensions (apply page-level cropping)
+    const cropLeft = extractionSettings.crop?.left || 0;
+    const cropTop = extractionSettings.crop?.top || 0;  
+    const cropRight = extractionSettings.crop?.right || 0;
+    const cropBottom = extractionSettings.crop?.bottom || 0;
+    
+    const croppedWidth = Math.max(1, sourceWidth - cropLeft - cropRight);
+    const croppedHeight = Math.max(1, sourceHeight - cropTop - cropBottom);
+    
+    // Calculate card dimensions and position
+    let cardWidth: number;
+    let cardHeight: number;
+    let adjustedX: number;
+    let adjustedY: number;
+    
+    if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth && extractionSettings.gutterWidth > 0) {
+      // Gutter-fold mode with gutter width
+      const availableWidth = croppedWidth - extractionSettings.gutterWidth;
+      cardWidth = availableWidth / (extractionSettings.grid.columns || 1);
+      cardHeight = croppedHeight / extractionSettings.grid.rows;
+      
+      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+      const col = cardOnPage % extractionSettings.grid.columns;
+      
+      adjustedX = cropLeft + (col * cardWidth) + (col >= extractionSettings.grid.columns / 2 ? extractionSettings.gutterWidth : 0);
+      adjustedY = cropTop + (row * cardHeight);
+    } else {
+      // Standard mode or gutter-fold without gutter width
+      cardWidth = croppedWidth / extractionSettings.grid.columns;
+      cardHeight = croppedHeight / extractionSettings.grid.rows;
+      
+      const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+      const col = cardOnPage % extractionSettings.grid.columns;
+      
+      adjustedX = cropLeft + (col * cardWidth);
+      adjustedY = cropTop + (row * cardHeight);
+    }
+    
+    // Validate card dimensions
+    if (cardWidth <= 0 || cardHeight <= 0) {
+      throw new Error(`Invalid card dimensions calculated: ${cardWidth} x ${cardHeight}`);
+    }
+    
+    // Ensure extraction coordinates are within canvas bounds
+    const sourceX = Math.max(0, Math.min(Math.floor(adjustedX), sourceWidth - 1));
+    const sourceY = Math.max(0, Math.min(Math.floor(adjustedY), sourceHeight - 1));
+    const extractWidth = Math.max(1, Math.min(Math.floor(cardWidth), sourceWidth - sourceX));
+    const extractHeight = Math.max(1, Math.min(Math.floor(cardHeight), sourceHeight - sourceY));
+    
+    // Validate extraction bounds
+    if (extractWidth <= 0 || extractHeight <= 0) {
+      throw new Error(`Invalid extraction dimensions: ${extractWidth} x ${extractHeight} at position (${sourceX}, ${sourceY})`);
+    }
+    
+    // Create a new canvas for the extracted card
+    let cardCanvas: HTMLCanvasElement;
+    let cardContext: CanvasRenderingContext2D;
+    
+    try {
+      cardCanvas = document.createElement('canvas');
+      cardCanvas.width = Math.max(1, extractWidth);
+      cardCanvas.height = Math.max(1, extractHeight);
+      
+      const context = cardCanvas.getContext('2d');
+      if (!context) {
+        throw new Error('Failed to get 2D rendering context for card canvas');
+      }
+      
+      cardContext = context;
+    } catch (error) {
+      throw new Error(`Card canvas creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+    // Extract the card area from the source canvas
+    try {
+      cardContext.drawImage(
+        sourceCanvas,
+        sourceX, sourceY, extractWidth, extractHeight,
+        0, 0, cardCanvas.width, cardCanvas.height
+      );
+    } catch (error) {
+      throw new Error(`Card image extraction failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // Apply individual card cropping if specified
+    let finalCanvas = cardCanvas;
+    if (extractionSettings.cardCrop && 
+        (extractionSettings.cardCrop.top > 0 || extractionSettings.cardCrop.right > 0 || 
+         extractionSettings.cardCrop.bottom > 0 || extractionSettings.cardCrop.left > 0)) {
+      
+      const cardCrop = extractionSettings.cardCrop;
+      const croppedCardWidth = Math.max(1, cardCanvas.width - cardCrop.left - cardCrop.right);
+      const croppedCardHeight = Math.max(1, cardCanvas.height - cardCrop.top - cardCrop.bottom);
+      
+      // Only apply cropping if the result would be a valid size
+      if (croppedCardWidth > 0 && croppedCardHeight > 0) {
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = croppedCardWidth;
+        croppedCanvas.height = croppedCardHeight;
+        const croppedContext = croppedCanvas.getContext('2d');
+        
+        if (croppedContext) {
+          croppedContext.drawImage(
+            cardCanvas,
+            cardCrop.left, cardCrop.top, croppedCardWidth, croppedCardHeight,
+            0, 0, croppedCardWidth, croppedCardHeight
+          );
+          
+          finalCanvas = croppedCanvas;
+        }
+      }
+    }
+
+    // Apply image rotation if specified
+    if (extractionSettings.imageRotation) {
+      // Determine card type to get appropriate rotation
+      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
+      const rotation = extractionSettings.imageRotation[cardType] || 0;
+      
+      if (rotation !== 0) {
+        // Create a new canvas for the rotated card
+        const rotatedCanvas = document.createElement('canvas');
+        const rotatedContext = rotatedCanvas.getContext('2d');
+        
+        if (rotatedContext) {
+          // Set canvas dimensions based on rotation
+          if (rotation === 90 || rotation === 270) {
+            // Swap dimensions for 90° and 270° rotations
+            rotatedCanvas.width = finalCanvas.height;
+            rotatedCanvas.height = finalCanvas.width;
+          } else {
+            rotatedCanvas.width = finalCanvas.width;
+            rotatedCanvas.height = finalCanvas.height;
+          }
+          
+          // Apply rotation transformation
+          rotatedContext.translate(rotatedCanvas.width / 2, rotatedCanvas.height / 2);
+          rotatedContext.rotate((rotation * Math.PI) / 180);
+          rotatedContext.drawImage(finalCanvas, -finalCanvas.width / 2, -finalCanvas.height / 2);
+          
+          finalCanvas = rotatedCanvas;
+        }
+      }
+    }
+
+    // Generate data URL with error handling
+    try {
+      const dataUrl = finalCanvas.toDataURL('image/png');
+      
+      if (!dataUrl || dataUrl === 'data:,') {
+        throw new Error('Failed to generate valid image data URL');
+      }
+      
+      // Check if the data URL is reasonably sized
+      if (dataUrl.length < 100) {
+        throw new Error('Generated image data URL is too small, likely invalid');
+      }
+      
+      const maxSize = 50 * 1024 * 1024; // 50MB limit
+      if (dataUrl.length > maxSize) {
+        throw new Error(`Generated image data URL is too large (${Math.round(dataUrl.length / 1024 / 1024)}MB), exceeds ${Math.round(maxSize / 1024 / 1024)}MB limit`);
+      }
+      
+      return dataUrl;
+    } catch (error) {
+      throw new Error(`Data URL generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+    
+  } catch (error) {
+    console.error(`Card extraction from canvas failed for card ${cardIndex}:`, error);
+    
+    const cardsPerPageForContext = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const pageIndexForContext = Math.floor(cardIndex / cardsPerPageForContext);
+    const cardOnPageForContext = cardIndex % cardsPerPageForContext;
+    
+    console.error(`Card extraction context: cardIndex=${cardIndex}, pageIndex=${pageIndexForContext}, cardOnPage=${cardOnPageForContext}, fileName=${imageData.fileName}`);
+    
+    return null;
+  }
+}
+
+/**
  * Get available card IDs for a specific view mode (front/back)
  * 
  * Generates a sorted list of unique card IDs that exist for the specified

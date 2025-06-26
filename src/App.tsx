@@ -20,6 +20,7 @@ import { usePdfData } from './hooks/usePdfData';
 import { useSettingsManager } from './hooks/useSettingsManager';
 import { useLocalStorageSync } from './hooks/useLocalStorageSync';
 import { useFileImport } from './hooks/useFileImport';
+import { useMultiFileImport } from './hooks/useMultiFileImport';
 
 export function App() {
   // Initialize all hooks
@@ -27,6 +28,7 @@ export function App() {
   const pdfDataManager = usePdfData();
   const settingsManager = useSettingsManager();
   const fileImportManager = useFileImport();
+  const multiFileImport = useMultiFileImport();
   
   // Initialize localStorage sync with current settings and PDF data
   const localStorageSync = useLocalStorageSync(
@@ -66,6 +68,7 @@ export function App() {
           autoRestoredSettings={localStorageSync.autoRestoredSettings} 
           lastImportedFileInfo={pdfDataManager.lastImportedFileInfo} 
           onClearLastImportedFile={pdfDataManager.handleClearLastImportedFile} 
+          multiFileImport={multiFileImport}
         />
       </PDFProcessingErrorBoundary>
     )
@@ -78,6 +81,7 @@ export function App() {
           pdfMode={settingsManager.pdfMode} 
           pageSettings={settingsManager.pageSettings} 
           extractionSettings={settingsManager.extractionSettings} 
+          multiFileImport={multiFileImport}
           onSettingsChange={settingsManager.updateExtractionSettings} 
           onCardDimensionsChange={pdfDataManager.setCardDimensions} 
           onPrevious={stepNavigation.previousStep} 

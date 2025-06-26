@@ -5,7 +5,6 @@ import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
-import { useMultiFileImport } from '../hooks/useMultiFileImport';
 import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
 
 // Configure PDF.js worker for Vite
@@ -23,6 +22,7 @@ interface ImportStepProps {
   autoRestoredSettings: boolean;
   lastImportedFileInfo: LastImportedFileInfo | null;
   onClearLastImportedFile: () => void;
+  multiFileImport: any; // Add multiFileImport as a prop
 }
 export const ImportStep: React.FC<ImportStepProps> = ({
   onFileSelect,
@@ -36,7 +36,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   pageSettings,
   autoRestoredSettings,
   lastImportedFileInfo,
-  onClearLastImportedFile
+  onClearLastImportedFile,
+  multiFileImport
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -52,8 +53,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   
-  // Multi-file support - Phase 2 implementation
-  const multiFileImport = useMultiFileImport();
+  // Multi-file support - using shared instance from App.tsx
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
@@ -496,7 +496,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   
   return <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-gray-800">Import PDF File{multiFileImport.isMultiFileMode ? 's' : ''}</h2>
+        <h2 className="text-xl font-semibold text-gray-800">Import {multiFileImport.isMultiFileMode ? 'Files' : 'PDF File'}</h2>
         
         {/* Multi-file Mode Toggle */}
         <div className="flex items-center space-x-3">
