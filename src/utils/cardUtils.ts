@@ -979,14 +979,20 @@ export async function extractCardImageFromCanvas(
     const sourceWidth = sourceCanvas.width;
     const sourceHeight = sourceCanvas.height;
     
-    // Calculate cropped dimensions (apply page-level cropping)
+    // Convert image to extraction DPI coordinate system for consistent crop application
+    // Images are stored at their native resolution, but crop values are in extraction DPI pixels
+    // This ensures crop values mean the same thing for both PDF and image files
+    const extractionDpiWidth = sourceWidth; // Assume images are already at extraction DPI
+    const extractionDpiHeight = sourceHeight; // TODO: Add proper DPI conversion if needed
+    
+    // Apply page-level cropping (crop settings are in extraction DPI pixels)
     const cropLeft = extractionSettings.crop?.left || 0;
     const cropTop = extractionSettings.crop?.top || 0;  
     const cropRight = extractionSettings.crop?.right || 0;
     const cropBottom = extractionSettings.crop?.bottom || 0;
     
-    const croppedWidth = Math.max(1, sourceWidth - cropLeft - cropRight);
-    const croppedHeight = Math.max(1, sourceHeight - cropTop - cropBottom);
+    const croppedWidth = Math.max(1, extractionDpiWidth - cropLeft - cropRight);
+    const croppedHeight = Math.max(1, extractionDpiHeight - cropTop - cropBottom);
     
     // Calculate card dimensions and position
     let cardWidth: number;
@@ -1022,7 +1028,9 @@ export async function extractCardImageFromCanvas(
       throw new Error(`Invalid card dimensions calculated: ${cardWidth} x ${cardHeight}`);
     }
     
-    // Ensure extraction coordinates are within canvas bounds
+    // Extraction coordinates are calculated in extraction DPI, but canvas operations need source pixels
+    // For now, assume 1:1 mapping (images treated as extraction DPI)
+    // TODO: Add proper coordinate conversion if images have different native DPI
     const sourceX = Math.max(0, Math.min(Math.floor(adjustedX), sourceWidth - 1));
     const sourceY = Math.max(0, Math.min(Math.floor(adjustedY), sourceHeight - 1));
     const extractWidth = Math.max(1, Math.min(Math.floor(cardWidth), sourceWidth - sourceX));

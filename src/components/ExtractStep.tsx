@@ -123,12 +123,23 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
 
     try {
-      // Get the extraction scale (300 DPI)
-      const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
+      // Calculate source dimensions based on file type
+      let sourceWidth: number, sourceHeight: number;
       
-      // Calculate cropped dimensions at extraction DPI
-      const croppedWidth = (renderedPageData.width / renderedPageData.previewScale) * extractionScale - extractionSettings.crop.left - extractionSettings.crop.right;
-      const croppedHeight = (renderedPageData.height / renderedPageData.previewScale) * extractionScale - extractionSettings.crop.top - extractionSettings.crop.bottom;
+      if (renderedPageData.sourceType === 'image') {
+        // For image files, use pageDimensions directly (source image pixels)
+        sourceWidth = pageDimensions?.width || 0;
+        sourceHeight = pageDimensions?.height || 0;
+      } else {
+        // For PDF files, calculate from rendered data and scale
+        const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
+        sourceWidth = (renderedPageData.width / renderedPageData.previewScale) * extractionScale;
+        sourceHeight = (renderedPageData.height / renderedPageData.previewScale) * extractionScale;
+      }
+      
+      // Apply page-level cropping
+      const croppedWidth = sourceWidth - extractionSettings.crop.left - extractionSettings.crop.right;
+      const croppedHeight = sourceHeight - extractionSettings.crop.top - extractionSettings.crop.bottom;
       
       if (croppedWidth <= 0 || croppedHeight <= 0) {
         return null;

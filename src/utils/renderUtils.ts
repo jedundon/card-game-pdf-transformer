@@ -154,7 +154,8 @@ export async function calculateFinalCardRenderDimensions(
           throw new Error(`Image too large: ${imageWidthPx} x ${imageHeightPx}. Maximum allowed: ${maxDimension} x ${maxDimension}`);
         }
         
-        // Convert to inches using extraction DPI (this is how the image was extracted)
+        // Convert to inches using extraction DPI 
+        // All extracted cards (from both PDF and image sources) are normalized to extraction DPI
         const originalImageWidthInches = imageWidthPx / DPI_CONSTANTS.EXTRACTION_DPI;
         const originalImageHeightInches = imageHeightPx / DPI_CONSTANTS.EXTRACTION_DPI;
         
