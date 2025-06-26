@@ -119,6 +119,7 @@ export function App() {
           pageSettings={settingsManager.pageSettings} 
           cardDimensions={pdfDataManager.cardDimensions} 
           colorSettings={settingsManager.colorSettings} 
+          multiFileImport={multiFileImport}
           onColorSettingsChange={settingsManager.updateColorSettings} 
           onPrevious={stepNavigation.previousStep} 
           onNext={stepNavigation.nextStep} 

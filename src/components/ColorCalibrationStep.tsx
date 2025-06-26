@@ -26,10 +26,11 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'lucide-react';
 import { PrecisionSliderInput } from './PrecisionSliderInput';
 import { 
-  getActivePages, 
+  getActivePagesWithSource, 
   calculateTotalCards, 
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
+  extractCardImageFromCanvas,
   getAvailableCardIds
 } from '../utils/cardUtils';
 import { 
@@ -362,6 +363,7 @@ interface ColorCalibrationStepProps {
     heightInches: number;
   } | null;
   colorSettings: any;
+  multiFileImport: any; // Add multiFileImport as a prop
   onColorSettingsChange: (settings: any) => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -374,6 +376,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   outputSettings,
   pageSettings,
   colorSettings,
+  multiFileImport,
   onColorSettingsChange,
   onPrevious,
   onNext
@@ -454,10 +457,30 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     }
   }, [colorSettings?.gridConfig, cardRenderData, cropRegionDimensions, colorSettings, onColorSettingsChange]);
 
+  // Unified page data handling for both single PDF and multi-file sources
+  const unifiedPages = useMemo(() => {
+    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
+      // Multi-file mode: use pages from multi-file import with source information
+      return multiFileImport.multiFileState.pages;
+    } else if (pageSettings.length > 0) {
+      // Single PDF mode: convert pageSettings to unified format
+      return pageSettings.map((page: any, index: number) => ({
+        ...page,
+        fileName: 'current.pdf', // Default filename for single PDF mode
+        fileType: 'pdf' as const,
+        originalPageIndex: index,
+        displayOrder: index
+      }));
+    } else {
+      // No data available
+      return [];
+    }
+  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages, pageSettings]);
+  
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
-    getActivePages(pageSettings), 
-    [pageSettings]
+    getActivePagesWithSource(unifiedPages), 
+    [unifiedPages]
   );
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
@@ -511,10 +534,33 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     return null;
   }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
 
-  // Extract card image for preview using utility function
+  // Extract card image for preview using source-aware logic
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
-    return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, pageSettings, extractionSettings);
-  }, [pdfData, pdfMode, activePages, pageSettings, extractionSettings]);
+    // Calculate which page this card belongs to
+    const cardsPerPageLocal = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const pageIndex = Math.floor(cardIndex / cardsPerPageLocal);
+    
+    if (pageIndex >= activePages.length) {
+      return null;
+    }
+    
+    const currentPageInfo = activePages[pageIndex];
+    
+    if (currentPageInfo.fileType === 'pdf') {
+      // Use PDF extraction
+      return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, unifiedPages, extractionSettings);
+    } else if (currentPageInfo.fileType === 'image') {
+      // Use image extraction
+      const imageData = multiFileImport.getImageData(currentPageInfo.fileName);
+      if (!imageData) {
+        console.error(`No image data found for file: ${currentPageInfo.fileName}`);
+        return null;
+      }
+      return await extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
+    }
+    
+    return null;
+  }, [extractionSettings, pdfMode, activePages, unifiedPages, pdfData, multiFileImport]);
 
   // Update card preview when current card changes
   useEffect(() => {
@@ -967,15 +1013,15 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     <div className="space-y-6">
       <h2 className="text-xl font-semibold text-gray-800">Color Calibration</h2>
       
-      {!pdfData && (
+      {!pdfData && (!multiFileImport.isMultiFileMode || multiFileImport.multiFileState.pages.length === 0) && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
-            Please load a PDF file in the Import step to continue.
+            Please load files in the Import step to continue.
           </p>
         </div>
       )}
       
-      {pdfData && totalCards === 0 && (
+      {(pdfData || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && totalCards === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
             No cards available. Please configure extraction settings in the previous steps.
