@@ -100,6 +100,7 @@ export function App() {
           outputSettings={settingsManager.outputSettings} 
           pageSettings={settingsManager.pageSettings} 
           cardDimensions={pdfDataManager.cardDimensions} 
+          multiFileImport={multiFileImport}
           onSettingsChange={settingsManager.updateOutputSettings} 
           onPrevious={stepNavigation.previousStep} 
           onNext={stepNavigation.nextStep} 
