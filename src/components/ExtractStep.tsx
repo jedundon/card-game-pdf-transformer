@@ -117,7 +117,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
   // Calculate card dimensions for display with rotation effects
   const cardDimensions = useMemo(() => {
-    if (!pdfData || !activePages.length || !renderedPageData) {
+    const hasValidDataSource = pdfData || (renderedPageData?.sourceType === 'image');
+    if (!hasValidDataSource || !activePages.length || !renderedPageData) {
       return null;
     }
 
