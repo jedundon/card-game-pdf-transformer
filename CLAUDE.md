@@ -21,24 +21,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Architecture
 
 ### Core Application Flow
-This is a React-based PDF transformation tool with a 4-step wizard:
+This is a React-based card game file transformation tool with a 5-step wizard that supports both PDF and image files:
 
-1. **Import PDF** (`ImportStep.tsx`) - Upload PDF, configure page settings and PDF mode
-2. **Extract Cards** (`ExtractStep.tsx`) - Set up grid layout and cropping parameters  
-3. **Configure Layout** (`ConfigureStep.tsx`) - Adjust output format, sizing, and positioning
-4. **Export** (`ExportStep.tsx`) - Generate final PDF for printing
+1. **Import Files** (`ImportStep.tsx`) - Upload PDF and/or image files, configure page settings and processing mode
+2. **Extract Cards** (`ExtractStep.tsx`) - Set up grid layout and cropping parameters for card identification
+3. **Color Calibration** (`ColorCalibrationStep.tsx`) - Apply color corrections and calibration adjustments
+4. **Configure Layout** (`ConfigureStep.tsx`) - Adjust output format, sizing, and positioning for print
+5. **Export** (`ExportStep.tsx`) - Generate final PDF for printing with processed cards
 
 ### Key State Management
 - Main app state lives in `App.tsx` with step-by-step data flow
-- PDF mode affects card extraction logic (simplex/duplex/gutter-fold)
+- Processing mode affects card extraction logic (simplex/duplex/gutter-fold) for both PDF and image files
+- Multi-file import system (`useMultiFileImport`) manages mixed PDF/image workflows
 - Settings can be saved/loaded via `SettingsManager.tsx`
 
-### PDF Processing Architecture
+### File Processing Architecture
+The application supports both PDF and image files through a unified processing pipeline:
+
+#### PDF File Processing
 - **PDF.js Integration**: Uses `pdfjs-dist` for PDF parsing and rendering
 - **Worker Setup**: PDF.js worker copied to public/ directory for browser compatibility
-- **Card Extraction**: Utility functions in `utils/cardUtils.ts` handle complex card identification logic
-- **DPI Handling**: Different DPI constants for extraction (300) vs screen display (72/96)
-- **Unified Rendering**: Shared `renderUtils.ts` ensures preview and export use identical calculations
+- **Coordinate System**: PDF coordinates (72 DPI) converted to extraction DPI (300 DPI)
+
+#### Image File Processing  
+- **Multi-Format Support**: Handles PNG, JPG, JPEG files through HTML5 Canvas API
+- **ImageFileData**: Structured data format for consistent image handling
+- **Coordinate System**: Native image pixels treated as extraction DPI (300 DPI)
+
+#### Unified Processing Pipeline
+- **Card Extraction**: Source-aware utility functions in `utils/cardUtils.ts` handle both PDF and image sources
+- **DPI Standardization**: All measurements normalized to extraction DPI (300) for consistent calculations
+- **Unified Rendering**: Shared `renderUtils.ts` ensures preview and export use identical calculations for both file types
+- **Multi-File Import**: `useMultiFileImport` hook manages mixed PDF/image sessions with unified page ordering
 
 ### Rendering Architecture and Consistency
 The application uses a unified rendering system to ensure perfect consistency between preview and final output:
@@ -57,20 +71,28 @@ The application uses a unified rendering system to ensure perfect consistency be
 
 ### Component Structure
 - `components/` - Step components and shared utilities
+  - `ImportStep.tsx` - Multi-file import with PDF and image support
+  - `ExtractStep.tsx` - Source-aware card extraction with unified preview overlays
+  - `ColorCalibrationStep.tsx` - Color correction and calibration adjustments
+  - `ConfigureStep.tsx` - Layout configuration with multi-file support
+  - `ExportStep.tsx` - Final PDF generation from mixed sources
 - `utils/` - Business logic separated from UI
-  - `cardUtils.ts` - Card identification and calculation logic
+  - `cardUtils.ts` - Source-aware card identification and calculation logic
   - `renderUtils.ts` - Unified rendering functions for preview and export consistency
   - `calibrationUtils.ts` - Printer calibration utilities
-- `constants.ts` - Application-wide constants (DPI, preview constraints)
+  - `multiFileUtils.ts` - Multi-file import and management utilities
+- `hooks/` - React hooks for state management
+  - `useMultiFileImport.ts` - Multi-file session management
+- `constants.ts` - Application-wide constants (DPI, file type support, preview constraints)
 - `defaults.ts` - Default configuration values
 
-### PDF Mode Handling
-The application handles three PDF layouts:
-- **Simplex**: Single-sided pages, each card appears once
-- **Duplex**: Double-sided pages, cards have fronts and backs
-- **Gutter-fold**: Cards are arranged for gutter folding
+### Processing Mode Handling
+The application handles three layout types that apply to both PDF and image files:
+- **Simplex**: Single-sided pages/images, each card appears once
+- **Duplex**: Double-sided pages/images, cards have fronts and backs  
+- **Gutter-fold**: Cards are arranged for gutter folding across page center
 
-Card identification logic varies significantly between modes and is centralized in `cardUtils.ts`.
+Card identification logic varies significantly between modes and is centralized in `cardUtils.ts`, with source-aware processing for both PDF and image inputs.
 
 ### Styling and UI
 - **Tailwind CSS**: Primary styling framework
