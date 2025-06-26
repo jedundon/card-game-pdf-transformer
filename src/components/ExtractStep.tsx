@@ -7,7 +7,6 @@ import {
   extractCardImage as extractCardImageUtil,
   extractCardImageFromCanvas,
   getActualPageNumber,
-  getDpiScaleFactor,
   getAvailableCardIds,
   isCardSkipped,
   toggleCardSkip,
@@ -586,9 +585,9 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     if (!canvasRef.current || !renderedPageData) return 1;
     
     // Since we're inside the zoom wrapper, we don't need to multiply by zoom
-    // The CSS transform handles the zoom scaling automatically
-    // We just need the scale to convert from 300 DPI pixels to canvas pixels
-    const extractionToPreviewScale = renderedPageData.previewScale / getDpiScaleFactor();
+    // The CSS transform handles the zoom scaling automatically  
+    // Use preview scale directly to match extraction logic (crop values are source image pixels)
+    const extractionToPreviewScale = renderedPageData.previewScale;
     
     // When DPI scaling is active (dpiMultiplier > 1), we apply CSS counter-scaling
     // to the canvas, so the overlays should use the CSS-scaled dimensions
@@ -818,7 +817,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
               Page Crop Settings
             </h3>
             <p className="text-sm text-gray-600 mb-3">
-              Specify margins to crop from each edge (values in 300 DPI pixels for precise control)
+              Specify margins to crop from each edge (values in source image pixels)
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div>
