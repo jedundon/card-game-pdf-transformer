@@ -119,3 +119,82 @@ Card identification logic varies significantly between modes and is centralized 
 - Apply transformations in correct order: center → rotate → draw
 - Set canvas dimensions to final output size, not image size
 - Handle rotation by swapping width/height for 90°/270° rotations
+
+## Multi-File Architecture Considerations
+
+### PDF vs Image File Handling
+The application supports both PDF and image files (PNG, JPG) through a unified interface, but there are critical architectural considerations:
+
+#### Coordinate System Consistency
+**CRITICAL**: All coordinate calculations (crops, dimensions, positioning) must use the same coordinate system for both PDF and image files.
+
+**Standard Approach**:
+- **Extraction DPI (300)**: All measurements internally in extraction DPI pixels
+- **PDF files**: Convert from PDF.js coordinates (72 DPI) to extraction DPI
+- **Image files**: Treat native pixels as extraction DPI (assume 300 DPI)
+- **UI inputs**: Crop values, dimensions are in extraction DPI pixels
+
+**Implementation Pattern**:
+```typescript
+// ✅ CORRECT: Unified coordinate system
+if (sourceType === 'image') {
+  sourceWidth = pageDimensions.width; // Use native pixels as extraction DPI
+} else {
+  sourceWidth = (renderedData.width / previewScale) * extractionScale; // Convert PDF to extraction DPI
+}
+
+// ✅ CORRECT: Crop values always in extraction DPI
+const croppedWidth = sourceWidth - cropLeft - cropRight;
+```
+
+**Anti-Patterns to Avoid**:
+```typescript
+// ❌ WRONG: Different coordinate systems
+if (sourceType === 'image') {
+  // Using native pixels directly
+} else {
+  // Using extraction DPI
+}
+
+// ❌ WRONG: Inconsistent scaling
+const scale = pdfData ? extractionScale : 1.0; // Different behavior by type
+```
+
+#### Data Source Validation
+When supporting multiple file types, always validate data sources properly:
+
+```typescript
+// ✅ CORRECT: Check for either data source
+const hasValidDataSource = pdfData || (renderedPageData?.sourceType === 'image');
+if (!hasValidDataSource || !otherRequiredData) return null;
+
+// ❌ WRONG: Only checking one source type
+if (!pdfData || !otherRequiredData) return null; // Fails for images
+```
+
+#### Preview and Extraction Consistency
+**Critical Pattern**: Ensure preview calculations match extraction calculations exactly:
+
+- **Preview overlays**: Use same scaling logic as actual extraction
+- **Dimension display**: Calculate using same formulas as extraction
+- **Coordinate conversion**: Apply same transformations in both paths
+
+#### Common Pitfalls with Multi-File Support
+1. **DPI Assumptions**: Don't assume all images are at extraction DPI
+2. **Scaling Logic**: Avoid duplicating scaling calculations between preview and extraction
+3. **Conditional Logic**: Be careful with `if (pdfData)` checks that exclude image files
+4. **Settings Interpretation**: Ensure crop/grid values mean the same thing for all file types
+
+### Debugging Multi-File Issues
+When debugging PDF vs image discrepancies:
+
+1. **Check coordinate systems**: Are measurements in the same units?
+2. **Trace scaling calculations**: Do preview and extraction use same formulas?
+3. **Validate data sources**: Are conditionals excluding valid image data?
+4. **Compare end-to-end**: Do identical layouts produce identical results?
+
+### Testing Multi-File Features
+- Create identical content in both PDF and image formats
+- Process with identical settings through both pipelines  
+- Compare pixel-perfect results at each stage
+- Verify preview matches final extraction for both file types
