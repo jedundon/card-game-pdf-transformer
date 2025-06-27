@@ -89,6 +89,10 @@ interface UseMultiFileImportReturn {
   getImageData: (fileName: string) => ImageFileData | undefined;
   /** Get all image data */
   getAllImageData: () => Map<string, ImageFileData>;
+  /** Get PDF data for a specific file */
+  getPdfData: (fileName: string) => PdfData | undefined;
+  /** Get all PDF data */
+  getAllPdfData: () => Map<string, PdfData>;
 }
 
 /**
@@ -112,6 +116,9 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
 
   // Single PDF reference for backward compatibility
   const [singlePdfData, setSinglePdfData] = useState<PdfData | null>(null);
+  
+  // PDF data storage for multiple PDF files (fileName -> PdfData)
+  const [pdfDataStore, setPdfDataStore] = useState<Map<string, PdfData>>(new Map());
   
   // Image data storage for processed images
   const [imageDataStore, setImageDataStore] = useState<Map<string, ImageFileData>>(new Map());
@@ -208,6 +215,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     const errors: Record<string, string> = {};
     let firstPdf: PdfData | null = null;
     const newImageData = new Map<string, ImageFileData>();
+    const newPdfData = new Map<string, PdfData>();
 
     try {
       for (const file of files) {
@@ -231,6 +239,9 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
               firstPdf = pdf;
               setSinglePdfData(pdf);
             }
+            
+            // Store PDF data in local map for batch update
+            newPdfData.set(file.name, pdf);
 
             // Create file source entry
             const fileSource: FileSource = {
@@ -307,10 +318,18 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         errors
       }));
 
-      // Update image data store
+      // Update data stores
       setImageDataStore(prev => {
         const updated = new Map(prev);
         newImageData.forEach((data, fileName) => {
+          updated.set(fileName, data);
+        });
+        return updated;
+      });
+      
+      setPdfDataStore(prev => {
+        const updated = new Map(prev);
+        newPdfData.forEach((data, fileName) => {
           updated.set(fileName, data);
         });
         return updated;
@@ -362,6 +381,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     const addedPages: (PageSettings & PageSource)[] = [];
     const errors: Record<string, string> = {};
     const newImageData = new Map<string, ImageFileData>();
+    const newPdfData = new Map<string, PdfData>();
 
     try {
       // Get current state for proper ordering
@@ -394,6 +414,9 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
             if (!singlePdfData) {
               setSinglePdfData(pdf);
             }
+            
+            // Store PDF data in local map for batch update
+            newPdfData.set(file.name, pdf);
 
             // Create file source entry
             const fileSource: FileSource = {
@@ -470,10 +493,18 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
           errors: { ...prev.errors, ...errors }
         }));
 
-        // Update image data store
+        // Update data stores
         setImageDataStore(prev => {
           const updated = new Map(prev);
           newImageData.forEach((data, fileName) => {
+            updated.set(fileName, data);
+          });
+          return updated;
+        });
+        
+        setPdfDataStore(prev => {
+          const updated = new Map(prev);
+          newPdfData.forEach((data, fileName) => {
             updated.set(fileName, data);
           });
           return updated;
@@ -530,6 +561,13 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     
     // Remove image data if it exists
     setImageDataStore(prev => {
+      const updated = new Map(prev);
+      updated.delete(fileName);
+      return updated;
+    });
+    
+    // Remove PDF data if it exists
+    setPdfDataStore(prev => {
       const updated = new Map(prev);
       updated.delete(fileName);
       return updated;
@@ -676,6 +714,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
       errors: {}
     });
     setSinglePdfData(null);
+    setPdfDataStore(new Map());
     setImageDataStore(new Map());
   }, []);
 
@@ -707,6 +746,20 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     return new Map(imageDataStore);
   }, [imageDataStore]);
 
+  /**
+   * Get PDF data for a specific file
+   */
+  const getPdfData = useCallback((fileName: string): PdfData | undefined => {
+    return pdfDataStore.get(fileName);
+  }, [pdfDataStore]);
+
+  /**
+   * Get all PDF data
+   */
+  const getAllPdfData = useCallback((): Map<string, PdfData> => {
+    return new Map(pdfDataStore);
+  }, [pdfDataStore]);
+
 
   return {
     multiFileState,
@@ -723,6 +776,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     getFileList,
     getFileError,
     getImageData,
-    getAllImageData
+    getAllImageData,
+    getPdfData,
+    getAllPdfData
   };
 };

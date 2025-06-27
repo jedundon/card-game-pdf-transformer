@@ -322,9 +322,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     const thead = table.querySelector('thead');
     const theadHeight = thead ? thead.getBoundingClientRect().height : 0;
     
-    // Note: tableOffsetInContainer was replaced with simpler headerOffset logic
-    
-    // Calculate position based on hover index
+    // Calculate position based on hover index using actual row positions
     let topPosition: number;
     
     // Check if container is positioned at tbody level (common case)
@@ -336,21 +334,32 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       topPosition = headerOffset;
     } else if (dragState.hoverIndex >= pages.length) {
       // Drop at the end - position at the bottom of the last row
-      topPosition = (tbodyRect.bottom - containerRect.top) + headerOffset;
+      const rows = tableRef.current.querySelectorAll('tr');
+      if (rows.length > 0) {
+        const lastRowRect = rows[rows.length - 1].getBoundingClientRect();
+        topPosition = (lastRowRect.bottom - containerRect.top) + headerOffset;
+      } else {
+        topPosition = (tbodyRect.bottom - containerRect.top) + headerOffset;
+      }
     } else {
-      // Drop between rows - position above the target row (which means below the previous row)
+      // Drop between rows - position above the target row using actual row positions
       const rows = tableRef.current.querySelectorAll('tr');
       if (rows[dragState.hoverIndex]) {
         const targetRowRect = rows[dragState.hoverIndex].getBoundingClientRect();
-        // Position the line at the top of the target row, adding header offset if needed
+        // Position the line at the top of the target row
         topPosition = (targetRowRect.top - containerRect.top) + headerOffset;
       } else {
-        // Fallback: calculate position at the top of the target row
-        topPosition = headerOffset + (dragState.hoverIndex * ROW_HEIGHT);
+        // Fallback: use the previous row's bottom position
+        const prevRowIndex = Math.min(dragState.hoverIndex - 1, rows.length - 1);
+        if (rows[prevRowIndex]) {
+          const prevRowRect = rows[prevRowIndex].getBoundingClientRect();
+          topPosition = (prevRowRect.bottom - containerRect.top) + headerOffset;
+        } else {
+          // Final fallback: position at the end
+          topPosition = (tbodyRect.bottom - containerRect.top) + headerOffset;
+        }
       }
     }
-    
-    // Drop line positioning is working correctly now - debug logs removed
     
     return {
       position: 'absolute' as const,

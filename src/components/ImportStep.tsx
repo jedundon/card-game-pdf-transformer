@@ -55,6 +55,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   
+  // Track when data stores are ready for thumbnail loading
+  const [dataStoreVersion, setDataStoreVersion] = useState<number>(0);
+  
   // Multi-file support - using shared instance from App.tsx
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -197,12 +200,21 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   }, [multiFileImport]);
 
   // Load thumbnail for PDF pages in multi-file context
-  const loadPdfThumbnailForPage = useCallback(async (pageIndex: number, pdfPageNumber: number) => {
-    // Get PDF data from multiFileImport (for added files) or fallback to pdfData prop (for initial import)
-    const activePdfData = multiFileImport.getCombinedPdfData() || pdfData;
+  const loadPdfThumbnailForPage = useCallback(async (pageIndex: number, pdfPageNumber: number, fileName?: string) => {
+    let activePdfData: any = null;
+    
+    if (fileName && multiFileImport.getPdfData) {
+      // Get specific PDF data for this file from multi-file store
+      activePdfData = multiFileImport.getPdfData(fileName);
+    }
+    
+    // Only fall back to main pdfData prop if no fileName specified (single-file mode)
+    if (!activePdfData && !fileName) {
+      activePdfData = multiFileImport.getCombinedPdfData() || pdfData;
+    }
     
     if (!activePdfData) {
-      console.warn(`No PDF data available for thumbnail loading at page ${pdfPageNumber}`);
+      console.warn(`No PDF data available for thumbnail loading at page ${pdfPageNumber}${fileName ? ` from file ${fileName}` : ''} - PDF data not ready yet`);
       return;
     }
     
@@ -212,16 +224,17 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       const thumbnailUrl = await renderPageThumbnail(activePdfData, pdfPageNumber);
       setThumbnails(prev => ({ ...prev, [pageIndex]: thumbnailUrl }));
     } catch (error) {
-      console.error(`Failed to load thumbnail for PDF page ${pdfPageNumber}:`, error);
+      console.error(`Failed to load thumbnail for PDF page ${pdfPageNumber}${fileName ? ` from file ${fileName}` : ''}:`, error);
       setThumbnailErrors(prev => ({ ...prev, [pageIndex]: true }));
     } finally {
       setThumbnailLoading(prev => ({ ...prev, [pageIndex]: false }));
     }
   }, [pdfData, multiFileImport]);
 
-  // Effect to start loading thumbnails when page settings are available
+  // Effect to start loading thumbnails when page settings are available (single-file mode only)
   useEffect(() => {
-    if (pdfData && pageSettings.length > 0) {
+    // Only run in single-file mode (when no multi-file pages exist)
+    if (pdfData && pageSettings.length > 0 && multiFileImport.multiFileState.pages.length === 0) {
       // Start loading thumbnails progressively - load first few immediately
       const immediateLoadCount = Math.min(5, pageSettings.length);
       for (let i = 0; i < immediateLoadCount; i++) {
@@ -237,12 +250,44 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         }, 500);
       }
     }
-  }, [pdfData, pageSettings.length]);
+  }, [pdfData, pageSettings.length, loadThumbnail, multiFileImport.multiFileState.pages.length]);
 
-  // Effect to start loading thumbnails for multi-file imports
+  // Effect to track data store changes
   useEffect(() => {
     if (multiFileImport.multiFileState.pages.length > 0) {
+      // Increment version to trigger thumbnail loading effect
+      setDataStoreVersion(prev => prev + 1);
+    }
+  }, [
+    multiFileImport.multiFileState.pages.length,
+    multiFileImport.multiFileState.files.length // Also track file changes
+  ]);
+  
+  // Effect to start loading thumbnails for multi-file imports
+  useEffect(() => {
+    if (multiFileImport.multiFileState.pages.length > 0 && dataStoreVersion > 0) {
       const pages = multiFileImport.multiFileState.pages;
+      const pdfDataStore = multiFileImport.getAllPdfData();
+      const imageDataStore = multiFileImport.getAllImageData();
+      
+      // Validate that all required data is available before starting
+      const allDataReady = pages.every((page: any) => {
+        if (page.fileType === 'image') {
+          return imageDataStore.has(page.fileName);
+        } else if (page.fileType === 'pdf') {
+          return pdfDataStore.has(page.fileName);
+        }
+        return false;
+      });
+      
+      if (!allDataReady) {
+        // Schedule a retry after a short delay
+        const retryTimeout = setTimeout(() => {
+          setDataStoreVersion(prev => prev + 1);
+        }, 100);
+        
+        return () => clearTimeout(retryTimeout);
+      }
       
       // Start loading thumbnails progressively
       const immediateLoadCount = Math.min(5, pages.length);
@@ -251,7 +296,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         if (page.fileType === 'image') {
           loadImageThumbnail(i, page.fileName);
         } else if (page.fileType === 'pdf') {
-          loadPdfThumbnailForPage(i, page.originalPageIndex + 1);
+          loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
         }
       }
       
@@ -264,14 +309,18 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               if (page.fileType === 'image') {
                 loadImageThumbnail(i, page.fileName);
               } else if (page.fileType === 'pdf') {
-                loadPdfThumbnailForPage(i, page.originalPageIndex + 1);
+                loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
               }
             }, i * 100);
           }
         }, 500);
       }
     }
-  }, [multiFileImport.multiFileState.pages.length, loadImageThumbnail, loadPdfThumbnailForPage]);
+  }, [
+    dataStoreVersion,
+    loadImageThumbnail, 
+    loadPdfThumbnailForPage
+  ]);
 
   // File processing functions are now unified under processMultipleFiles
 
@@ -666,43 +715,78 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     const currentPages = multiFileImport.multiFileState.pages;
                     
                     // Create a mapping from new position to old position for thumbnails
+                    // Using a more unique identifier: fileName + originalPageIndex + fileType
                     const thumbnailMapping: Record<number, number> = {};
                     reorderedPages.forEach((reorderedPage, newIndex) => {
-                      // Find the old index of this page
+                      // Find the old index of this page using a unique page identifier
+                      const pageId = `${reorderedPage.fileName}:${reorderedPage.originalPageIndex}:${reorderedPage.fileType}`;
                       const oldIndex = currentPages.findIndex(
-                        (currentPage: any) => currentPage.fileName === reorderedPage.fileName && 
-                        currentPage.originalPageIndex === reorderedPage.originalPageIndex
+                        (currentPage: any) => `${currentPage.fileName}:${currentPage.originalPageIndex}:${currentPage.fileType}` === pageId
                       );
                       if (oldIndex !== -1) {
                         thumbnailMapping[newIndex] = oldIndex;
+                      } else {
+                        console.warn(`Could not find mapping for page: ${pageId}`, { reorderedPage, currentPages });
                       }
                     });
                     
-                    // Reorder thumbnails to match the new page order
+                    
+                    // Create new thumbnail states that preserve existing thumbnails and map reordered ones
                     const newThumbnails: Record<number, string> = {};
                     const newThumbnailLoading: Record<number, boolean> = {};
                     const newThumbnailErrors: Record<number, boolean> = {};
                     
-                    Object.entries(thumbnailMapping).forEach(([newIndexStr, oldIndex]) => {
-                      const newIndex = parseInt(newIndexStr);
-                      if (thumbnails[oldIndex]) {
-                        newThumbnails[newIndex] = thumbnails[oldIndex];
+                    // Map thumbnails according to the reordering
+                    reorderedPages.forEach((_, newIndex) => {
+                      const oldIndex = thumbnailMapping[newIndex];
+                      if (oldIndex !== undefined) {
+                        // Copy thumbnail data from old position to new position
+                        if (thumbnails[oldIndex]) {
+                          newThumbnails[newIndex] = thumbnails[oldIndex];
+                        }
+                        if (thumbnailLoading[oldIndex]) {
+                          newThumbnailLoading[newIndex] = thumbnailLoading[oldIndex];
+                        }
+                        if (thumbnailErrors[oldIndex]) {
+                          newThumbnailErrors[newIndex] = thumbnailErrors[oldIndex];
+                        }
                       }
-                      if (thumbnailLoading[oldIndex]) {
-                        newThumbnailLoading[newIndex] = thumbnailLoading[oldIndex];
-                      }
-                      if (thumbnailErrors[oldIndex]) {
-                        newThumbnailErrors[newIndex] = thumbnailErrors[oldIndex];
-                      }
+                      // If no mapping found, the thumbnail will need to be reloaded
                     });
                     
-                    // Update thumbnail states
+                    // Update multi-file state first (this updates the page order)
+                    multiFileImport.updateAllPageSettings(reorderedPages);
+                    
+                    
+                    // Then update thumbnail states to match the new order
                     setThumbnails(newThumbnails);
                     setThumbnailLoading(newThumbnailLoading);
                     setThumbnailErrors(newThumbnailErrors);
                     
-                    // Update multi-file state with complete page objects (preserves reordering)
-                    multiFileImport.updateAllPageSettings(reorderedPages);
+                    // Reload any missing thumbnails after a brief delay to ensure state is settled
+                    setTimeout(() => {
+                      const pdfDataStore = multiFileImport.getAllPdfData();
+                      const imageDataStore = multiFileImport.getAllImageData();
+                      
+                      reorderedPages.forEach((page, newIndex) => {
+                        if (!newThumbnails[newIndex] && !newThumbnailLoading[newIndex] && !newThumbnailErrors[newIndex]) {
+                          // Validate data availability before attempting reload
+                          if (page.fileType === 'image') {
+                            if (imageDataStore.has(page.fileName)) {
+                              loadImageThumbnail(newIndex, page.fileName);
+                            } else {
+                              console.warn(`Image data not available for ${page.fileName}, skipping reload`);
+                            }
+                          } else if (page.fileType === 'pdf') {
+                            if (pdfDataStore.has(page.fileName)) {
+                              loadPdfThumbnailForPage(newIndex, page.originalPageIndex + 1, page.fileName);
+                            } else {
+                              console.warn(`PDF data not available for ${page.fileName}, skipping reload`);
+                            }
+                          }
+                        }
+                      });
+                    }, 50);
                     
                     // Also update the main page settings for compatibility
                     const corePageSettings = reorderedPages.map(page => ({
@@ -752,12 +836,23 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                   // Load thumbnail based on file type
                   if (multiFileImport.multiFileState.pages.length > 0) {
                     const page = multiFileImport.multiFileState.pages[pageIndex];
+                    
                     if (page && page.fileType === 'image') {
-                      // Load image thumbnail
-                      loadImageThumbnail(pageIndex, page.fileName);
+                      // Validate image data availability
+                      const imageDataStore = multiFileImport.getAllImageData();
+                      if (imageDataStore.has(page.fileName)) {
+                        loadImageThumbnail(pageIndex, page.fileName);
+                      } else {
+                        console.warn(`Image data not available for ${page.fileName}, cannot load thumbnail`);
+                      }
                     } else if (page && page.fileType === 'pdf') {
-                      // Load PDF thumbnail (uses multiFileImport.getCombinedPdfData() internally)
-                      loadPdfThumbnailForPage(pageIndex, page.originalPageIndex + 1);
+                      // Validate PDF data availability
+                      const pdfDataStore = multiFileImport.getAllPdfData();
+                      if (pdfDataStore.has(page.fileName)) {
+                        loadPdfThumbnailForPage(pageIndex, page.originalPageIndex + 1, page.fileName);
+                      } else {
+                        console.warn(`PDF data not available for ${page.fileName}, cannot load thumbnail`);
+                      }
                     }
                   } else if (pdfData) {
                     // Single PDF mode

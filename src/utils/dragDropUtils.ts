@@ -29,11 +29,12 @@ import { PageReorderState } from '../types';
  * Calculate drop position based on mouse/touch coordinates
  * 
  * Determines where a dragged item should be dropped based on the current
- * cursor position relative to the drop target container.
+ * cursor position relative to the drop target container. Uses actual DOM
+ * row positions for precise calculations.
  * 
  * @param clientY - Current Y coordinate of the cursor/touch
- * @param containerElement - Container element for the drop operation
- * @param itemHeight - Height of individual items in pixels
+ * @param containerElement - Container element for the drop operation (tbody)
+ * @param itemHeight - Height of individual items in pixels (fallback only)
  * @param maxItems - Maximum number of items (to clamp the result)
  * @returns Index where the item should be dropped (0-based)
  * 
@@ -52,11 +53,31 @@ export function calculateDropPosition(
   const containerRect = containerElement.getBoundingClientRect();
   const relativeY = clientY - containerRect.top;
   
-  // Calculate which item position the cursor is over
-  const dropIndex = Math.floor(relativeY / itemHeight);
+  // Try to get actual row elements for precise positioning
+  const rows = containerElement.querySelectorAll('tr');
   
-  // Clamp to valid range (0 to maxItems-1)
-  return Math.max(0, Math.min(dropIndex, maxItems - 1));
+  if (rows.length > 0) {
+    // Use actual row positions for precise calculation
+    for (let i = 0; i < rows.length; i++) {
+      const rowRect = rows[i].getBoundingClientRect();
+      const rowTop = rowRect.top - containerRect.top;
+      const rowBottom = rowRect.bottom - containerRect.top;
+      const rowMiddle = (rowTop + rowBottom) / 2;
+      
+      // If cursor is in the top half of the row, drop before this row
+      // If cursor is in the bottom half, continue to check next row
+      if (relativeY <= rowMiddle) {
+        return i;
+      }
+    }
+    
+    // If cursor is below all rows, drop at the end
+    return rows.length;
+  } else {
+    // Fallback to calculation using item height
+    const dropIndex = Math.floor(relativeY / itemHeight);
+    return Math.max(0, Math.min(dropIndex, maxItems));
+  }
 }
 
 /**
