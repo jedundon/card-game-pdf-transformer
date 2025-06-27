@@ -250,32 +250,41 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   // Unified page rendering for both PDF and image sources
   useEffect(() => {
     const renderPage = async () => {
-      if (!canvasRef.current || !activePages.length) return;
+      if (!canvasRef.current || !activePages.length) {
+        console.log('ExtractStep: renderPage early return - no canvas or activePages');
+        return;
+      }
       
       // Get current page info with source type
       const currentPageInfo = activePages[currentPage];
       if (!currentPageInfo) {
+        console.log('ExtractStep: renderPage early return - no currentPageInfo for page', currentPage);
         return;
       }
       
       // Check if we have the necessary data for the current source type
       if (currentPageInfo.fileType === 'pdf' && !pdfData) {
+        console.log('ExtractStep: renderPage early return - PDF page but no pdfData');
         return;
       }
       if (currentPageInfo.fileType === 'image' && !multiFileImport.getImageData(currentPageInfo.fileName)) {
-        return;
-      }
-      
-      // Prevent multiple concurrent renders using ref
-      if (renderingRef.current || isRendering) {
+        console.log('ExtractStep: renderPage early return - image page but no imageData for', currentPageInfo.fileName);
         return;
       }
       
       // Additional stability check to prevent render loops
       if (currentPage < 0 || currentPage >= activePages.length) {
+        console.log('ExtractStep: renderPage early return - currentPage out of bounds', currentPage, activePages.length);
         return;
       }
       
+      // Prevent multiple concurrent renders using ref
+      if (renderingRef.current || isRendering) {
+        console.log('ExtractStep: renderPage early return - already rendering', {renderingRef: renderingRef.current, isRendering});
+        return;
+      }
+      
+      console.log('ExtractStep: Starting render for page', currentPage, currentPageInfo.fileType, currentPageInfo.fileName);
       renderingRef.current = true;
       setIsRendering(true);
       
@@ -432,15 +441,18 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
     };
 
-    renderPage();
+    // Add a small delay to avoid rapid successive renders when navigating pages quickly
+    const renderTimer = setTimeout(renderPage, 50);
     
     // Cleanup function
     return () => {
+      clearTimeout(renderTimer);
       if (renderTaskRef.current) {
         renderTaskRef.current.cancel();
         renderTaskRef.current = null;
       }
       renderingRef.current = false;
+      setIsRendering(false);
     };
   }, [pdfData, currentPage, activePages, unifiedPages, multiFileImport, zoom]);
   // Update card preview when current card or extraction settings change
