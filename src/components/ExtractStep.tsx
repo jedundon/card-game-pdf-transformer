@@ -249,42 +249,42 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   }, [extractionSettings, pdfMode, activePages, unifiedPages, pdfData, multiFileImport]);
   // Unified page rendering for both PDF and image sources
   useEffect(() => {
+    // Early exit checks first, before any async operations
+    if (!canvasRef.current || !activePages.length) {
+      console.log('ExtractStep: useEffect early return - no canvas or activePages');
+      return;
+    }
+    
+    if (currentPage < 0 || currentPage >= activePages.length) {
+      console.log('ExtractStep: useEffect early return - currentPage out of bounds', currentPage, activePages.length);
+      return;
+    }
+    
+    const currentPageInfo = activePages[currentPage];
+    if (!currentPageInfo) {
+      console.log('ExtractStep: useEffect early return - no currentPageInfo for page', currentPage);
+      return;
+    }
+    
+    // Check if we have the necessary data for the current source type
+    if (currentPageInfo.fileType === 'pdf' && !pdfData) {
+      console.log('ExtractStep: useEffect early return - PDF page but no pdfData');
+      return;
+    }
+    if (currentPageInfo.fileType === 'image' && !multiFileImport.getImageData(currentPageInfo.fileName)) {
+      console.log('ExtractStep: useEffect early return - image page but no imageData for', currentPageInfo.fileName);
+      return;
+    }
+    
+    // Prevent multiple concurrent renders using ref - check this BEFORE starting render
+    if (renderingRef.current || isRendering) {
+      console.log('ExtractStep: useEffect early return - already rendering', {renderingRef: renderingRef.current, isRendering});
+      return;
+    }
+    
+    console.log('ExtractStep: Starting render for page', currentPage, currentPageInfo.fileType, currentPageInfo.fileName);
+    
     const renderPage = async () => {
-      if (!canvasRef.current || !activePages.length) {
-        console.log('ExtractStep: renderPage early return - no canvas or activePages');
-        return;
-      }
-      
-      // Get current page info with source type
-      const currentPageInfo = activePages[currentPage];
-      if (!currentPageInfo) {
-        console.log('ExtractStep: renderPage early return - no currentPageInfo for page', currentPage);
-        return;
-      }
-      
-      // Check if we have the necessary data for the current source type
-      if (currentPageInfo.fileType === 'pdf' && !pdfData) {
-        console.log('ExtractStep: renderPage early return - PDF page but no pdfData');
-        return;
-      }
-      if (currentPageInfo.fileType === 'image' && !multiFileImport.getImageData(currentPageInfo.fileName)) {
-        console.log('ExtractStep: renderPage early return - image page but no imageData for', currentPageInfo.fileName);
-        return;
-      }
-      
-      // Additional stability check to prevent render loops
-      if (currentPage < 0 || currentPage >= activePages.length) {
-        console.log('ExtractStep: renderPage early return - currentPage out of bounds', currentPage, activePages.length);
-        return;
-      }
-      
-      // Prevent multiple concurrent renders using ref
-      if (renderingRef.current || isRendering) {
-        console.log('ExtractStep: renderPage early return - already rendering', {renderingRef: renderingRef.current, isRendering});
-        return;
-      }
-      
-      console.log('ExtractStep: Starting render for page', currentPage, currentPageInfo.fileType, currentPageInfo.fileName);
       renderingRef.current = true;
       setIsRendering(true);
       
@@ -296,8 +296,15 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       
       try {
         const canvas = canvasRef.current;
+        if (!canvas) {
+          renderingRef.current = false;
+          setIsRendering(false);
+          return;
+        }
+        
         const context = canvas.getContext('2d');
         if (!context) {
+          renderingRef.current = false;
           setIsRendering(false);
           return;
         }
@@ -441,12 +448,11 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       }
     };
 
-    // Add a small delay to avoid rapid successive renders when navigating pages quickly
-    const renderTimer = setTimeout(renderPage, 50);
+    // Call renderPage immediately - no setTimeout to avoid timing issues
+    renderPage();
     
     // Cleanup function
     return () => {
-      clearTimeout(renderTimer);
       if (renderTaskRef.current) {
         renderTaskRef.current.cancel();
         renderTaskRef.current = null;
