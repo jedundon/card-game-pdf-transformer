@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon, PrinterIcon, RulerIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
+import { FileManagerPanel } from './FileManagerPanel';
 import { 
   getActivePagesWithSource, 
   calculateTotalCards, 
@@ -729,6 +730,15 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           size="sm"
         />
       </div>
+      
+      {/* File Management Panel */}
+      {multiFileImport.getFileList().length > 0 && (
+        <FileManagerPanel 
+          multiFileImport={multiFileImport}
+          expanded={false}
+          compact={true}
+        />
+      )}
       
       {!pdfData && multiFileImport.multiFileState.pages.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
+import { FileManagerPanel } from './FileManagerPanel';
 import { 
   getActivePagesWithSource,
   calculateTotalCards,
@@ -578,6 +579,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           size="sm"
         />
       </div>
+      
+      {/* File Management Panel */}
+      {multiFileImport.getFileList().length > 0 && (
+        <FileManagerPanel 
+          multiFileImport={multiFileImport}
+          expanded={false}
+          compact={true}
+        />
+      )}
+      
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <h3 className="text-lg font-medium text-gray-800 mb-3">
           Export Summary
