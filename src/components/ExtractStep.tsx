@@ -213,7 +213,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } catch (error) {
       console.error('Error calculating card dimensions:', error);
       return null;
-    }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode, globalCardIndex, cardsPerPage]);
+    }  }, [pdfData, activePages, renderedPageData, extractionSettings, pdfMode, globalCardIndex, cardsPerPage, pageDimensions]);
 
   // Notify parent component when card dimensions change
   useEffect(() => {
@@ -252,39 +252,27 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     const renderPage = async () => {
       if (!canvasRef.current || !activePages.length) return;
       
-      // Debug logging
-      console.log('ExtractStep renderPage debug:', {
-        currentPage,
-        activePages: activePages.length,
-        unifiedPages: unifiedPages.length,
-        multiFileMode: true, // Always operate in multi-file context
-        multiFileState: multiFileImport.multiFileState.pages.length
-      });
-      
       // Get current page info with source type
       const currentPageInfo = activePages[currentPage];
       if (!currentPageInfo) {
-        console.log('No currentPageInfo for page:', currentPage);
         return;
       }
-      
-      console.log('Current page info:', currentPageInfo);
       
       // Check if we have the necessary data for the current source type
       if (currentPageInfo.fileType === 'pdf' && !pdfData) {
-        console.log('PDF rendering skipped: no pdfData');
         return;
       }
       if (currentPageInfo.fileType === 'image' && !multiFileImport.getImageData(currentPageInfo.fileName)) {
-        console.log('Image rendering skipped:', {
-          fileName: currentPageInfo.fileName,
-          hasImageData: !!multiFileImport.getImageData(currentPageInfo.fileName)
-        });
         return;
       }
       
       // Prevent multiple concurrent renders using ref
       if (renderingRef.current || isRendering) {
+        return;
+      }
+      
+      // Additional stability check to prevent render loops
+      if (currentPage < 0 || currentPage >= activePages.length) {
         return;
       }
       
@@ -459,16 +447,24 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   useEffect(() => {
     let cancelled = false;
     
-    if (renderedPageData && !isRendering && canvasRef.current) {
-      // Delay the card extraction to ensure canvas is fully rendered
+    // Add stabilization check to prevent rapid re-renders
+    if (renderedPageData && !isRendering && canvasRef.current && activePages.length > 0) {
+      // Increased delay to debounce rapid setting changes and prevent render loops
       const timer = setTimeout(async () => {
-        if (!cancelled) {
-          const cardUrl = await extractCardImage(globalCardIndex);
-          if (!cancelled) {
-            setCardPreviewUrl(cardUrl);
+        if (!cancelled && renderedPageData && !isRendering) {
+          try {
+            const cardUrl = await extractCardImage(globalCardIndex);
+            if (!cancelled) {
+              setCardPreviewUrl(cardUrl);
+            }
+          } catch (error) {
+            console.error('Card preview extraction failed:', error);
+            if (!cancelled) {
+              setCardPreviewUrl(null);
+            }
           }
         }
-      }, 100); // Reduced delay for better responsiveness
+      }, 250); // Increased delay to debounce rapid changes
       
       return () => {
         cancelled = true;
@@ -477,7 +473,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     } else {
       // Clear the preview if prerequisites aren't met
       setCardPreviewUrl(null);
-    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractionSettings.cardCrop, extractionSettings.imageRotation, extractCardImage, globalCardIndex]);
+    }  }, [currentCard, currentPage, renderedPageData, isRendering, extractionSettings.crop, extractionSettings.grid, extractionSettings.gutterWidth, extractionSettings.cardCrop, extractionSettings.imageRotation, extractCardImage, globalCardIndex, activePages.length]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
