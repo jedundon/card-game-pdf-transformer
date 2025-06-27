@@ -31,7 +31,6 @@ import {
   getActivePagesWithSource, 
   calculateTotalCards, 
   getCardInfo, 
-  extractCardImage as extractCardImageUtil,
   extractCardImageFromCanvas,
   getAvailableCardIds
 } from '../utils/cardUtils';
@@ -51,7 +50,105 @@ import {
   getTransformationRange,
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
-import { PREVIEW_CONSTRAINTS } from '../constants';
+import { PREVIEW_CONSTRAINTS, DPI_CONSTANTS } from '../constants';
+
+/**
+ * Extract a single card from a specific PDF page
+ * This is a simplified version for multi-file scenarios
+ */
+async function extractCardImageFromPdfPage(
+  pdfData: any,
+  pageNumber: number,
+  cardOnPage: number,
+  extractionSettings: any
+): Promise<string | null> {
+  try {
+    // Get the PDF page
+    const page = await pdfData.getPage(pageNumber);
+    
+    // Calculate scale for extraction DPI
+    const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
+    const viewport = page.getViewport({ scale: extractionScale });
+    
+    // Create canvas for rendering
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Failed to get canvas context');
+    }
+    
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    
+    // Render the PDF page to canvas
+    const renderContext = {
+      canvasContext: context,
+      viewport: viewport
+    };
+    
+    await page.render(renderContext).promise;
+    
+    // Apply page-level cropping
+    const sourceWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
+    const sourceHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
+    
+    if (sourceWidth <= 0 || sourceHeight <= 0) {
+      throw new Error('Invalid dimensions after cropping');
+    }
+    
+    // Calculate card grid position
+    const cardWidthPx = sourceWidth / extractionSettings.grid.columns;
+    const cardHeightPx = sourceHeight / extractionSettings.grid.rows;
+    
+    const cardRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+    const cardCol = cardOnPage % extractionSettings.grid.columns;
+    
+    // Calculate card position
+    const cardX = extractionSettings.crop.left + cardCol * cardWidthPx;
+    const cardY = extractionSettings.crop.top + cardRow * cardHeightPx;
+    
+    // Apply individual card cropping if specified
+    let finalCardWidth = cardWidthPx;
+    let finalCardHeight = cardHeightPx;
+    let finalCardX = cardX;
+    let finalCardY = cardY;
+    
+    if (extractionSettings.cardCrop) {
+      finalCardX += extractionSettings.cardCrop.left || 0;
+      finalCardY += extractionSettings.cardCrop.top || 0;
+      finalCardWidth -= (extractionSettings.cardCrop.left || 0) + (extractionSettings.cardCrop.right || 0);
+      finalCardHeight -= (extractionSettings.cardCrop.top || 0) + (extractionSettings.cardCrop.bottom || 0);
+    }
+    
+    if (finalCardWidth <= 0 || finalCardHeight <= 0) {
+      throw new Error('Invalid card dimensions after card cropping');
+    }
+    
+    // Extract the card area
+    const cardCanvas = document.createElement('canvas');
+    const cardContext = cardCanvas.getContext('2d');
+    if (!cardContext) {
+      throw new Error('Failed to get card canvas context');
+    }
+    
+    cardCanvas.width = finalCardWidth;
+    cardCanvas.height = finalCardHeight;
+    
+    // Copy the card area from the main canvas
+    cardContext.drawImage(
+      canvas,
+      finalCardX, finalCardY, finalCardWidth, finalCardHeight,
+      0, 0, finalCardWidth, finalCardHeight
+    );
+    
+    // Convert to data URL
+    return cardCanvas.toDataURL('image/png');
+    
+  } catch (error) {
+    console.error('Failed to extract card from PDF page:', error);
+    throw error;
+  }
+}
 
 /**
  * GridPreview component for showing the actual calibration grid
@@ -395,6 +492,48 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   
+  // Create a stable reference to image data map to prevent dependency issues
+  const imageDataMap = useMemo(() => {
+    const map = new Map();
+    if (multiFileImport?.multiFileState?.pages) {
+      multiFileImport.multiFileState.pages.forEach((page: any) => {
+        if (page.fileType === 'image') {
+          const imageData = multiFileImport.getImageData(page.fileName);
+          if (imageData) {
+            map.set(page.fileName, imageData);
+          }
+        }
+      });
+    }
+    return map;
+  }, [multiFileImport?.multiFileState?.pages]);
+  
+  // Get image data from stable map
+  const getImageData = useCallback((fileName: string) => {
+    return imageDataMap.get(fileName);
+  }, [imageDataMap]);
+  
+  // Create a stable reference to PDF data map to prevent dependency issues
+  const pdfDataMap = useMemo(() => {
+    const map = new Map();
+    if (multiFileImport?.multiFileState?.pages) {
+      multiFileImport.multiFileState.pages.forEach((page: any) => {
+        if (page.fileType === 'pdf') {
+          const pdfData = multiFileImport.getPdfData(page.fileName);
+          if (pdfData) {
+            map.set(page.fileName, pdfData);
+          }
+        }
+      });
+    }
+    return map;
+  }, [multiFileImport?.multiFileState?.pages]);
+  
+  // Get PDF data from stable map
+  const getPdfData = useCallback((fileName: string) => {
+    return pdfDataMap.get(fileName);
+  }, [pdfDataMap]);
+  
   // Current color transformation settings from finalAdjustments
   const currentColorTransformation: ColorTransformation = useMemo(() => {
     return colorSettings?.finalAdjustments || getDefaultColorTransformation();
@@ -542,27 +681,56 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     const cardsPerPageLocal = extractionSettings.grid.rows * extractionSettings.grid.columns;
     const pageIndex = Math.floor(cardIndex / cardsPerPageLocal);
     
-    if (pageIndex >= activePages.length) {
+    if (pageIndex >= activePages.length || pageIndex < 0) {
+      console.warn(`ColorCalibrationStep: Invalid page index ${pageIndex} for card ${cardIndex} (activePages.length: ${activePages.length})`);
       return null;
     }
     
     const currentPageInfo = activePages[pageIndex];
     
+    if (!currentPageInfo || !currentPageInfo.fileType) {
+      console.warn(`ColorCalibrationStep: Invalid page info for page ${pageIndex}:`, currentPageInfo);
+      return null;
+    }
+    
     if (currentPageInfo.fileType === 'pdf') {
-      // Use PDF extraction
-      return await extractCardImageUtil(cardIndex, pdfData, pdfMode, activePages, unifiedPages, extractionSettings);
+      // Get the correct PDF data for this specific file
+      const filePdfData = getPdfData(currentPageInfo.fileName);
+      if (!filePdfData) {
+        console.warn(`ColorCalibrationStep: No PDF data available for file ${currentPageInfo.fileName} on page ${pageIndex}`);
+        return null;
+      }
+      
+      // For multi-file scenarios, calculate the card extraction directly
+      const cardOnPage = cardIndex % cardsPerPageLocal;
+      
+      // Use the original page index from the current page info
+      const actualPageNumber = currentPageInfo.originalPageIndex + 1;
+      
+      try {
+        // Extract the card directly using the file-specific PDF data and page number
+        return await extractCardImageFromPdfPage(
+          filePdfData, 
+          actualPageNumber, 
+          cardOnPage, 
+          extractionSettings
+        );
+      } catch (error) {
+        console.error(`ColorCalibrationStep: Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
+        return null;
+      }
     } else if (currentPageInfo.fileType === 'image') {
       // Use image extraction
-      const imageData = multiFileImport.getImageData(currentPageInfo.fileName);
+      const imageData = getImageData(currentPageInfo.fileName);
       if (!imageData) {
-        console.error(`No image data found for file: ${currentPageInfo.fileName}`);
+        console.error(`ColorCalibrationStep: No image data found for file: ${currentPageInfo.fileName}`);
         return null;
       }
       return await extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
     }
     
     return null;
-  }, [extractionSettings, pdfMode, activePages, unifiedPages, pdfData, multiFileImport]);
+  }, [extractionSettings, pdfMode, activePages, getPdfData, getImageData]);
 
   // Update card preview when current card changes
   useEffect(() => {
