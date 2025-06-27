@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
+import { AddFilesButton } from './AddFilesButton';
 import { 
   getActivePagesWithSource,
   calculateTotalCards,
@@ -67,13 +68,13 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     return hasNonDefaultColorSettings(currentColorTransformation);
   }, [currentColorTransformation]);
 
-  // Unified page data handling for both single PDF and multi-file sources
+  // Unified page data handling - always prioritize multi-file state
   const unifiedPages = useMemo(() => {
-    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
-      // Multi-file mode: use pages from multi-file import with source information
+    if (multiFileImport.multiFileState.pages.length > 0) {
+      // Use pages from multi-file import with source information
       return multiFileImport.multiFileState.pages;
     } else if (pageSettings.length > 0) {
-      // Single PDF mode: convert pageSettings to unified format
+      // Fallback: convert pageSettings to unified format for backward compatibility
       return pageSettings.map((page: any, index: number) => ({
         ...page,
         fileName: 'current.pdf', // Default filename for single PDF mode
@@ -85,7 +86,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       // No data available
       return [];
     }
-  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages, pageSettings]);
+  }, [multiFileImport.multiFileState.pages, pageSettings]);
 
   // Calculate total cards using unified pages
   const activePages = useMemo(() => 
@@ -123,11 +124,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
     const errors: string[] = [];
     
-    // Check if PDF data is available for single PDF mode, or multi-file data for multi-file mode
-    if (!multiFileImport.isMultiFileMode && !pdfData) {
-      errors.push('No PDF data available for export');
-    } else if (multiFileImport.isMultiFileMode && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
-      errors.push('No files available for export in multi-file mode');
+    // Check if data is available for export
+    if (!pdfData && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
+      errors.push('No files available for export');
     }
     
     // Check if there are active pages
@@ -193,11 +192,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
   // Generate a PDF with all cards of a specific type
   const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
-    // Validate data availability for both modes
-    if (!multiFileImport.isMultiFileMode && !pdfData) {
-      throw new Error('No PDF data available for export');
-    } else if (multiFileImport.isMultiFileMode && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
-      throw new Error('No files available for export in multi-file mode');
+    // Validate data availability
+    if (!pdfData && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
+      throw new Error('No files available for export');
     }
 
     try {
@@ -571,7 +568,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-800">Export PDFs</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-800">Export PDFs</h2>
+        
+        {/* Add Files button */}
+        <AddFilesButton 
+          multiFileImport={multiFileImport}
+          variant="subtle"
+          size="sm"
+        />
+      </div>
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <h3 className="text-lg font-medium text-gray-800 mb-3">
           Export Summary
@@ -581,10 +587,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               <span className="text-gray-600">Source Type:</span>
               <span className="font-medium text-gray-800">
                 {(() => {
-                  if (multiFileImport.isMultiFileMode) {
-                    if (multiFileImport.multiFileState.files.length === 0) {
-                      return 'No files';
-                    }
+                  if (multiFileImport.multiFileState.files.length > 0) {
                     const fileTypes = [...new Set(multiFileImport.multiFileState.files.map((f: any) => f.type))];
                     if (fileTypes.length === 1) {
                       return fileTypes[0] === 'pdf' ? 'PDF Only' : 'Images Only';

@@ -50,10 +50,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.
 interface UseMultiFileImportReturn {
   /** Current multi-file import state */
   multiFileState: MultiFileImportState;
-  /** Whether multi-file mode is currently active */
-  isMultiFileMode: boolean;
-  /** Enable/disable multi-file mode */
-  setMultiFileMode: (enabled: boolean) => void;
   /** Process multiple files (PDFs and images) */
   processFiles: (files: File[]) => Promise<{
     files: FileSource[];
@@ -61,6 +57,13 @@ interface UseMultiFileImportReturn {
     errors: Record<string, string>;
     firstPdf: PdfData | null;
     imageData: Map<string, ImageFileData>;
+  }>;
+  /** Add files to existing import (append instead of replace) */
+  addFiles: (files: File[]) => Promise<{
+    success: boolean;
+    addedFiles: FileSource[];
+    addedPages: (PageSettings & PageSource)[];
+    errors: Record<string, string>;
   }>;
   /** Process a single file (backward compatibility) */
   processSingleFile: (file: File) => Promise<PdfData | null>;
@@ -92,8 +95,6 @@ interface UseMultiFileImportReturn {
  * Custom hook for managing multi-file import operations
  */
 export const useMultiFileImport = (): UseMultiFileImportReturn => {
-  // Multi-file mode toggle
-  const [isMultiFileMode, setIsMultiFileMode] = useState<boolean>(false);
   
   // Combined multi-file state
   const [multiFileState, setMultiFileState] = useState<MultiFileImportState>({
@@ -349,6 +350,157 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
   }, [isValidFile, processSingleFile, singlePdfData]);
 
   /**
+   * Add files to existing import (append instead of replace)
+   */
+  const addFiles = useCallback(async (files: File[]): Promise<{
+    success: boolean;
+    addedFiles: FileSource[];
+    addedPages: (PageSettings & PageSource)[];
+    errors: Record<string, string>;
+  }> => {
+    const addedFiles: FileSource[] = [];
+    const addedPages: (PageSettings & PageSource)[] = [];
+    const errors: Record<string, string> = {};
+    const newImageData = new Map<string, ImageFileData>();
+
+    try {
+      // Get current state for proper ordering
+      const currentPageCount = multiFileState.pages.length;
+      
+      for (const file of files) {
+        try {
+          const validation = isValidFile(file);
+          if (!validation.isValid) {
+            errors[file.name] = `Unsupported file type. Supported formats: PDF, PNG, JPG, JPEG.`;
+            continue;
+          }
+
+          // Check for duplicate files
+          const isDuplicate = multiFileState.files.some(existingFile => existingFile.name === file.name);
+          if (isDuplicate) {
+            errors[file.name] = `File already imported: ${file.name}`;
+            continue;
+          }
+
+          if (validation.type === 'pdf') {
+            // Process PDF file
+            const pdf = await processSingleFile(file);
+            if (!pdf) {
+              errors[file.name] = 'Failed to process PDF file.';
+              continue;
+            }
+
+            // Update first PDF reference if this is the first PDF overall
+            if (!singlePdfData) {
+              setSinglePdfData(pdf);
+            }
+
+            // Create file source entry
+            const fileSource: FileSource = {
+              name: file.name,
+              type: 'pdf',
+              originalPageCount: pdf.numPages,
+              size: file.size,
+              importTimestamp: Date.now()
+            };
+            addedFiles.push(fileSource);
+
+            // Create page entries for this PDF file
+            for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+              const page: PageSettings & PageSource = {
+                skip: false,
+                type: pageIndex % 2 === 0 ? 'front' : 'back', // Default alternating
+                fileName: file.name,
+                originalPageIndex: pageIndex,
+                fileType: 'pdf',
+                displayOrder: currentPageCount + addedPages.length // Sequential ordering
+              };
+              addedPages.push(page);
+            }
+
+          } else if (validation.type === 'image') {
+            // Process image file
+            if (!validateImageFileSize(file)) {
+              errors[file.name] = `Image file too large. Maximum size: 50MB.`;
+              continue;
+            }
+
+            const imageData = await processImageFile(file);
+            if (!imageData) {
+              errors[file.name] = 'Failed to process image file.';
+              continue;
+            }
+
+            // Store image data for later access
+            newImageData.set(file.name, imageData);
+
+            // Create file source entry
+            const fileSource: FileSource = createImageFileSource(file);
+            addedFiles.push(fileSource);
+
+            // Create single page entry for this image file
+            const page: PageSettings & PageSource = {
+              skip: false,
+              type: 'front', // Images default to front type
+              fileName: file.name,
+              originalPageIndex: 0, // Images are always single "page"
+              fileType: 'image',
+              displayOrder: currentPageCount + addedPages.length // Sequential ordering
+            };
+            addedPages.push(page);
+          }
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          errors[file.name] = errorMessage;
+          console.error(`Error processing file ${file.name}:`, error);
+        }
+      }
+
+      // Update state by appending to existing files and pages
+      if (addedFiles.length > 0 || addedPages.length > 0) {
+        setMultiFileState(prev => ({
+          ...prev,
+          files: [...prev.files, ...addedFiles], // Append to existing files
+          pages: [...prev.pages, ...addedPages], // Append to existing pages
+          reorderState: {
+            ...prev.reorderState,
+            pageOrder: [...prev.pages, ...addedPages].map((_, index) => index)
+          },
+          errors: { ...prev.errors, ...errors }
+        }));
+
+        // Update image data store
+        setImageDataStore(prev => {
+          const updated = new Map(prev);
+          newImageData.forEach((data, fileName) => {
+            updated.set(fileName, data);
+          });
+          return updated;
+        });
+
+        console.log(`Successfully added ${addedFiles.length} files with ${addedPages.length} total pages`);
+      }
+
+      return {
+        success: addedFiles.length > 0,
+        addedFiles,
+        addedPages,
+        errors
+      };
+
+    } catch (error) {
+      console.error('Error in addFiles:', error);
+      return {
+        success: false,
+        addedFiles: [],
+        addedPages: [],
+        errors: { _general: 'Failed to add files. Please try again.' }
+      };
+    }
+  }, [isValidFile, processSingleFile, multiFileState.files, multiFileState.pages, singlePdfData]);
+
+  /**
    * Remove a file from the multi-file list
    */
   const removeFile = useCallback((fileName: string) => {
@@ -478,36 +630,34 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
    * Get combined PDF data for backward compatibility
    */
   const getCombinedPdfData = useCallback((): PdfData | null => {
-    if (!isMultiFileMode) {
-      return singlePdfData;
-    }
-    
-    // For multi-file mode, return the first PDF data
-    // TODO: In the future, we might want to create a virtual combined PDF
+    // Always return the first PDF data from multi-file state
     return singlePdfData;
-  }, [isMultiFileMode, singlePdfData]);
+  }, [singlePdfData]);
 
   /**
    * Get combined page settings for backward compatibility
    */
   const getCombinedPageSettings = useCallback((): PageSettings[] => {
-    if (!isMultiFileMode) {
-      // For single-file mode, create basic page settings from the current PDF
-      if (!singlePdfData) return [];
-      
+    // Always extract page settings from multi-file state
+    // If no multi-file pages, fall back to single PDF data
+    if (multiFileState.pages.length > 0) {
+      return multiFileState.pages.map(page => ({
+        skip: page.skip,
+        type: page.type,
+        originalPageIndex: page.originalPageIndex
+      }));
+    }
+    
+    // Fallback for empty multi-file state with single PDF
+    if (singlePdfData) {
       return Array(singlePdfData.numPages).fill(null).map((_, i) => ({
         skip: false,
         type: i % 2 === 0 ? 'front' : 'back'
       }));
     }
     
-    // For multi-file mode, extract page settings from combined pages
-    return multiFileState.pages.map(page => ({
-      skip: page.skip,
-      type: page.type,
-      originalPageIndex: page.originalPageIndex
-    }));
-  }, [isMultiFileMode, singlePdfData, multiFileState.pages]);
+    return [];
+  }, [singlePdfData, multiFileState.pages]);
 
   /**
    * Reset all state
@@ -557,36 +707,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     return new Map(imageDataStore);
   }, [imageDataStore]);
 
-  /**
-   * Set multi-file mode and handle state transitions
-   */
-  const setMultiFileMode = useCallback((enabled: boolean) => {
-    setIsMultiFileMode(enabled);
-    
-    if (!enabled) {
-      // When switching to single-file mode, reset multi-file state
-      setMultiFileState(prev => ({
-        ...prev,
-        files: [],
-        pages: [],
-        reorderState: {
-          dragIndex: null,
-          hoverIndex: null,
-          isDragging: false,
-          pageOrder: []
-        },
-        errors: {}
-      }));
-      // Clear image data when switching to single-file mode
-      setImageDataStore(new Map());
-    }
-  }, []);
 
   return {
     multiFileState,
-    isMultiFileMode,
-    setMultiFileMode,
     processFiles,
+    addFiles,
     processSingleFile,
     removeFile,
     updateAllPageSettings,

@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
+import { AddFilesButton } from './AddFilesButton';
 import { 
   getActivePagesWithSource,
   calculateTotalCards, 
   getCardInfo, 
   extractCardImage as extractCardImageUtil,
   extractCardImageFromCanvas,
-  getActualPageNumber,
   getAvailableCardIds,
   isCardSkipped,
   toggleCardSkip,
@@ -59,7 +59,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   
   // Unified page data handling for both single PDF and multi-file sources
   const unifiedPages = useMemo(() => {
-    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
+    if (multiFileImport.multiFileState.pages.length > 0) {
       // Multi-file mode: use pages from multi-file import with source information
       return multiFileImport.multiFileState.pages;
     } else if (pageSettings.length > 0) {
@@ -75,7 +75,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       // No data available
       return [];
     }
-  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages, pageSettings]);
+  }, [multiFileImport.multiFileState.pages, pageSettings]);
   
   // Memoize activePages to prevent unnecessary re-renders - use unified pages with source info
   const activePages = useMemo(() => 
@@ -256,7 +256,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         currentPage,
         activePages: activePages.length,
         unifiedPages: unifiedPages.length,
-        multiFileMode: multiFileImport.isMultiFileMode,
+        multiFileMode: true, // Always operate in multi-file context
         multiFileState: multiFileImport.multiFileState.pages.length
       });
       
@@ -274,12 +274,10 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         console.log('PDF rendering skipped: no pdfData');
         return;
       }
-      if (currentPageInfo.fileType === 'image' && (!multiFileImport.isMultiFileMode || !multiFileImport.getImageData(currentPageInfo.fileName))) {
+      if (currentPageInfo.fileType === 'image' && !multiFileImport.getImageData(currentPageInfo.fileName)) {
         console.log('Image rendering skipped:', {
-          isMultiFileMode: multiFileImport.isMultiFileMode,
           fileName: currentPageInfo.fileName,
-          hasImageData: !!multiFileImport.getImageData(currentPageInfo.fileName),
-          imageData: multiFileImport.getImageData(currentPageInfo.fileName)
+          hasImageData: !!multiFileImport.getImageData(currentPageInfo.fileName)
         });
         return;
       }
@@ -308,9 +306,8 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
         if (currentPageInfo.fileType === 'pdf') {
           // PDF rendering logic
-          const actualPageNumber = multiFileImport.isMultiFileMode 
-            ? currentPageInfo.originalPageIndex + 1  // For multi-file mode, use the original page index directly
-            : getActualPageNumber(currentPage, pageSettings); // For single PDF mode, use the traditional logic
+          // Always use originalPageIndex from unified page data
+          const actualPageNumber = currentPageInfo.originalPageIndex + 1;
           const page = await pdfData.getPage(actualPageNumber);
         
           // Calculate base scale to fit the preview area nicely
@@ -821,7 +818,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-800">Extract Cards</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-800">Extract Cards</h2>
+        
+        {/* Add Files button */}
+        <AddFilesButton 
+          multiFileImport={multiFileImport}
+          variant="subtle"
+          size="sm"
+        />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
@@ -1142,12 +1148,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                     className="block"
                     style={{ 
                       display: activePages.length > 0 && 
-                               (pdfData || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) 
+                               (pdfData || multiFileImport.multiFileState.pages.length > 0) 
                                ? 'block' : 'none'
                     }}
                   />
                   {(activePages.length === 0 || 
-                    (!pdfData && !multiFileImport.isMultiFileMode)) && (
+                    (!pdfData && multiFileImport.multiFileState.pages.length === 0)) && (
                     <div className="text-gray-400 text-center p-8">
                       <p>No files loaded or no active pages</p>
                     </div>

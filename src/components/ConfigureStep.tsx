@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon, PrinterIcon, RulerIcon } from 'lucide-react';
+import { AddFilesButton } from './AddFilesButton';
 import { 
   getActivePagesWithSource, 
   calculateTotalCards, 
@@ -79,13 +80,13 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     crosshairLength: ''
   });
   
-  // Unified page data handling for both single PDF and multi-file sources
+  // Unified page data handling - always prioritize multi-file state
   const unifiedPages = useMemo(() => {
-    if (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0) {
-      // Multi-file mode: use pages from multi-file import with source information
+    if (multiFileImport.multiFileState.pages.length > 0) {
+      // Use pages from multi-file import with source information
       return multiFileImport.multiFileState.pages;
     } else if (pageSettings.length > 0) {
-      // Single PDF mode: convert pageSettings to unified format
+      // Fallback: convert pageSettings to unified format for backward compatibility
       return pageSettings.map((page: any, index: number) => ({
         ...page,
         fileName: 'current.pdf', // Default filename for single PDF mode
@@ -97,7 +98,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       // No data available
       return [];
     }
-  }, [multiFileImport.isMultiFileMode, multiFileImport.multiFileState.pages, pageSettings]);
+  }, [multiFileImport.multiFileState.pages, pageSettings]);
   
   // Calculate total cards from extraction settings and active pages
   const activePages = useMemo(() => 
@@ -718,9 +719,18 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   };
 
   return <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-gray-800">Configure Layout</h2>
+        
+        {/* Add Files button */}
+        <AddFilesButton 
+          multiFileImport={multiFileImport}
+          variant="subtle"
+          size="sm"
+        />
+      </div>
       
-      {!pdfData && (!multiFileImport.isMultiFileMode || multiFileImport.multiFileState.pages.length === 0) && (
+      {!pdfData && multiFileImport.multiFileState.pages.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
             Please load files in the Import step to continue.
@@ -728,7 +738,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         </div>
       )}
       
-      {(pdfData || (multiFileImport.isMultiFileMode && multiFileImport.multiFileState.pages.length > 0)) && totalCards === 0 && (
+      {(pdfData || multiFileImport.multiFileState.pages.length > 0) && totalCards === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-yellow-800">
             No cards available. Please configure extraction settings in the previous step.
