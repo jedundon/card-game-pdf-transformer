@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronRightIcon, RotateCcwIcon, UploadIcon, XIcon, ClockIcon } from 'lucide-react';
+import { ChevronRightIcon, RotateCcwIcon, UploadIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
-import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
+import { LastImportedFileInfo } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
 import { FileManagerPanel } from './FileManagerPanel';
@@ -11,6 +11,7 @@ import { TIMEOUT_CONSTANTS } from '../constants';
 import type { ImportStepProps, MultiFileImportHook } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
+import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -531,39 +532,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         />
       )}
       
-      {/* Previously Imported File Display */}
-      {lastImportedFileInfo && !pdfData && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center mb-2">
-                <ClockIcon size={16} className="text-blue-600 mr-2" />
-                <h4 className="text-sm font-medium text-blue-800">
-                  Previously Imported File
-                </h4>
-              </div>
-              <div className="mb-2">
-                <p className="text-sm font-medium text-blue-900 mb-1">
-                  {lastImportedFileInfo.name}
-                </p>
-                <p className="text-xs text-blue-700">
-                  {formatFileSize(lastImportedFileInfo.size)} • {formatImportTimestamp(lastImportedFileInfo.importTimestamp)}
-                </p>
-              </div>
-              <p className="text-xs text-blue-600">
-                Upload the same file or choose a different one to continue working.
-              </p>
-            </div>
-            <button
-              onClick={onClearLastImportedFile}
-              className="ml-3 flex-shrink-0 p-1 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded transition-colors"
-              title="Clear previous file info"
-            >
-              <XIcon size={16} />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Previous File Display */}
+      <PreviousFileDisplay
+        lastImportedFileInfo={lastImportedFileInfo}
+        hasCurrentData={!!pdfData || multiFileImport.multiFileState.pages.length > 0}
+        onClearLastImportedFile={onClearLastImportedFile}
+      />
       
       <div 
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
