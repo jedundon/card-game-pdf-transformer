@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, MoveIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
 import { 
@@ -20,6 +20,7 @@ import type { ExtractStepProps, MultiFileImportHook } from '../types';
 import { useCardDimensions } from './ExtractStep/hooks/useCardDimensions';
 import { GridSettings } from './ExtractStep/components/GridSettings';
 import { GutterSettings } from './ExtractStep/components/GutterSettings';
+import { PageCropSettings } from './ExtractStep/components/PageCropSettings';
 
 export const ExtractStep: React.FC<ExtractStepProps> = ({
   pdfData,
@@ -847,58 +848,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Page Crop Settings
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Specify margins to crop from each edge (values in source image pixels)
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Top Margin
-                </label>
-                <input type="number" value={extractionSettings.crop.top} onChange={e => handleCropChange('top', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Right Margin
-                </label>
-                <input type="number" value={extractionSettings.crop.right} onChange={e => handleCropChange('right', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bottom Margin
-                </label>
-                <input type="number" value={extractionSettings.crop.bottom} onChange={e => handleCropChange('bottom', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Left Margin
-                </label>
-                <input type="number" value={extractionSettings.crop.left} onChange={e => handleCropChange('left', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-            </div>
-          </div>
-
-          {/* Total crop indicator - immediately after page crop settings */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-            <div className="flex items-center">
-              <MoveIcon size={16} className="text-gray-600 mr-2" />
-              <span className="text-sm text-gray-600">
-                Total crop applied:{' '}
-                {extractionSettings.crop.top + extractionSettings.crop.right + extractionSettings.crop.bottom + extractionSettings.crop.left}
-                px (300 DPI)
-                {pdfMode.type === 'gutter-fold' && (extractionSettings.gutterWidth || 0) > 0 && (
-                  <>
-                    {' + '}
-                    {extractionSettings.gutterWidth}px gutter
-                  </>
-                )}
-              </span>
-            </div>
-          </div>
+          <PageCropSettings
+            crop={extractionSettings.crop}
+            pdfMode={pdfMode}
+            gutterWidth={extractionSettings.gutterWidth}
+            onCropChange={handleCropChange}
+          />
 
           <GridSettings
             grid={extractionSettings.grid}
