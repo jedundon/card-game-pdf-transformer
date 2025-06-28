@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon, MoveVerticalIcon, RotateCcwIcon, PrinterIcon, RulerIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
+import { PageSizeSettings } from './ConfigureStep/components/PageSizeSettings';
+import { CardPositionSettings } from './ConfigureStep/components/CardPositionSettings';
+import { CardSizeSettings } from './ConfigureStep/components/CardSizeSettings';
+import { CalibrationSection } from './ConfigureStep/components/CalibrationSection';
+import { CardPreviewPanel } from './ConfigureStep/components/CardPreviewPanel';
+import { CalibrationWizardModal } from './ConfigureStep/components/CalibrationWizardModal';
 import { 
   getActivePagesWithSource, 
   calculateTotalCards, 
@@ -814,330 +820,26 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Output Page Size
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Width (inches)
-                </label>
-                <input type="number" step="0.1" min="1" max="12" value={outputSettings.pageSize.width} onChange={e => handlePageSizeChange('width', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Height (inches)
-                </label>
-                <input type="number" step="0.1" min="1" max="12" value={outputSettings.pageSize.height} onChange={e => handlePageSizeChange('height', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => handlePageSizeChange('preset', { width: 3.5, height: 3.5 })}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Square (3.5×3.5")
-              </button>
-              <button
-                onClick={() => handlePageSizeChange('preset', { width: 8.5, height: 11 })}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                Letter (8.5×11")
-              </button>
-              <button
-                onClick={() => handlePageSizeChange('preset', { width: 8.27, height: 11.69 })}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                A4 (8.27×11.69")
-              </button>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Position Offset
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Horizontal (inches)
-                </label>
-                <div className="flex items-center">
-                  <MoveHorizontalIcon size={16} className="text-gray-400 mr-2" />
-                  <input type="number" step="0.001" min="-2" max="2" value={outputSettings.offset.horizontal} onChange={e => handleOffsetChange('horizontal', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vertical (inches)
-                </label>
-                <div className="flex items-center">
-                  <MoveVerticalIcon size={16} className="text-gray-400 mr-2" />
-                  <input type="number" step="0.001" min="-2" max="2" value={outputSettings.offset.vertical} onChange={e => handleOffsetChange('vertical', parseFloat(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-                </div>
-              </div>
-            </div>
-          </div>
+          <PageSizeSettings
+            outputSettings={outputSettings}
+            onPageSizeChange={handlePageSizeChange}
+          />
+          <CardPositionSettings
+            outputSettings={outputSettings}
+            onOffsetChange={handleOffsetChange}
+          />
 
-          {/* Card Size Section */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Image Size
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Set the target card dimensions. Bleed extends the print area beyond the card edges for better coverage.
-            </p>
-            
-            {/* Card Image Sizing Mode */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Image Sizing Mode
-              </label>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => handleCardImageSizingModeChange('actual-size')}
-                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
-                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'actual-size'
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Actual Size
-                </button>
-                <button
-                  onClick={() => handleCardImageSizingModeChange('fit-to-card')}
-                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
-                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'fit-to-card'
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Fit to Card
-                </button>
-                <button
-                  onClick={() => handleCardImageSizingModeChange('fill-card')}
-                  className={`flex-1 py-2 px-3 text-sm border rounded-md transition-colors ${
-                    (outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode) === 'fill-card'
-                      ? 'bg-blue-50 border-blue-300 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  Fill Card
-                </button>
-              </div>
-              <div className="mt-2 text-xs text-gray-500">
-                {(() => {
-                  const mode = outputSettings.cardImageSizingMode || DEFAULT_SETTINGS.outputSettings.cardImageSizingMode;
-                  switch (mode) {
-                    case 'actual-size':
-                      return 'Use the image at its original size without scaling';
-                    case 'fit-to-card':
-                      return 'Scale the image to fit entirely within the card boundaries, maintaining aspect ratio';
-                    case 'fill-card':
-                      return 'Scale the image to fill the entire card area, maintaining aspect ratio (may crop edges)';
-                    default:
-                      return '';
-                  }
-                })()}
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4">
-              {/* Width */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Width (inches)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="1" 
-                  max="12" 
-                  value={outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches} 
-                  onChange={e => handleCardSizeChange('widthInches', parseFloat(e.target.value))} 
-                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                />
-              </div>
-              
-              {/* Height */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Height (inches)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.1" 
-                  min="1" 
-                  max="12" 
-                  value={outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches} 
-                  onChange={e => handleCardSizeChange('heightInches', parseFloat(e.target.value))} 
-                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                />
-              </div>
-              
-              {/* Bleed */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Bleed (inches)
-                </label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  min="0" 
-                  max="0.5" 
-                  value={outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches} 
-                  onChange={e => handleBleedMarginChange(parseFloat(e.target.value))} 
-                  className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                />
-              </div>
-            </div>
-            
-            {/* Card Size Presets and Bleed Presets Row */}
-            <div className="grid grid-cols-3 gap-4 mt-3">
-              {/* Card Size Presets - spans first two columns */}
-              <div className="col-span-2">
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleCardSizePreset({ widthInches: 2.5, heightInches: 3.5 })}
-                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Poker (2.5×3.5")
-                  </button>
-                  <button
-                    onClick={() => handleCardSizePreset({ widthInches: 2.25, heightInches: 3.5 })}
-                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Bridge (2.25×3.5")
-                  </button>
-                  <button
-                    onClick={() => handleCardSizePreset({ widthInches: 3.5, heightInches: 3.5 })}
-                    className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-                  >
-                    Square (3.5×3.5")
-                  </button>
-                </div>
-              </div>
-              
-              {/* Bleed Presets - third column */}
-              <div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => handleBleedMarginChange(0)}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
-                  >
-                    0
-                  </button>
-                  <button
-                    onClick={() => handleBleedMarginChange(0.05)}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
-                  >
-                    0.05
-                  </button>
-                  <button
-                    onClick={() => handleBleedMarginChange(0.1)}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 flex-1"
-                  >
-                    0.1
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CardSizeSettings
+            outputSettings={outputSettings}
+            onCardImageSizingModeChange={handleCardImageSizingModeChange}
+            onCardSizeChange={handleCardSizeChange}
+            onBleedMarginChange={handleBleedMarginChange}
+            onCardSizePreset={handleCardSizePreset}
+            onCardScalePercentChange={handleCardScalePercentChange}
+            onRotationChange={handleRotationChange}
+            getRotationForCardType={getRotationForCardType}
+          />
 
-          {/* Card Scale Section */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Scale
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Adjust the scale to compensate for printer enlargement during borderless printing
-            </p>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Scale (percent)
-              </label>
-              <input 
-                type="number" 
-                step="1" 
-                min="50" 
-                max="150" 
-                value={outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent} 
-                onChange={e => handleCardScalePercentChange(parseFloat(e.target.value))} 
-                className="w-full border border-gray-300 rounded-md px-3 py-2" 
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                100% = actual size, &lt;100% = smaller (compensate for printer enlargement)
-              </p>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => handleCardScalePercentChange(100)}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                100% (No scaling)
-              </button>
-              <button
-                onClick={() => handleCardScalePercentChange(95)}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                95% (Common adjustment)
-              </button>
-              <button
-                onClick={() => handleCardScalePercentChange(90)}
-                className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
-              >
-                90% (Strong adjustment)
-              </button>
-            </div>
-          </div>
-
-          {/* Card Rotation Section */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Rotation
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Rotate the final card output for different orientations
-            </p>
-            
-            {/* Front Card Rotation */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                Front Cards
-              </h4>
-              <div className="flex items-center space-x-4">
-                <RotateCcwIcon size={16} className="text-gray-500" />
-                <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`front-${degree}`} onClick={() => handleRotationChange('front', degree)} className={`flex-1 py-2 border ${
-                    getRotationForCardType(outputSettings, 'front') === degree 
-                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  } rounded-md text-sm font-medium`}>
-                      {degree}°
-                    </button>)}
-                </div>
-              </div>
-            </div>
-            
-            {/* Back Card Rotation */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-2">
-                Back Cards
-              </h4>
-              <div className="flex items-center space-x-4">
-                <RotateCcwIcon size={16} className="text-gray-500" />
-                <div className="flex-1 flex space-x-2">
-                  {[0, 90, 180, 270].map(degree => <button key={`back-${degree}`} onClick={() => handleRotationChange('back', degree)} className={`flex-1 py-2 border ${
-                    getRotationForCardType(outputSettings, 'back') === degree 
-                      ? 'bg-blue-50 border-blue-300 text-blue-700' 
-                      : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                  } rounded-md text-sm font-medium`}>
-                      {degree}°
-                    </button>)}
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Printer Calibration Section */}
           <div>
