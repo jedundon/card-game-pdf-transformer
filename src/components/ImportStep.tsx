@@ -9,6 +9,7 @@ import { FileManagerPanel } from './FileManagerPanel';
 import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
 import { TIMEOUT_CONSTANTS } from '../constants';
 import type { ImportStepProps, MultiFileImportHook } from '../types';
+import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -1009,29 +1010,10 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       )}
 
       {/* Start Over Confirmation Dialog */}
-      {showStartOverConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Start Over?</h3>
-            <p className="text-gray-600 mb-4">
-              This will remove all imported files and reset your workflow. You'll need to re-import your files and reconfigure any settings.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button 
-                onClick={handleStartOverCancel}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 rounded transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleStartOverConfirm}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-              >
-                Start Over
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <StartOverConfirmationDialog
+        isOpen={showStartOverConfirm}
+        onConfirm={handleStartOverConfirm}
+        onCancel={handleStartOverCancel}
+      />
     </div>;
 };
