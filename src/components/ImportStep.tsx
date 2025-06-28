@@ -58,6 +58,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   // Track when data stores are ready for thumbnail loading
   const [dataStoreVersion, setDataStoreVersion] = useState<number>(0);
   
+  // Single-file reset functionality - track original page order
+  const [originalPageSettings, setOriginalPageSettings] = useState<any[]>([]);
+  
   // Multi-file support - using shared instance from App.tsx
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -281,6 +284,17 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     multiFileImport.multiFileState.pages.length,
     multiFileImport.multiFileState.files.length // Also track file changes
   ]);
+
+  // Effect to track original page settings for single-file mode
+  useEffect(() => {
+    // Only capture original settings for single-file mode (when no multi-file pages exist)
+    if (pdfData && pageSettings.length > 0 && multiFileImport.multiFileState.pages.length === 0) {
+      // Only set original if we don't have it yet, or if the page count changed
+      if (originalPageSettings.length === 0 || originalPageSettings.length !== pageSettings.length) {
+        setOriginalPageSettings([...pageSettings]);
+      }
+    }
+  }, [pdfData, pageSettings, multiFileImport.multiFileState.pages.length, originalPageSettings.length]);
   
   // Effect to start loading thumbnails for multi-file imports
   useEffect(() => {
@@ -343,6 +357,27 @@ export const ImportStep: React.FC<ImportStepProps> = ({
 
   // File processing functions are now unified under processMultipleFiles
 
+  // Single-file reset functionality
+  const isSingleFileReordered = useCallback((): boolean => {
+    if (!pdfData || pageSettings.length === 0 || originalPageSettings.length === 0) {
+      return false;
+    }
+    
+    // Compare current page settings with original
+    return !originalPageSettings.every((origPage, index) => 
+      pageSettings[index] && 
+      origPage.type === pageSettings[index].type && 
+      origPage.skip === pageSettings[index].skip &&
+      origPage.originalPageIndex === pageSettings[index].originalPageIndex
+    );
+  }, [pdfData, pageSettings, originalPageSettings]);
+  
+  const resetSingleFileToImportOrder = useCallback(() => {
+    if (originalPageSettings.length > 0) {
+      onPageSettingsChange([...originalPageSettings]);
+    }
+  }, [originalPageSettings, onPageSettingsChange]);
+
   
   // Validate if file is a PDF
   const isValidPdfFile = (file: File): boolean => {
@@ -387,6 +422,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     setThumbnailErrors({});
     setHoveredThumbnail(null);
     setDataStoreVersion(0);
+    
+    // Reset single-file reset functionality
+    setOriginalPageSettings([]);
     
     // Reset page settings
     onPageSettingsChange([]);
@@ -783,8 +821,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     }))
                 }
                 pdfMode={pdfMode}
-                onResetToImportOrder={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.resetToImportOrder : undefined}
-                isPagesReordered={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.isPagesReordered() : false}
+                onResetToImportOrder={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.resetToImportOrder : (pdfData && originalPageSettings.length > 0 ? resetSingleFileToImportOrder : undefined)}
+                isPagesReordered={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.isPagesReordered() : isSingleFileReordered()}
                 onPagesReorder={(reorderedPages) => {
                   if (multiFileImport.multiFileState.pages.length > 0) {
                     // Get the current pages before reordering to determine the mapping
