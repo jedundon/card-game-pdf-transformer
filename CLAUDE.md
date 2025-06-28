@@ -220,3 +220,210 @@ When debugging PDF vs image discrepancies:
 - Process with identical settings through both pipelines  
 - Compare pixel-perfect results at each stage
 - Verify preview matches final extraction for both file types
+
+## Component Architecture and Refactoring Insights
+
+### Major Refactoring (December 2024)
+The codebase underwent a comprehensive component decomposition that transformed three massive components into a modular, maintainable architecture. This section documents key architectural insights and best practices discovered during this process.
+
+#### Component Decomposition Results
+- **ImportStep.tsx**: 874+ → 582 lines (-292 lines, -33%)
+- **ExtractStep.tsx**: 1778+ → ~800 lines (-978 lines, -55%) 
+- **ConfigureStep.tsx**: 1647+ → ~600 lines (-1047 lines, -64%)
+- **Total**: ~2,317 lines reduced, 22 focused components created
+
+### Architectural Patterns Established
+
+#### Component Structure Standards
+```
+src/components/
+├── [StepName].tsx                    # Main step component (slim coordinator)
+├── [StepName]/
+│   ├── components/                   # Step-specific UI components
+│   │   ├── [FeatureSection].tsx     # Logical feature groupings
+│   │   └── [UIElement].tsx          # Reusable UI elements
+│   └── hooks/                       # Step-specific custom hooks
+│       └── use[Feature].ts          # Extracted business logic
+```
+
+#### TypeScript Interface Design
+**Best Practice**: Create comprehensive prop interfaces with JSDoc documentation:
+
+```typescript
+interface ComponentProps {
+  /** Primary data or state */
+  data: DataType;
+  /** Event handlers with descriptive names */
+  onDataChange: (newData: DataType) => void;
+  /** Optional configuration */
+  config?: ConfigType;
+}
+
+/**
+ * Brief component description explaining its single responsibility
+ * 
+ * Detailed explanation of component purpose, key features, and usage context.
+ * Include any important behavioral notes or dependencies.
+ */
+export const Component: React.FC<ComponentProps> = ({ ... }) => {
+```
+
+#### Component Responsibility Guidelines
+1. **Single Responsibility**: Each component should handle one logical UI concern
+2. **80-200 Lines**: Target component size for optimal maintainability
+3. **Pure Props**: Avoid direct imports of global state when possible
+4. **Event Boundaries**: Clear event handler interfaces between components
+
+### Critical Icon Import Pattern
+**IMPORTANT**: Lucide React icon imports changed naming convention. Always use base names:
+
+```typescript
+// ✅ CORRECT: Use base icon names
+import { Printer, Upload, Ruler, RotateCcw } from 'lucide-react';
+
+// ❌ WRONG: Old "Icon" suffix pattern (will cause runtime errors)
+import { PrinterIcon, UploadIcon, RulerIcon, RotateCcwIcon } from 'lucide-react';
+```
+
+### Custom Hook Extraction Patterns
+
+#### When to Extract Hooks
+- **Complex State Logic**: When useState patterns become complex
+- **Expensive Calculations**: When useMemo dependencies grow large
+- **Reusable Patterns**: When multiple components need similar logic
+
+#### Example: useCardDimensions Hook
+```typescript
+// ✅ GOOD: Extracted complex calculation with memoization
+export const useCardDimensions = (
+  extractionSettings: ExtractionSettings,
+  outputSettings: OutputSettings
+) => {
+  return useMemo(() => {
+    // Complex calculation logic here
+    return { widthPx, heightPx, widthInches, heightInches };
+  }, [extractionSettings.grid, outputSettings.cardSize]);
+};
+```
+
+### Error Handling and User Experience
+
+#### Progressive Enhancement Pattern
+```typescript
+// ✅ PATTERN: Graceful degradation with specific error messages
+const [error, setError] = useState<string>('');
+
+try {
+  // Risky operation
+} catch (error) {
+  let errorMessage = 'Operation failed';
+  
+  if (error instanceof Error) {
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Operation timed out. Please try again.';
+    } else if (error.message.includes('memory')) {
+      errorMessage = 'Not enough memory. Try refreshing the page.';
+    }
+  }
+  
+  setError(errorMessage);
+}
+```
+
+#### Timeout and Performance Patterns
+```typescript
+// ✅ PATTERN: Race conditions with timeouts for better UX
+const extractPromise = extractCardImage(cardIndex);
+const timeoutPromise = new Promise<null>((_, reject) => 
+  setTimeout(() => reject(new Error('Extraction timed out')), 10000)
+);
+
+const result = await Promise.race([extractPromise, timeoutPromise]);
+```
+
+### State Management Insights
+
+#### Multi-File State Complexity
+The multi-file import system revealed important patterns for complex state management:
+
+1. **Unified Data Models**: Always use consistent data structures across file types
+2. **Source Awareness**: Components should know whether they're handling PDF or image data
+3. **Stable References**: Use useMemo for data maps to prevent unnecessary re-renders
+
+```typescript
+// ✅ PATTERN: Stable reference pattern for complex data
+const imageDataMap = useMemo(() => {
+  const map = new Map();
+  pages.forEach(page => {
+    if (page.fileType === 'image') {
+      map.set(page.fileName, getImageData(page.fileName));
+    }
+  });
+  return map;
+}, [pages]); // Only recreate when pages change
+```
+
+#### Debounced Settings Pattern
+```typescript
+// ✅ PATTERN: Debounced settings for expensive operations
+const debouncedSettingsChange = useCallback((newSettings: any) => {
+  if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  
+  pendingSettingsRef.current = newSettings;
+  timeoutRef.current = setTimeout(() => {
+    if (pendingSettingsRef.current) {
+      onSettingsChange(pendingSettingsRef.current);
+      pendingSettingsRef.current = null;
+    }
+  }, 300);
+}, [onSettingsChange]);
+```
+
+### Performance Optimizations Discovered
+
+#### Canvas Processing Efficiency
+- **Batch Operations**: Group canvas operations to minimize context switches
+- **Image Caching**: Cache processed images with timestamp-based expiration
+- **Progressive Loading**: Load thumbnails in batches to avoid overwhelming the browser
+
+#### Memory Management
+```typescript
+// ✅ PATTERN: Bounded cache with LRU eviction
+if (cache.size > MAX_CACHE_SIZE) {
+  const entries = Array.from(cache.entries());
+  entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+  // Remove oldest entries
+  for (let i = 0; i < EVICTION_COUNT; i++) {
+    cache.delete(entries[i][0]);
+  }
+}
+```
+
+### Development Workflow Insights
+
+#### Git Commit Strategy
+Successful refactoring used structured commits with clear scope:
+- `Extract [ComponentName] component from [ParentComponent]`
+- `Fix [specific issue] causing [error description]`
+- `Add [feature] with [implementation detail]`
+
+#### Testing During Refactoring
+1. **Incremental Validation**: Test functionality after each component extraction
+2. **Cross-Browser Testing**: Verify icon imports and component rendering
+3. **Error Boundary Testing**: Ensure error handling works in degraded states
+
+### Future Development Guidelines
+
+#### When Adding New Features
+1. **Start Small**: Create focused components following established patterns
+2. **TypeScript First**: Define interfaces before implementation
+3. **Test Edge Cases**: Consider multi-file scenarios and error states
+4. **Performance Conscious**: Use memoization and debouncing appropriately
+
+#### Maintenance Best Practices
+1. **Component Size Monitoring**: Keep components under 300 lines
+2. **Dependency Auditing**: Regularly review useEffect dependencies
+3. **Interface Evolution**: Update TypeScript interfaces when adding features
+4. **Documentation**: Maintain JSDoc comments for complex business logic
+
+This refactoring established a solid foundation for continued development while maintaining full functionality and improving developer experience significantly.
