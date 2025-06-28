@@ -68,14 +68,53 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
   const getOverlayScaleFactor = useCallback((renderedPageData: RenderedPageData | null) => {
     if (!canvasRef.current || !renderedPageData) return 1;
     
-    const extractionToPreviewScale = renderedPageData.previewScale;
-    const dpiMultiplier = renderedPageData.dpiMultiplier || 1.0;
+    // Get canvas dimensions - use offsetWidth/Height if available (accounts for CSS scaling)
+    const canvasDisplayWidth = canvasRef.current.offsetWidth || canvasRef.current.width;
+    const canvasDisplayHeight = canvasRef.current.offsetHeight || canvasRef.current.height;
     
-    if (dpiMultiplier > 1.0) {
-      return extractionToPreviewScale;
+    if (!canvasDisplayWidth || !canvasDisplayHeight) return 1;
+    
+    // For both PDF and image sources, we need to convert from extraction DPI coordinates
+    // (where crop values are defined) to the actual canvas display coordinates
+    let sourceWidthInExtractionDPI: number;
+    let sourceHeightInExtractionDPI: number;
+    
+    if (renderedPageData.sourceType === 'pdf') {
+      // PDF source: page dimensions are in PDF points (72 DPI), convert to extraction DPI
+      // The rendered canvas shows the page scaled, but crop values are in extraction DPI
+      const pdfToExtractionScale = 300 / 72; // Convert from PDF points to extraction DPI
+      sourceWidthInExtractionDPI = (renderedPageData.width / renderedPageData.previewScale / renderedPageData.dpiMultiplier) * pdfToExtractionScale;
+      sourceHeightInExtractionDPI = (renderedPageData.height / renderedPageData.previewScale / renderedPageData.dpiMultiplier) * pdfToExtractionScale;
     } else {
-      return extractionToPreviewScale;
+      // Image source: page dimensions are already in extraction DPI equivalent (300 DPI)
+      sourceWidthInExtractionDPI = renderedPageData.width / renderedPageData.previewScale / renderedPageData.dpiMultiplier;
+      sourceHeightInExtractionDPI = renderedPageData.height / renderedPageData.previewScale / renderedPageData.dpiMultiplier;
     }
+    
+    if (!sourceWidthInExtractionDPI || !sourceHeightInExtractionDPI) return 1;
+    
+    // Calculate scale factor: how many display pixels per extraction DPI pixel
+    // This accounts for the full transformation: extraction DPI -> canvas size -> display size
+    const scaleX = canvasDisplayWidth / sourceWidthInExtractionDPI;
+    const scaleY = canvasDisplayHeight / sourceHeightInExtractionDPI;
+    
+    // Use consistent scale factor (average of X and Y to handle any minor aspect ratio differences)
+    const finalScale = (scaleX + scaleY) / 2;
+    
+    // Validate the scale factor
+    if (!isFinite(finalScale) || finalScale <= 0) {
+      console.warn('Invalid overlay scale factor calculated:', finalScale, {
+        canvasDisplayWidth,
+        canvasDisplayHeight,
+        sourceWidthInExtractionDPI,
+        sourceHeightInExtractionDPI,
+        scaleX,
+        scaleY
+      });
+      return 1;
+    }
+    
+    return finalScale;
   }, []);
 
   // --- Overlay: Margins ---
