@@ -228,7 +228,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           filePdfData, 
           actualPageNumber, 
           cardOnPage, 
-          extractionSettings
+          extractionSettings,
+          cardIndex, // globalCardIndex
+          activePages, 
+          pdfMode
         );
       } catch (error) {
         console.error(`ConfigureStep: Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);

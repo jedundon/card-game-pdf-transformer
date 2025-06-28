@@ -21,7 +21,8 @@
  */
 
 import { DPI_CONSTANTS } from '../constants';
-import type { PdfData, ExtractionSettings } from '../types';
+import type { PdfData, ExtractionSettings, PdfMode, PageSettings } from '../types';
+import { getCardInfo } from './cardUtils';
 
 /**
  * Extract a single card from a specific PDF page
@@ -66,7 +67,10 @@ export async function extractCardImageFromPdfPage(
   pdfData: PdfData,
   pageNumber: number,
   cardOnPage: number,
-  extractionSettings: ExtractionSettings
+  extractionSettings: ExtractionSettings,
+  globalCardIndex?: number,
+  activePages?: PageSettings[],
+  pdfMode?: PdfMode
 ): Promise<string | null> {
   let canvas: HTMLCanvasElement | null = null;
   let cardCanvas: HTMLCanvasElement | null = null;
@@ -173,8 +177,43 @@ export async function extractCardImageFromPdfPage(
       0, 0, finalCardWidth, finalCardHeight
     );
     
-    // Convert card canvas to data URL for use in other components
-    const dataUrl = cardCanvas.toDataURL('image/png', 1.0); // Maximum quality
+    // Apply image rotation if specified
+    let finalCanvas = cardCanvas;
+    if (extractionSettings.imageRotation && globalCardIndex !== undefined && activePages && pdfMode) {
+      // Determine card type to get appropriate rotation
+      const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+      const cardInfo = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
+      const rotation = extractionSettings.imageRotation[cardType] || 0;
+      
+      if (rotation !== 0) {
+        // Create a new canvas for the rotated card
+        const rotatedCanvas = document.createElement('canvas');
+        const rotatedContext = rotatedCanvas.getContext('2d');
+        
+        if (rotatedContext) {
+          // Set canvas dimensions based on rotation
+          if (rotation === 90 || rotation === 270) {
+            // Swap dimensions for 90° and 270° rotations
+            rotatedCanvas.width = cardCanvas.height;
+            rotatedCanvas.height = cardCanvas.width;
+          } else {
+            rotatedCanvas.width = cardCanvas.width;
+            rotatedCanvas.height = cardCanvas.height;
+          }
+          
+          // Apply rotation transformation
+          rotatedContext.translate(rotatedCanvas.width / 2, rotatedCanvas.height / 2);
+          rotatedContext.rotate((rotation * Math.PI) / 180);
+          rotatedContext.drawImage(cardCanvas, -cardCanvas.width / 2, -cardCanvas.height / 2);
+          
+          finalCanvas = rotatedCanvas;
+        }
+      }
+    }
+    
+    // Convert final canvas to data URL for use in other components
+    const dataUrl = finalCanvas.toDataURL('image/png', 1.0); // Maximum quality
     
     return dataUrl;
     

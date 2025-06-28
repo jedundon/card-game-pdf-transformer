@@ -308,7 +308,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               filePdfData, 
               actualPageNumber, 
               cardOnPage, 
-              extractionSettings
+              extractionSettings,
+              cardIndex, // globalCardIndex
+              activePages, 
+              pdfMode
             );
           } else {
             console.error(`ExportStep: Invalid page info for card ${cardId} at page ${pageIndex}:`, currentPageInfo);

@@ -203,7 +203,10 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           filePdfData, 
           actualPageNumber, 
           cardOnPage, 
-          extractionSettings
+          extractionSettings,
+          cardIndex, // globalCardIndex
+          activePages, 
+          pdfMode
         );
       } catch (error) {
         console.error(`Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);

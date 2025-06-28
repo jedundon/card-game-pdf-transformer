@@ -41,6 +41,7 @@ import {
   processCardImageForRendering
 } from '../utils/renderUtils';
 import { generateColorCalibrationPDF } from '../utils/calibrationUtils';
+import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
 import { 
   applyColorTransformation,
   getDefaultColorTransformation,
@@ -52,103 +53,6 @@ import {
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS, DPI_CONSTANTS } from '../constants';
 
-/**
- * Extract a single card from a specific PDF page
- * This is a simplified version for multi-file scenarios
- */
-async function extractCardImageFromPdfPage(
-  pdfData: any,
-  pageNumber: number,
-  cardOnPage: number,
-  extractionSettings: any
-): Promise<string | null> {
-  try {
-    // Get the PDF page
-    const page = await pdfData.getPage(pageNumber);
-    
-    // Calculate scale for extraction DPI
-    const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
-    const viewport = page.getViewport({ scale: extractionScale });
-    
-    // Create canvas for rendering
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Failed to get canvas context');
-    }
-    
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    
-    // Render the PDF page to canvas
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport
-    };
-    
-    await page.render(renderContext).promise;
-    
-    // Apply page-level cropping
-    const sourceWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
-    const sourceHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
-    
-    if (sourceWidth <= 0 || sourceHeight <= 0) {
-      throw new Error('Invalid dimensions after cropping');
-    }
-    
-    // Calculate card grid position
-    const cardWidthPx = sourceWidth / extractionSettings.grid.columns;
-    const cardHeightPx = sourceHeight / extractionSettings.grid.rows;
-    
-    const cardRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
-    const cardCol = cardOnPage % extractionSettings.grid.columns;
-    
-    // Calculate card position
-    const cardX = extractionSettings.crop.left + cardCol * cardWidthPx;
-    const cardY = extractionSettings.crop.top + cardRow * cardHeightPx;
-    
-    // Apply individual card cropping if specified
-    let finalCardWidth = cardWidthPx;
-    let finalCardHeight = cardHeightPx;
-    let finalCardX = cardX;
-    let finalCardY = cardY;
-    
-    if (extractionSettings.cardCrop) {
-      finalCardX += extractionSettings.cardCrop.left || 0;
-      finalCardY += extractionSettings.cardCrop.top || 0;
-      finalCardWidth -= (extractionSettings.cardCrop.left || 0) + (extractionSettings.cardCrop.right || 0);
-      finalCardHeight -= (extractionSettings.cardCrop.top || 0) + (extractionSettings.cardCrop.bottom || 0);
-    }
-    
-    if (finalCardWidth <= 0 || finalCardHeight <= 0) {
-      throw new Error('Invalid card dimensions after card cropping');
-    }
-    
-    // Extract the card area
-    const cardCanvas = document.createElement('canvas');
-    const cardContext = cardCanvas.getContext('2d');
-    if (!cardContext) {
-      throw new Error('Failed to get card canvas context');
-    }
-    
-    cardCanvas.width = finalCardWidth;
-    cardCanvas.height = finalCardHeight;
-    
-    // Copy the card area from the main canvas
-    cardContext.drawImage(
-      canvas,
-      finalCardX, finalCardY, finalCardWidth, finalCardHeight,
-      0, 0, finalCardWidth, finalCardHeight
-    );
-    
-    // Convert to data URL
-    return cardCanvas.toDataURL('image/png');
-    
-  } catch (error) {
-    console.error('Failed to extract card from PDF page:', error);
-    throw error;
-  }
-}
 
 /**
  * GridPreview component for showing the actual calibration grid
@@ -713,7 +617,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           filePdfData, 
           actualPageNumber, 
           cardOnPage, 
-          extractionSettings
+          extractionSettings,
+          cardIndex, // globalCardIndex
+          activePages, 
+          pdfMode
         );
       } catch (error) {
         console.error(`ColorCalibrationStep: Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
