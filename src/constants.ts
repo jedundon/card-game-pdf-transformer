@@ -131,3 +131,26 @@ export const DRAG_DROP_CONSTANTS = {
   /** Z-index for dragged elements */
   DRAG_Z_INDEX: 1000
 } as const;
+
+/**
+ * Timeout constants for async operations
+ * 
+ * Centralized timeout values to prevent operations from hanging indefinitely.
+ * Values are carefully chosen based on operation complexity and user experience.
+ */
+export const TIMEOUT_CONSTANTS = {
+  /** Card extraction timeout (30 seconds) - allows for complex PDF processing */
+  CARD_EXTRACTION_TIMEOUT: 30000,
+  /** Image processing timeout (20 seconds) - for canvas operations and transformations */
+  IMAGE_PROCESSING_TIMEOUT: 20000,
+  /** Color transformation timeout (15 seconds) - for color adjustment operations */
+  COLOR_TRANSFORMATION_TIMEOUT: 15000,
+  /** Render calculation timeout (10 seconds) - for dimension and layout calculations */
+  RENDER_CALCULATION_TIMEOUT: 10000,
+  /** Settings debounce delay (500ms) - prevents excessive API calls during user input */
+  SETTINGS_DEBOUNCE_DELAY: 500,
+  /** Preview update delay (250ms) - balances responsiveness with performance */
+  PREVIEW_UPDATE_DELAY: 250,
+  /** Canvas operation debounce (100ms) - prevents excessive canvas redraws */
+  CANVAS_DEBOUNCE_DELAY: 100
+} as const;

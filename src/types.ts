@@ -446,3 +446,139 @@ export type PageReorderHandler = (oldIndex: number, newIndex: number) => void;
 export type PageRemoveHandler = (pageIndex: number) => void;
 export type FileRemoveHandler = (fileName: string) => void;
 export type MultiFileImportStateChangeHandler = (state: MultiFileImportState) => void;
+
+/**
+ * Multi-file import hook interface
+ * 
+ * Defines the public API for the multi-file import functionality.
+ * This hook manages state for importing and processing multiple PDF and image files.
+ */
+export interface MultiFileImportHook {
+  /** Current multi-file import state */
+  multiFileState: MultiFileImportState;
+  
+  /** Add new files to the import */
+  addFiles: (files: File[]) => Promise<{
+    success: boolean;
+    addedFiles: FileSource[];
+    addedPages: (PageSettings & PageSource)[];
+    errors: Record<string, string>;
+  }>;
+  
+  /** Process initial files for import */
+  processFiles: (files: File[]) => Promise<{
+    files: FileSource[];
+    pages: (PageSettings & PageSource)[];
+    firstPdf: PdfData | null;
+  }>;
+  
+  /** Remove a specific file and its pages */
+  removeFile: (fileName: string) => void;
+  
+  /** Remove a specific page */
+  removePage: (pageIndex: number) => void;
+  
+  /** Reset all import state */
+  reset: () => void;
+  
+  /** Get list of imported files */
+  getFileList: () => FileSource[];
+  
+  /** Get image data for a specific file */
+  getImageData: (fileName: string) => ImageFileData | null;
+  
+  /** Get PDF data for a specific file */
+  getPdfData: (fileName: string) => PdfData | null;
+  
+  /** Get all PDF data */
+  getAllPdfData: () => Map<string, PdfData>;
+  
+  /** Get all image data */
+  getAllImageData: () => Map<string, ImageFileData>;
+  
+  /** Get combined PDF data (for single-file compatibility) */
+  getCombinedPdfData: () => PdfData | null;
+  
+  /** Update all page settings */
+  updateAllPageSettings: (pages: (PageSettings & PageSource)[]) => void;
+  
+  /** Reset pages to import order */
+  resetToImportOrder: () => void;
+  
+  /** Check if pages have been reordered */
+  isPagesReordered: () => boolean;
+}
+
+/**
+ * Component prop interfaces for better type safety
+ */
+
+/** Props for ImportStep component */
+export interface ImportStepProps {
+  onFileSelect: FileSelectHandler;
+  onModeSelect: ModeSelectHandler;
+  onPageSettingsChange: PageSettingsChangeHandler;
+  onNext: () => void;
+  onResetToDefaults: () => void;
+  onTriggerImportSettings: () => void;
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  pageSettings: PageSettings[];
+  autoRestoredSettings: boolean;
+  lastImportedFileInfo: any | null; // TODO: Define proper type
+  onClearLastImportedFile: () => void;
+  multiFileImport: MultiFileImportHook;
+}
+
+/** Props for ExtractStep component */
+export interface ExtractStepProps {
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  pageSettings: PageSettings[];
+  extractionSettings: ExtractionSettings;
+  multiFileImport: MultiFileImportHook;
+  onSettingsChange: ExtractionSettingsChangeHandler;
+  onCardDimensionsChange: CardDimensionsChangeHandler;
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+/** Props for ColorCalibrationStep component */
+export interface ColorCalibrationStepProps {
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  pageSettings: PageSettings[];
+  extractionSettings: ExtractionSettings;
+  colorSettings: any; // TODO: Define proper color settings type
+  multiFileImport: MultiFileImportHook;
+  onSettingsChange: (settings: any) => void; // TODO: Type this properly
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+/** Props for ConfigureStep component */
+export interface ConfigureStepProps {
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  extractionSettings: ExtractionSettings;
+  outputSettings: OutputSettings;
+  pageSettings: PageSettings[];
+  cardDimensions: CardDimensions | null;
+  multiFileImport: MultiFileImportHook;
+  onSettingsChange: OutputSettingsChangeHandler;
+  onPrevious: () => void;
+  onNext: () => void;
+}
+
+/** Props for ExportStep component */
+export interface ExportStepProps {
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  pageSettings: PageSettings[];
+  extractionSettings: ExtractionSettings;
+  outputSettings: OutputSettings;
+  colorSettings: any; // TODO: Define proper color settings type
+  currentPdfFileName?: string;
+  multiFileImport: MultiFileImportHook;
+  onPrevious: () => void;
+}
