@@ -22,118 +22,11 @@ import {
   ColorTransformation,
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
-import { DPI_CONSTANTS } from '../constants';
+import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
+import { DPI_CONSTANTS, TIMEOUT_CONSTANTS } from '../constants';
+import type { ExportStepProps, MultiFileImportHook } from '../types';
 import jsPDF from 'jspdf';
 
-/**
- * Extract a single card from a specific PDF page
- * This is a simplified version for multi-file scenarios
- */
-async function extractCardImageFromPdfPage(
-  pdfData: any,
-  pageNumber: number,
-  cardOnPage: number,
-  extractionSettings: any
-): Promise<string | null> {
-  try {
-    // Get the PDF page
-    const page = await pdfData.getPage(pageNumber);
-    
-    // Calculate scale for extraction DPI
-    const extractionScale = DPI_CONSTANTS.EXTRACTION_DPI / DPI_CONSTANTS.SCREEN_DPI;
-    const viewport = page.getViewport({ scale: extractionScale });
-    
-    // Create canvas for rendering
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Failed to get canvas context');
-    }
-    
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    
-    // Render the PDF page to canvas
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport
-    };
-    
-    await page.render(renderContext).promise;
-    
-    // Apply page-level cropping
-    const sourceWidth = viewport.width - extractionSettings.crop.left - extractionSettings.crop.right;
-    const sourceHeight = viewport.height - extractionSettings.crop.top - extractionSettings.crop.bottom;
-    
-    if (sourceWidth <= 0 || sourceHeight <= 0) {
-      throw new Error('Invalid dimensions after cropping');
-    }
-    
-    // Calculate card grid position
-    const cardWidthPx = sourceWidth / extractionSettings.grid.columns;
-    const cardHeightPx = sourceHeight / extractionSettings.grid.rows;
-    
-    const cardRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
-    const cardCol = cardOnPage % extractionSettings.grid.columns;
-    
-    // Calculate card position
-    const cardX = extractionSettings.crop.left + cardCol * cardWidthPx;
-    const cardY = extractionSettings.crop.top + cardRow * cardHeightPx;
-    
-    // Apply individual card cropping if specified
-    let finalCardWidth = cardWidthPx;
-    let finalCardHeight = cardHeightPx;
-    let finalCardX = cardX;
-    let finalCardY = cardY;
-    
-    if (extractionSettings.cardCrop) {
-      finalCardX += extractionSettings.cardCrop.left || 0;
-      finalCardY += extractionSettings.cardCrop.top || 0;
-      finalCardWidth -= (extractionSettings.cardCrop.left || 0) + (extractionSettings.cardCrop.right || 0);
-      finalCardHeight -= (extractionSettings.cardCrop.top || 0) + (extractionSettings.cardCrop.bottom || 0);
-    }
-    
-    if (finalCardWidth <= 0 || finalCardHeight <= 0) {
-      throw new Error('Invalid card dimensions after card cropping');
-    }
-    
-    // Extract the card area
-    const cardCanvas = document.createElement('canvas');
-    const cardContext = cardCanvas.getContext('2d');
-    if (!cardContext) {
-      throw new Error('Failed to get card canvas context');
-    }
-    
-    cardCanvas.width = finalCardWidth;
-    cardCanvas.height = finalCardHeight;
-    
-    // Copy the card area from the main canvas
-    cardContext.drawImage(
-      canvas,
-      finalCardX, finalCardY, finalCardWidth, finalCardHeight,
-      0, 0, finalCardWidth, finalCardHeight
-    );
-    
-    // Convert to data URL
-    return cardCanvas.toDataURL('image/png');
-    
-  } catch (error) {
-    console.error('Failed to extract card from PDF page:', error);
-    throw error;
-  }
-}
-
-interface ExportStepProps {
-  pdfData: any;
-  pdfMode: any;
-  pageSettings: any;
-  extractionSettings: any;
-  outputSettings: any;
-  colorSettings: any;
-  currentPdfFileName?: string;
-  multiFileImport: any; // Add multiFileImport as a prop
-  onPrevious: () => void;
-}
 
 export const ExportStep: React.FC<ExportStepProps> = ({
   pdfData,
@@ -423,7 +316,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             continue;
           }
           const extractTimeout = new Promise<null>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} extraction timed out`)), 30000)
+            setTimeout(() => reject(new Error(`Card ${cardId} extraction timed out`)), TIMEOUT_CONSTANTS.CARD_EXTRACTION_TIMEOUT)
           );
           
           const cardImageUrl = await Promise.race([extractPromise, extractTimeout]);
@@ -444,7 +337,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           // Use unified rendering functions with timeout
           const renderPromise = calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
           const renderTimeout = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} render calculation timed out`)), 20000)
+            setTimeout(() => reject(new Error(`Card ${cardId} render calculation timed out`)), TIMEOUT_CONSTANTS.IMAGE_PROCESSING_TIMEOUT)
           );
           
           const renderDimensions = await Promise.race([renderPromise, renderTimeout]);
@@ -452,7 +345,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           
           const processPromise = processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
           const processTimeout = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} image processing timed out`)), 20000)
+            setTimeout(() => reject(new Error(`Card ${cardId} image processing timed out`)), TIMEOUT_CONSTANTS.IMAGE_PROCESSING_TIMEOUT)
           );
           
           const processedImage = await Promise.race([processPromise, processTimeout]);
@@ -465,7 +358,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             try {
               const colorPromise = applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
               const colorTimeout = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error(`Card ${cardId} color transformation timed out`)), 15000)
+                setTimeout(() => reject(new Error(`Card ${cardId} color transformation timed out`)), TIMEOUT_CONSTANTS.COLOR_TRANSFORMATION_TIMEOUT)
               );
               
               finalImageUrl = await Promise.race([colorPromise, colorTimeout]);
