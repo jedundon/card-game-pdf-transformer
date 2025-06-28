@@ -10,6 +10,7 @@ import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
 import { TIMEOUT_CONSTANTS } from '../constants';
 import type { ImportStepProps, MultiFileImportHook } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
+import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -964,40 +965,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               />
           )}
 
-      {/* Thumbnail Popup - Show for any imported content */}
-      {hoveredThumbnail !== null && thumbnails[hoveredThumbnail] && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.3)' }}
-          onClick={() => setHoveredThumbnail(null)}
-        >
-          <div 
-            className="bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-[95vw] max-h-[95vh] overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-gray-800">
-                Page {hoveredThumbnail + 1} Preview
-              </h4>
-              <button
-                onClick={() => setHoveredThumbnail(null)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <XIcon size={16} />
-              </button>
-            </div>
-            <img
-              src={thumbnails[hoveredThumbnail]}
-              alt={`Page ${hoveredThumbnail + 1} preview`}
-              className="w-auto h-auto border border-gray-200 rounded"
-              style={{
-                maxWidth: 'min(600px, 90vw)',
-                maxHeight: 'min(600px, 90vh)'
-              }}
-            />
-          </div>
-        </div>
-      )}
+      {/* Thumbnail Popup */}
+      <ThumbnailPopup
+        pageIndex={hoveredThumbnail}
+        thumbnails={thumbnails}
+        onClose={() => setHoveredThumbnail(null)}
+      />
 
       {/* Next Button - Show when any content is imported */}
       {(pdfData || multiFileImport.multiFileState.pages.length > 0) && (
