@@ -293,6 +293,7 @@ export function createInitialMultiFileState(): MultiFileImportState {
       isDragging: false,
       pageOrder: []
     },
+    originalPageOrder: [],
     isProcessing: false,
     errors: {}
   };

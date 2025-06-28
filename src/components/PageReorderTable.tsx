@@ -24,7 +24,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from 'lucide-react';
+import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon } from 'lucide-react';
 import { 
   PageSettings, 
   PageSource, 
@@ -59,6 +59,10 @@ interface PageReorderTableProps {
   onPageSettingsChange: (pageIndex: number, settings: Partial<PageSettings>) => void;
   /** Callback when a page is removed */
   onPageRemove: (pageIndex: number) => void;
+  /** Callback to reset page order to original import order */
+  onResetToImportOrder?: () => void;
+  /** Whether pages have been reordered from original import order */
+  isPagesReordered?: boolean;
   /** Map of page thumbnails (page index -> data URL) */
   thumbnails: Record<number, string>;
   /** Map of thumbnail loading states */
@@ -82,6 +86,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   onPagesReorder,
   onPageSettingsChange,
   onPageRemove,
+  onResetToImportOrder,
+  isPagesReordered = false,
   thumbnails,
   thumbnailLoading,
   thumbnailErrors,
@@ -383,9 +389,21 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   return (
     <div className="mt-6">
-      <h3 className="text-lg font-medium text-gray-800 mb-3">
-        Page Management & Reordering
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-medium text-gray-800">
+          Page Management & Reordering
+        </h3>
+        {onResetToImportOrder && pages.length > 1 && isPagesReordered && (
+          <button
+            onClick={onResetToImportOrder}
+            className="inline-flex items-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 border border-gray-300 transition-colors"
+            title="Reset page order to original import order"
+          >
+            <RotateCcwIcon size={12} className="mr-1" />
+            Reset to Import Order
+          </button>
+        )}
+      </div>
       
       <div className="border border-gray-200 rounded-md overflow-hidden relative">
         {/* Drop line indicator */}

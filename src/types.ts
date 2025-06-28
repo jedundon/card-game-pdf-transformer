@@ -377,6 +377,8 @@ export interface MultiFileImportState {
   pages: (PageSettings & PageSource)[];
   /** Current page reordering state */
   reorderState: PageReorderState;
+  /** Original import order of pages for reset functionality */
+  originalPageOrder: (PageSettings & PageSource)[];
   /** Whether any files are currently being processed */
   isProcessing: boolean;
   /** Error messages for failed file imports */

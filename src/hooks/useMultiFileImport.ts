@@ -75,6 +75,10 @@ interface UseMultiFileImportReturn {
   reorderPages: (oldIndex: number, newIndex: number) => void;
   /** Remove a specific page */
   removePage: (pageIndex: number) => void;
+  /** Reset page order to original import order */
+  resetToImportOrder: () => void;
+  /** Check if pages have been reordered from original import order */
+  isPagesReordered: () => boolean;
   /** Get combined PDF data (for backward compatibility) */
   getCombinedPdfData: () => PdfData | null;
   /** Get combined page settings (for backward compatibility) */
@@ -110,6 +114,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
       isDragging: false,
       pageOrder: []
     },
+    originalPageOrder: [],
     isProcessing: false,
     errors: {}
   });
@@ -314,6 +319,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
           ...prev.reorderState,
           pageOrder: newPages.map((_, index) => index)
         },
+        originalPageOrder: [...newPages], // Store original order for reset functionality
         isProcessing: false,
         errors
       }));
@@ -482,16 +488,21 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
 
       // Update state by appending to existing files and pages
       if (addedFiles.length > 0 || addedPages.length > 0) {
-        setMultiFileState(prev => ({
-          ...prev,
-          files: [...prev.files, ...addedFiles], // Append to existing files
-          pages: [...prev.pages, ...addedPages], // Append to existing pages
-          reorderState: {
-            ...prev.reorderState,
-            pageOrder: [...prev.pages, ...addedPages].map((_, index) => index)
-          },
-          errors: { ...prev.errors, ...errors }
-        }));
+        setMultiFileState(prev => {
+          const allPages = [...prev.pages, ...addedPages];
+          const allOriginalPages = [...prev.originalPageOrder, ...addedPages];
+          return {
+            ...prev,
+            files: [...prev.files, ...addedFiles], // Append to existing files
+            pages: allPages, // Append to existing pages
+            reorderState: {
+              ...prev.reorderState,
+              pageOrder: allPages.map((_, index) => index)
+            },
+            originalPageOrder: allOriginalPages, // Append to original order
+            errors: { ...prev.errors, ...errors }
+          };
+        });
 
         // Update data stores
         setImageDataStore(prev => {
@@ -538,9 +549,15 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     setMultiFileState(prev => {
       const newFiles = prev.files.filter(file => file.name !== fileName);
       const newPages = prev.pages.filter(page => page.fileName !== fileName);
+      const newOriginalPages = prev.originalPageOrder.filter(page => page.fileName !== fileName);
       
       // Update display orders
       const updatedPages = newPages.map((page, index) => ({
+        ...page,
+        displayOrder: index
+      }));
+
+      const updatedOriginalPages = newOriginalPages.map((page, index) => ({
         ...page,
         displayOrder: index
       }));
@@ -549,6 +566,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         ...prev,
         files: newFiles,
         pages: updatedPages,
+        originalPageOrder: updatedOriginalPages,
         reorderState: {
           ...prev.reorderState,
           pageOrder: updatedPages.map((_, index) => index)
@@ -698,6 +716,45 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
   }, [singlePdfData, multiFileState.pages]);
 
   /**
+   * Check if pages have been reordered from original import order
+   */
+  const isPagesReordered = useCallback((): boolean => {
+    const { pages, originalPageOrder } = multiFileState;
+    
+    // If lengths don't match, something has changed
+    if (originalPageOrder.length !== pages.length) return false;
+    
+    // If no pages, nothing to reorder
+    if (pages.length === 0) return false;
+    
+    // Compare each page position with original order
+    return !originalPageOrder.every((origPage, index) => 
+      pages[index] && 
+      origPage.fileName === pages[index].fileName && 
+      origPage.originalPageIndex === pages[index].originalPageIndex &&
+      origPage.fileType === pages[index].fileType
+    );
+  }, [multiFileState]);
+
+  /**
+   * Reset page order to original import order
+   */
+  const resetToImportOrder = useCallback(() => {
+    setMultiFileState(prev => {
+      // Restore pages to original import order
+      const restoredPages = [...prev.originalPageOrder];
+      return {
+        ...prev,
+        pages: restoredPages,
+        reorderState: {
+          ...prev.reorderState,
+          pageOrder: restoredPages.map((_, index) => index)
+        }
+      };
+    });
+  }, []);
+
+  /**
    * Reset all state
    */
   const reset = useCallback(() => {
@@ -710,6 +767,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         isDragging: false,
         pageOrder: []
       },
+      originalPageOrder: [],
       isProcessing: false,
       errors: {}
     });
@@ -770,6 +828,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     updateAllPageSettings,
     reorderPages,
     removePage,
+    resetToImportOrder,
+    isPagesReordered,
     getCombinedPdfData,
     getCombinedPageSettings,
     reset,

@@ -5,7 +5,6 @@ import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo, formatFileSize, formatImportTimestamp } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
-import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
 import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
 
@@ -54,6 +53,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [thumbnailLoading, setThumbnailLoading] = useState<Record<number, boolean>>({});
   const [thumbnailErrors, setThumbnailErrors] = useState<Record<number, boolean>>({});
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
+  const [showStartOverConfirm, setShowStartOverConfirm] = useState<boolean>(false);
   
   // Track when data stores are ready for thumbnail loading
   const [dataStoreVersion, setDataStoreVersion] = useState<number>(0);
@@ -63,9 +63,28 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // Always process files using multi-file pipeline
-    // Single files are treated as multi-file with one file
-    await processMultipleFiles(files);
+    // Check if files already exist to determine whether to add or replace
+    const hasExistingFiles = multiFileImport.getFileList().length > 0;
+    
+    if (hasExistingFiles) {
+      // Add files to existing import instead of replacing
+      try {
+        const result = await multiFileImport.addFiles(files);
+        if (result.success) {
+          console.log(`Added ${result.addedFiles.length} files with ${result.addedPages.length} pages`);
+        }
+        if (Object.keys(result.errors).length > 0) {
+          console.warn('Some files had errors:', result.errors);
+          setDragError('Some files could not be added. Check console for details.');
+        }
+      } catch (error) {
+        console.error('Error adding files:', error);
+        setDragError('Failed to add files. Please try again.');
+      }
+    } else {
+      // Process using multi-file pipeline for initial import
+      await processMultipleFiles(files);
+    }
   };
 
   // Process multiple files using the multi-file import hook
@@ -346,6 +365,39 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const isValidFile = (file: File): boolean => {
     return isValidPdfFile(file) || isValidImageFile(file);
   };
+
+  // Handle Start Over confirmation
+  const handleStartOverClick = () => {
+    setShowStartOverConfirm(true);
+  };
+
+  const handleStartOverConfirm = () => {
+    // Reset all multi-file state
+    multiFileImport.reset();
+    
+    // Reset single-file state
+    setFileName('');
+    setPageCount(0);
+    setDragError('');
+    setLoadingError('');
+    
+    // Reset thumbnail state
+    setThumbnails({});
+    setThumbnailLoading({});
+    setThumbnailErrors({});
+    setHoveredThumbnail(null);
+    setDataStoreVersion(0);
+    
+    // Reset page settings
+    onPageSettingsChange([]);
+    
+    // Close confirmation dialog
+    setShowStartOverConfirm(false);
+  };
+
+  const handleStartOverCancel = () => {
+    setShowStartOverConfirm(false);
+  };
   
   // Drag and drop event handlers
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
@@ -416,8 +468,23 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         return;
       }
       
-      // Always process using multi-file pipeline
-      await processMultipleFiles(files);
+      // Check if files already exist to determine whether to add or replace
+      const hasExistingFiles = multiFileImport.getFileList().length > 0;
+      
+      if (hasExistingFiles) {
+        // Add files to existing import instead of replacing
+        const result = await multiFileImport.addFiles(files);
+        if (result.success) {
+          console.log(`Added ${result.addedFiles.length} files with ${result.addedPages.length} pages`);
+        }
+        if (Object.keys(result.errors).length > 0) {
+          console.warn('Some files had errors:', result.errors);
+          setDragError('Some files could not be added. Check console for details.');
+        }
+      } else {
+        // Process using multi-file pipeline for initial import
+        await processMultipleFiles(files);
+      }
     } catch (error) {
       console.error('Error handling file drop:', error);
       setDragError('Failed to process dropped file(s). Please try again.');
@@ -427,20 +494,6 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   return <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-800">Import Files</h2>
-        
-        {/* Add Files button - shown when files are already imported */}
-        {multiFileImport.getFileList().length > 0 && (
-          <AddFilesButton 
-            multiFileImport={multiFileImport}
-            onFilesAdded={() => {
-              // Refresh the UI after adding files
-              console.log('Files added successfully');
-            }}
-            disabled={isLoading}
-            variant="primary"
-            size="sm"
-          />
-        )}
       </div>
       
       {/* Enhanced File Management Panel */}
@@ -533,14 +586,35 @@ export const ImportStep: React.FC<ImportStepProps> = ({
           </button>
         )}
 
-        <button 
-          onClick={() => !isLoading && fileInputRef.current?.click()} 
-          disabled={isLoading}
-          className="mb-2 text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
-          aria-label="Select PDF or image files to import"
-        >
-          {isLoading ? 'Processing...' : 'Select PDF or image files'}
-        </button>
+        <div className="flex flex-col items-center space-y-2">
+          {(() => {
+            const hasExistingFiles = multiFileImport.getFileList().length > 0;
+            const buttonText = hasExistingFiles ? 'Add More Files' : 'Select PDF or image files';
+            const ariaLabel = hasExistingFiles ? 'Add more PDF or image files to existing import' : 'Select PDF or image files to import';
+            
+            return (
+              <button 
+                onClick={() => !isLoading && fileInputRef.current?.click()} 
+                disabled={isLoading}
+                className="text-blue-600 hover:text-blue-800 underline disabled:text-gray-400 disabled:no-underline focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 rounded"
+                aria-label={ariaLabel}
+              >
+                {isLoading ? 'Processing...' : buttonText}
+              </button>
+            );
+          })()}
+          
+          {/* Start Over link - shown when files are already imported */}
+          {multiFileImport.getFileList().length > 0 && !isLoading && (
+            <button
+              onClick={handleStartOverClick}
+              className="text-xs text-gray-500 hover:text-red-600 underline focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded transition-colors"
+              title="Remove all files and start over"
+            >
+              Start Over
+            </button>
+          )}
+        </div>
 
         <p className={`mb-2 ${
           isLoading 
@@ -709,6 +783,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     }))
                 }
                 pdfMode={pdfMode}
+                onResetToImportOrder={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.resetToImportOrder : undefined}
+                isPagesReordered={multiFileImport.multiFileState.pages.length > 0 ? multiFileImport.isPagesReordered() : false}
                 onPagesReorder={(reorderedPages) => {
                   if (multiFileImport.multiFileState.pages.length > 0) {
                     // Get the current pages before reordering to determine the mapping
@@ -904,6 +980,32 @@ export const ImportStep: React.FC<ImportStepProps> = ({
             Next Step
             <ChevronRightIcon size={16} className="ml-2" />
           </button>
+        </div>
+      )}
+
+      {/* Start Over Confirmation Dialog */}
+      {showStartOverConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Start Over?</h3>
+            <p className="text-gray-600 mb-4">
+              This will remove all imported files and reset your workflow. You'll need to re-import your files and reconfigure any settings.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={handleStartOverCancel}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleStartOverConfirm}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+              >
+                Start Over
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>;
