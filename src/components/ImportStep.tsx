@@ -538,7 +538,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       {multiFileImport.getFileList().length > 0 && (
         <FileManagerPanel 
           multiFileImport={multiFileImport}
-          expanded={true}
+          expanded={false}
         />
       )}
       
