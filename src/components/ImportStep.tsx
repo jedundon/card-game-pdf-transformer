@@ -7,24 +7,11 @@ import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
 import { FileManagerPanel } from './FileManagerPanel';
 import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
+import { TIMEOUT_CONSTANTS } from '../constants';
+import type { ImportStepProps, MultiFileImportHook } from '../types';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
-interface ImportStepProps {
-  onFileSelect: (data: any, fileName: string, file?: File) => void;
-  onModeSelect: (mode: any) => void;
-  onPageSettingsChange: (settings: any) => void;
-  onNext: () => void;
-  onResetToDefaults: () => void;
-  onTriggerImportSettings: () => void;
-  pdfData: any;
-  pdfMode: any;
-  pageSettings: any;
-  autoRestoredSettings: boolean;
-  lastImportedFileInfo: LastImportedFileInfo | null;
-  onClearLastImportedFile: () => void;
-  multiFileImport: any; // Add multiFileImport as a prop
-}
 export const ImportStep: React.FC<ImportStepProps> = ({
   onFileSelect,
   onModeSelect,
@@ -267,9 +254,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       if (pageSettings.length > immediateLoadCount) {
         setTimeout(() => {
           for (let i = immediateLoadCount; i < pageSettings.length; i++) {
-            setTimeout(() => loadThumbnail(i), i * 100); // Stagger loading by 100ms
+            setTimeout(() => loadThumbnail(i), i * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY); // Stagger loading by 100ms
           }
-        }, 500);
+        }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
       }
     }
   }, [pdfData, pageSettings.length, loadThumbnail, multiFileImport.multiFileState.pages.length]);
@@ -344,9 +331,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               } else if (page.fileType === 'pdf') {
                 loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
               }
-            }, i * 100);
+            }, i * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
           }
-        }, 500);
+        }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
       }
     }
   }, [
