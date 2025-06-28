@@ -7,12 +7,7 @@ import {
   calculateTotalCards, 
   getCardInfo, 
   extractCardImageFromCanvas,
-  getAvailableCardIds,
-  isCardSkipped,
-  toggleCardSkip,
-  skipAllInRow,
-  skipAllInColumn,
-  clearAllSkips
+  getAvailableCardIds
 } from '../utils/cardUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
 import { TIMEOUT_CONSTANTS } from '../constants';
@@ -21,6 +16,8 @@ import { useCardDimensions } from './ExtractStep/hooks/useCardDimensions';
 import { GridSettings } from './ExtractStep/components/GridSettings';
 import { GutterSettings } from './ExtractStep/components/GutterSettings';
 import { PageCropSettings } from './ExtractStep/components/PageCropSettings';
+import { CardSkipControls } from './ExtractStep/components/CardSkipControls';
+import { PagePreviewPanel } from './ExtractStep/components/PagePreviewPanel';
 
 export const ExtractStep: React.FC<ExtractStepProps> = ({
   pdfData,
@@ -866,148 +863,17 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             onGutterWidthChange={handleGutterWidthChange}
           />
 
-          {/* Card Skip Controls */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Skip Controls
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Mark cards to exclude from extraction and export. Click on the grid to the right to select a card, then use the controls below.
-            </p>
-            
-            {/* Export summary */}
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-              <div className="text-sm text-blue-800 mb-3">
-                <strong>Export Summary:</strong> {(() => {
-                  const skippedCards = extractionSettings.skippedCards || [];
-                  const totalCards = calculateTotalCards(pdfMode, activePages, cardsPerPage);
-                  const skippedCount = skippedCards.length;
-                  return `${totalCards - skippedCount} of ${totalCards} cards will be exported`;
-                })()}
-                {(() => {
-                  const skippedCount = extractionSettings.skippedCards?.length || 0;
-                  return skippedCount > 0 ? ` (${skippedCount} skipped)` : '';
-                })()}
-              </div>
-              <button
-                onClick={() => {
-                  onSettingsChange({
-                    ...extractionSettings,
-                    skippedCards: clearAllSkips()
-                  });
-                }}
-                className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700"
-              >
-                Clear All Skips
-              </button>
-            </div>
-            
-            {/* Current card skip controls */}
-            <div className="space-y-3">
-              <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm">
-                    <div className="font-medium text-gray-800">
-                      Selected: {cardType} {cardId}
-                    </div>
-                    <div className="text-gray-600">
-                      Row {Math.floor(currentCard / extractionSettings.grid.columns) + 1}, 
-                      Column {(currentCard % extractionSettings.grid.columns) + 1}
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {(() => {
-                      const skippedCards = extractionSettings.skippedCards || [];
-                      const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
-                      const gridCol = currentCard % extractionSettings.grid.columns;
-                      const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
-                      return isSkipped ? '🚫 Skipped' : '✓ Will export';
-                    })()}
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => {
-                    const skippedCards = extractionSettings.skippedCards || [];
-                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
-                    const gridCol = currentCard % extractionSettings.grid.columns;
-                    const newSkippedCards = toggleCardSkip(
-                      currentPage, 
-                      gridRow, 
-                      gridCol, 
-                      cardType.toLowerCase() as 'front' | 'back',
-                      skippedCards
-                    );
-                    onSettingsChange({
-                      ...extractionSettings,
-                      skippedCards: newSkippedCards
-                    });
-                  }}
-                  className={(() => {
-                    const skippedCards = extractionSettings.skippedCards || [];
-                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
-                    const gridCol = currentCard % extractionSettings.grid.columns;
-                    const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
-                    return isSkipped 
-                      ? 'w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm font-medium'
-                      : 'w-full px-3 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm font-medium';
-                  })()}
-                >
-                  {(() => {
-                    const skippedCards = extractionSettings.skippedCards || [];
-                    const gridRow = Math.floor(currentCard / extractionSettings.grid.columns);
-                    const gridCol = currentCard % extractionSettings.grid.columns;
-                    const isSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
-                    return isSkipped ? 'Include This Card' : 'Skip This Card';
-                  })()}
-                </button>
-                
-                {/* Row/Column skip buttons */}
-                <div className="grid grid-cols-2 gap-2 mt-3">
-                  <button
-                    onClick={() => {
-                      const skippedCards = extractionSettings.skippedCards || [];
-                      const currentRow = Math.floor(currentCard / extractionSettings.grid.columns);
-                      const newSkippedCards = skipAllInRow(
-                        currentPage,
-                        currentRow,
-                        extractionSettings.grid.columns,
-                        cardType.toLowerCase() as 'front' | 'back',
-                        skippedCards
-                      );
-                      onSettingsChange({
-                        ...extractionSettings,
-                        skippedCards: newSkippedCards
-                      });
-                    }}
-                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
-                  >
-                    Skip All in Row {Math.floor(currentCard / extractionSettings.grid.columns) + 1}
-                  </button>
-                  <button
-                    onClick={() => {
-                      const skippedCards = extractionSettings.skippedCards || [];
-                      const currentCol = currentCard % extractionSettings.grid.columns;
-                      const newSkippedCards = skipAllInColumn(
-                        currentPage,
-                        currentCol,
-                        extractionSettings.grid.rows,
-                        cardType.toLowerCase() as 'front' | 'back',
-                        skippedCards
-                      );
-                      onSettingsChange({
-                        ...extractionSettings,
-                        skippedCards: newSkippedCards
-                      });
-                    }}
-                    className="px-2 py-1 bg-gray-600 text-white rounded text-xs hover:bg-gray-700"
-                  >
-                    Skip All in Column {(currentCard % extractionSettings.grid.columns) + 1}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <CardSkipControls
+            pdfMode={pdfMode}
+            activePages={activePages}
+            extractionSettings={extractionSettings}
+            currentPage={currentPage}
+            currentCard={currentCard}
+            cardsPerPage={cardsPerPage}
+            cardType={cardType}
+            cardId={cardId}
+            onSettingsChange={onSettingsChange}
+          />
         </div>
         
         <div className="space-y-4">
