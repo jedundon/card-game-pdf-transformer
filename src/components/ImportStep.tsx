@@ -767,7 +767,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
 
       
       {/* Page Reordering Table - Show for any imported content */}
-      {(pageSettings.length > 0 || multiFileImport.multiFileState.pages.length > 0) && (
+      {((pdfData && pageSettings.length > 0) || multiFileImport.multiFileState.pages.length > 0) && (
               <PageReorderTable
                 pages={multiFileImport.multiFileState.pages.length > 0
                   ? multiFileImport.multiFileState.pages.map((page: any, index: number) => ({
