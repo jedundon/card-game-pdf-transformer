@@ -1,5 +1,5 @@
 import React from 'react';
-import { PrinterIcon, RulerIcon } from 'lucide-react';
+import { Printer, Ruler } from 'lucide-react';
 import { DEFAULT_SETTINGS } from '../../../defaults';
 import type { OutputSettings } from '../../../types';
 
@@ -57,7 +57,7 @@ export const CalibrationSection: React.FC<CalibrationSectionProps> = ({
         {/* Step 1: Print Calibration Card */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <h4 className="text-sm font-medium text-blue-800 mb-2 flex items-center">
-            <PrinterIcon size={16} className="mr-2" />
+            <Printer size={16} className="mr-2" />
             Step 1: Print Current Settings Test Card
           </h4>
           <p className="text-sm text-blue-700 mb-3">
@@ -74,7 +74,7 @@ export const CalibrationSection: React.FC<CalibrationSectionProps> = ({
         {/* Step 2: Measure and Enter Values */}
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center">
-            <RulerIcon size={16} className="mr-2" />
+            <Ruler size={16} className="mr-2" />
             Step 2: Measure and Refine Settings
           </h4>
           <p className="text-sm text-green-700 mb-3">

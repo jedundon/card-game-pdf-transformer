@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcwIcon } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { DEFAULT_SETTINGS } from '../../../defaults';
 import type { OutputSettings } from '../../../types';
 
@@ -259,7 +259,7 @@ export const CardSizeSettings: React.FC<CardSizeSettingsProps> = ({
             Front Cards
           </h4>
           <div className="flex items-center space-x-4">
-            <RotateCcwIcon size={16} className="text-gray-500" />
+            <RotateCcw size={16} className="text-gray-500" />
             <div className="flex-1 flex space-x-2">
               {[0, 90, 180, 270].map(degree => 
                 <button 
@@ -284,7 +284,7 @@ export const CardSizeSettings: React.FC<CardSizeSettingsProps> = ({
             Back Cards
           </h4>
           <div className="flex items-center space-x-4">
-            <RotateCcwIcon size={16} className="text-gray-500" />
+            <RotateCcw size={16} className="text-gray-500" />
             <div className="flex-1 flex space-x-2">
               {[0, 90, 180, 270].map(degree => 
                 <button 
