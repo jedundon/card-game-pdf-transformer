@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, LayoutGridIcon, MoveIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon, MoveIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
 import { 
@@ -18,6 +18,8 @@ import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
 import { TIMEOUT_CONSTANTS } from '../constants';
 import type { ExtractStepProps, MultiFileImportHook } from '../types';
 import { useCardDimensions } from './ExtractStep/hooks/useCardDimensions';
+import { GridSettings } from './ExtractStep/components/GridSettings';
+import { GutterSettings } from './ExtractStep/components/GutterSettings';
 
 export const ExtractStep: React.FC<ExtractStepProps> = ({
   pdfData,
@@ -898,63 +900,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             </div>
           </div>
 
-          <div>
-            <h3 className="text-lg font-medium text-gray-800 mb-3">
-              Card Grid
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rows
-                </label>
-                <input type="number" min="1" max="10" value={extractionSettings.grid.rows} onChange={e => handleGridChange('rows', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Columns
-                </label>
-                <input type="number" min="1" max="10" value={extractionSettings.grid.columns} onChange={e => handleGridChange('columns', parseInt(e.target.value))} className="w-full border border-gray-300 rounded-md px-3 py-2" />
-              </div>
-            </div>
-          </div>
+          <GridSettings
+            grid={extractionSettings.grid}
+            onGridChange={handleGridChange}
+          />
 
-          {/* Cards per page indicator - immediately after grid settings */}
-          <div className="flex items-center p-3 bg-gray-50 rounded-md">
-            <LayoutGridIcon size={16} className="text-gray-600 mr-2" />
-            <span className="text-sm text-gray-600">
-              {extractionSettings.grid.rows * extractionSettings.grid.columns}{' '}
-              cards per page
-            </span>
-          </div>
-
-          {/* Gutter Width Control - only show for gutter-fold mode */}
-          {pdfMode.type === 'gutter-fold' && (
-            <>
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-3">
-                  Gutter Settings
-                </h3>
-                <p className="text-sm text-gray-600 mb-3">
-                  Specify the width of the gutter area between front and back cards (in 300 DPI pixels)
-                </p>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Gutter Width (px at 300 DPI)
-                  </label>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    value={extractionSettings.gutterWidth || 0} 
-                    onChange={e => handleGutterWidthChange(parseInt(e.target.value))} 
-                    className="w-full border border-gray-300 rounded-md px-3 py-2" 
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  This area will be cropped out from the center of the page between front and back cards
-                </p>
-              </div>
-            </>
-          )}
+          <GutterSettings
+            pdfMode={pdfMode}
+            gutterWidth={extractionSettings.gutterWidth || 0}
+            onGutterWidthChange={handleGutterWidthChange}
+          />
 
           {/* Card Skip Controls */}
           <div>
