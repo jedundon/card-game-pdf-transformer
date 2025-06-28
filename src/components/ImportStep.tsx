@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronRightIcon, RotateCcwIcon, UploadIcon } from 'lucide-react';
+import { ChevronRightIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { getDefaultGrid } from '../defaults';
 import { LastImportedFileInfo } from '../utils/localStorageUtils';
@@ -12,6 +12,7 @@ import type { ImportStepProps, MultiFileImportHook } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
+import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -681,38 +682,12 @@ export const ImportStep: React.FC<ImportStepProps> = ({
 
       {/* Multi-file mode toggle removed for Phase 1 - focusing on single PDF page reordering */}
       
-      {/* Auto-restored Settings Notification */}
-      {autoRestoredSettings && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-blue-800 mb-1">
-                Settings Automatically Restored
-              </h4>
-              <p className="text-xs text-blue-700 mb-3">
-                Your previous workflow settings have been automatically applied. 
-                This includes PDF mode, extraction settings, output configuration, and color calibration.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={onResetToDefaults}
-                  className="inline-flex items-center px-3 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                >
-                  <RotateCcwIcon size={12} className="mr-1" />
-                  Reset to Defaults
-                </button>
-                <button
-                  onClick={onTriggerImportSettings}
-                  className="inline-flex items-center px-3 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                >
-                  <UploadIcon size={12} className="mr-1" />
-                  Import Different Settings
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Auto Restored Settings Notification */}
+      <AutoRestoredSettingsNotification
+        isVisible={autoRestoredSettings}
+        onResetToDefaults={onResetToDefaults}
+        onTriggerImportSettings={onTriggerImportSettings}
+      />
       {/* PDF Mode Configuration - Show for any imported files */}
       {(pdfData || multiFileImport.multiFileState.pages.length > 0) && (
         <>
