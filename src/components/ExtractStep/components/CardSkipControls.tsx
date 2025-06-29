@@ -2,9 +2,9 @@ import React from 'react';
 import { 
   calculateTotalCards, 
   isCardSkipped, 
-  toggleCardSkip, 
-  skipAllInRow, 
-  skipAllInColumn, 
+  toggleCardSkipWithPairing,
+  skipAllInRowWithPairing,
+  skipAllInColumnWithPairing, 
   clearAllSkips 
 } from '../../../utils/cardUtils';
 import type { PdfMode, ExtractionSettings } from '../../../types';
@@ -46,12 +46,16 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
   const isCurrentCardSkipped = isCardSkipped(currentPage, gridRow, gridCol, skippedCards, cardType.toLowerCase() as 'front' | 'back');
 
   const handleToggleCardSkip = () => {
-    const newSkippedCards = toggleCardSkip(
+    const newSkippedCards = toggleCardSkipWithPairing(
       currentPage, 
       gridRow, 
       gridCol, 
       cardType.toLowerCase() as 'front' | 'back',
-      skippedCards
+      skippedCards,
+      activePages,
+      extractionSettings,
+      pdfMode,
+      cardsPerPage
     );
     onSettingsChange({
       ...extractionSettings,
@@ -60,12 +64,16 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
   };
 
   const handleSkipAllInRow = () => {
-    const newSkippedCards = skipAllInRow(
+    const newSkippedCards = skipAllInRowWithPairing(
       currentPage,
       gridRow,
       extractionSettings.grid.columns,
       cardType.toLowerCase() as 'front' | 'back',
-      skippedCards
+      skippedCards,
+      activePages,
+      extractionSettings,
+      pdfMode,
+      cardsPerPage
     );
     onSettingsChange({
       ...extractionSettings,
@@ -74,12 +82,16 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
   };
 
   const handleSkipAllInColumn = () => {
-    const newSkippedCards = skipAllInColumn(
+    const newSkippedCards = skipAllInColumnWithPairing(
       currentPage,
       gridCol,
       extractionSettings.grid.rows,
       cardType.toLowerCase() as 'front' | 'back',
-      skippedCards
+      skippedCards,
+      activePages,
+      extractionSettings,
+      pdfMode,
+      cardsPerPage
     );
     onSettingsChange({
       ...extractionSettings,
@@ -101,6 +113,11 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
       </h3>
       <p className="text-sm text-gray-600 mb-3">
         Mark cards to exclude from extraction and export. Click on the grid to the right to select a card, then use the controls below.
+        {pdfMode.type === 'gutter-fold' && (
+          <span className="block mt-2 text-blue-600 font-medium">
+            💡 In gutter-fold mode, skipping a front card will also skip its paired back card automatically.
+          </span>
+        )}
       </p>
       
       {/* Export summary */}
