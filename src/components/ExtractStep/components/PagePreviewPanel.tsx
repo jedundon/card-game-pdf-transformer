@@ -1,7 +1,6 @@
-import React, { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
 import { isCardSkipped } from '../../../utils/cardUtils';
-import { TIMEOUT_CONSTANTS } from '../../../constants';
 import type { PdfData, ExtractionSettings, PdfMode } from '../../../types';
 
 interface RenderedPageData {
@@ -596,30 +595,28 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       {/* Header with navigation and zoom controls */}
       <div className="bg-gray-50 p-3 border-b border-gray-200 flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <button onClick={handlePreviousPage} disabled={currentPage === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+        <div className="flex items-center space-x-2 flex-1 min-w-0">
+          <button onClick={handlePreviousPage} disabled={currentPage === 0} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50 flex-shrink-0">
             <ChevronLeftIcon size={16} />
           </button>
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-700">
-              Page {currentPage + 1} of {totalPages}
-            </span>
-            {activePages[currentPage] && (
-              <div className="flex items-center space-x-1">
-                {activePages[currentPage].fileType === 'pdf' ? (
-                  <FileIcon size={14} className="text-red-600" />
-                ) : (
-                  <ImageIcon size={14} className="text-green-600" />
-                )}
-                <span className="text-xs text-gray-500 max-w-[150px] truncate" title={activePages[currentPage].fileName}>
-                  {activePages[currentPage].fileName}
-                </span>
-              </div>
-            )}
-          </div>
-          <button onClick={handleNextPage} disabled={currentPage === totalPages - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50">
+          <span className="text-sm text-gray-700 flex-shrink-0">
+            Page {currentPage + 1} of {totalPages}
+          </span>
+          <button onClick={handleNextPage} disabled={currentPage === totalPages - 1} className="p-1 rounded-full hover:bg-gray-200 disabled:opacity-50 flex-shrink-0">
             <ChevronRightIcon size={16} />
           </button>
+          {activePages[currentPage] && (
+            <div className="flex items-center space-x-1 ml-2 min-w-0 flex-1">
+              {activePages[currentPage].fileType === 'pdf' ? (
+                <FileIcon size={14} className="text-red-600 flex-shrink-0" />
+              ) : (
+                <ImageIcon size={14} className="text-green-600 flex-shrink-0" />
+              )}
+              <span className="text-xs text-gray-500 truncate min-w-0" title={activePages[currentPage].fileName}>
+                {activePages[currentPage].fileName}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1">
