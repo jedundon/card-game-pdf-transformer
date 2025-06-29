@@ -522,3 +522,321 @@ const handleResetToDefaults = () => {
 4. **State Snapshots**: Capture state before/after critical operations
 
 This debugging experience reinforced the importance of thorough state management and complete testing of user workflows, especially reset/clear operations that are often edge cases.
+
+## Comprehensive Testing Framework
+
+The application includes a comprehensive testing framework that catches "hard to detect" issues before they reach users. This testing infrastructure implements GitHub Issue #63 requirements and provides automated validation across all critical application areas.
+
+### Testing Architecture Overview
+
+The testing framework consists of four complementary layers:
+
+1. **Unit Testing** - Mathematical functions and business logic validation
+2. **Visual Regression Testing** - UI consistency across browsers and updates  
+3. **Integration Testing** - Complete workflow and multi-file processing
+4. **Build Validation** - Production asset integrity and performance
+
+### Test Files Structure
+
+```
+tests/                           # Playwright E2E and visual regression tests
+├── visual-regression.spec.ts    # All 5 wizard steps visual testing
+├── preview-consistency.spec.ts  # Mathematical consistency validation
+├── pdf-image-parity.spec.ts     # PDF vs image workflow parity
+├── workflow-integration.spec.ts # End-to-end workflow testing
+├── async-processing.spec.ts     # Real async processing validation
+├── build-validation.spec.ts     # Production build integrity
+└── basic-smoke.spec.ts         # Basic application startup tests
+
+src/test/                       # Unit tests for business logic
+├── renderUtils.test.ts         # Render utility mathematical functions
+├── cardUtils.test.ts          # Card positioning and grid logic
+├── previewConsistency.test.ts # Preview vs export consistency
+└── setup.ts                   # Test environment configuration
+```
+
+### Available Test Commands
+
+```bash
+# Unit Testing (Vitest)
+npm run test          # Run tests in watch mode during development
+npm run test:run      # Run tests once (used in CI/CD)
+npm run test:coverage # Run with coverage report
+
+# Visual Regression Testing (Playwright)
+npm run test:e2e      # Run all Playwright tests
+npm run test:e2e:ui   # Run with interactive UI for debugging
+
+# Combined Testing
+npm run build         # Includes TypeScript check and build validation
+```
+
+### Developer Testing Guidelines
+
+#### When to Write Tests
+
+**Always Write Tests For:**
+- Mathematical functions (DPI conversions, scaling, rotation)
+- Core business logic (card positioning, grid calculations)
+- Critical user workflows (file upload, extraction, export)
+- Bug fixes (add test that reproduces the bug first)
+
+**Consider Tests For:**
+- Complex UI components with business logic
+- Error handling and recovery scenarios
+- Performance-critical operations
+
+#### Unit Testing Best Practices
+
+**Location**: Place unit tests in `src/test/` directory alongside source code
+
+**Naming Convention**: `[sourceFile].test.ts` (e.g., `renderUtils.test.ts`)
+
+**Test Structure**:
+```typescript
+import { describe, it, expect } from 'vitest'
+import { functionToTest } from '../utils/targetFile'
+
+describe('Module Name', () => {
+  describe('specific function or feature', () => {
+    it('should describe expected behavior in specific scenario', () => {
+      // Arrange
+      const input = { /* test data */ }
+      
+      // Act
+      const result = functionToTest(input)
+      
+      // Assert
+      expect(result).toBe(expectedValue)
+      expect(result.property).toBeCloseTo(expectedFloat, precision)
+    })
+  })
+})
+```
+
+**Mathematical Testing Guidelines**:
+- Use `toBeCloseTo(expected, precision)` for floating-point comparisons
+- Test edge cases: zero values, extreme scales, boundary conditions
+- Validate both input/output values and intermediate calculations
+- Test mathematical relationships (e.g., area preservation during rotation)
+
+#### Visual Regression Testing Guidelines
+
+**Location**: Place visual tests in `tests/` directory
+
+**When to Add Visual Tests**:
+- New UI components or wizard steps
+- Changes to layout or styling systems
+- Cross-browser compatibility requirements
+
+**Visual Test Structure**:
+```typescript
+import { test, expect } from '@playwright/test'
+
+test.describe('Feature Name', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 })
+    // Disable animations for consistent testing
+    await page.addStyleTag({
+      content: `*, *::before, *::after { 
+        animation-duration: 0s !important; 
+        transition-duration: 0s !important; 
+      }`
+    })
+  })
+
+  test('should render component correctly', async ({ page }) => {
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+    
+    // Interact with component if needed
+    await page.click('[data-testid="button"]')
+    
+    // Take screenshot for comparison
+    await expect(page).toHaveScreenshot('feature-state.png')
+  })
+})
+```
+
+#### Integration Testing Guidelines
+
+**Focus Areas**:
+- Complete user workflows (upload → extract → configure → export)
+- Multi-file processing with mixed PDF/image files
+- Error recovery and state management
+- Settings persistence and loading
+
+**Integration Test Pattern**:
+```typescript
+test('complete workflow should maintain data consistency', async ({ page }) => {
+  // Test entire user journey
+  await page.goto('/')
+  
+  // Simulate file upload
+  const uploadData = await page.evaluate(() => {
+    // Mock file processing logic
+    return { /* simulated results */ }
+  })
+  
+  // Validate each step maintains data integrity
+  expect(uploadData.property).toBe(expectedValue)
+})
+```
+
+### Testing Critical Areas
+
+#### Mathematical Functions
+**Why Critical**: Errors in DPI conversions, scaling, or positioning directly impact user output
+
+**Test Requirements**:
+- Validate all DPI conversions (72 ↔ 300 ↔ 96 DPI)
+- Test scaling accuracy at various percentages
+- Verify rotation dimension swapping (90°, 270°)
+- Check grid positioning calculations
+- Validate aspect ratio preservation
+
+**Example**:
+```typescript
+it('should convert DPI accurately', () => {
+  const inches = 2.5
+  const extractionPixels = inches * 300  // 750
+  const screenPixels = inches * 72       // 180
+  
+  const converted = extractionPixels * (72 / 300)
+  expect(converted).toBe(screenPixels)
+})
+```
+
+#### Preview vs Export Consistency
+**Why Critical**: Users rely on preview accuracy for print planning
+
+**Test Requirements**:
+- Same mathematical functions used in preview and export
+- Identical coordinate system handling
+- Consistent DPI conversion logic
+- Matching rotation and scaling calculations
+
+#### Multi-File Workflows
+**Why Critical**: PDF and image files must produce identical results
+
+**Test Requirements**:
+- Unified coordinate system validation
+- Consistent processing pipeline
+- Identical output for same content
+- Cross-file-type compatibility
+
+### CI/CD Integration
+
+The testing framework automatically runs in GitHub Actions on:
+- Every pull request
+- Every push to main branch
+- Manual workflow triggers
+
+**CI/CD Test Sequence**:
+1. **Setup** - Install dependencies and browsers
+2. **Unit Tests** - Run all mathematical and logic validation
+3. **Build** - Verify TypeScript compilation and asset integrity
+4. **Visual Regression** - Cross-browser UI consistency testing
+5. **Integration** - Complete workflow validation
+
+**Failure Handling**:
+- Unit test failures block PR merging
+- Visual regression changes require manual review
+- Build failures prevent deployment
+- Test artifacts saved for debugging
+
+### Debugging Test Failures
+
+#### Unit Test Failures
+```bash
+# Run specific test file
+npm run test -- renderUtils.test.ts
+
+# Run with verbose output
+npm run test -- --reporter=verbose
+
+# Run in watch mode for iterative debugging
+npm run test
+```
+
+#### Visual Regression Failures
+```bash
+# Run with UI for interactive debugging
+npm run test:e2e:ui
+
+# Update visual baselines (after confirming changes are intentional)
+npm run test:e2e -- --update-snapshots
+
+# Run specific test file
+npm run test:e2e -- tests/visual-regression.spec.ts
+```
+
+#### Common Test Issues
+
+**Floating Point Precision**:
+```typescript
+// ❌ WRONG: Exact equality for floating point
+expect(result).toBe(2.33333333)
+
+// ✅ CORRECT: Use precision tolerance
+expect(result).toBeCloseTo(2.333, 3)
+```
+
+**Async Operations**:
+```typescript
+// ✅ CORRECT: Wait for operations to complete
+await page.waitForLoadState('networkidle')
+await page.waitForSelector('[data-testid="result"]')
+```
+
+**Animation Interference**:
+```typescript
+// ✅ CORRECT: Disable animations for consistent testing
+await page.addStyleTag({
+  content: `*, *::before, *::after { 
+    animation-duration: 0s !important; 
+    transition-duration: 0s !important; 
+  }`
+})
+```
+
+### Test Maintenance
+
+#### Updating Tests for New Features
+
+1. **Add unit tests** for new mathematical functions
+2. **Update visual regression tests** for UI changes
+3. **Extend integration tests** for new workflows
+4. **Update test documentation** in CLAUDE.md
+
+#### When Visual Baselines Need Updates
+
+**Legitimate Updates**:
+- Intentional UI/UX improvements
+- New feature additions
+- Cross-browser rendering updates
+
+**Process**:
+1. Review visual diff in test report
+2. Confirm changes are intentional
+3. Run `npm run test:e2e -- --update-snapshots`
+4. Commit updated baseline images
+
+#### Performance Considerations
+
+- Unit tests should complete in < 2 seconds
+- Visual regression tests should complete in < 5 minutes
+- Use `test.setTimeout()` for longer operations
+- Mock expensive operations when possible
+
+### Testing Philosophy
+
+The testing framework prioritizes:
+
+1. **Impact over Coverage** - Focus on critical user-affecting functionality
+2. **Mathematical Accuracy** - Validate all calculations that affect output
+3. **Visual Consistency** - Ensure UI remains stable across updates
+4. **Developer Productivity** - Catch issues early in development cycle
+5. **Minimal Maintenance** - Automated testing with clear failure diagnostics
+
+This comprehensive testing approach ensures the card game PDF transformer maintains high quality and reliability as it evolves, catching the "hard to detect" issues that could significantly impact users while providing developers with confidence to make improvements.
