@@ -1,14 +1,14 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, /* useRef, */ useEffect, useCallback } from 'react';
 import { ChevronRightIcon } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
-import { getDefaultGrid } from '../defaults';
-import { LastImportedFileInfo } from '../utils/localStorageUtils';
+// import { getDefaultGrid } from '../defaults';
+// import { LastImportedFileInfo } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
 import { FileManagerPanel } from './FileManagerPanel';
-import { isValidImageFile, createImageThumbnail } from '../utils/imageUtils';
+import { /* isValidImageFile, */ createImageThumbnail } from '../utils/imageUtils';
 import { TIMEOUT_CONSTANTS } from '../constants';
-import type { ImportStepProps, MultiFileImportHook } from '../types';
+import type { ImportStepProps /*, MultiFileImportHook */ } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
@@ -33,7 +33,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   onClearLastImportedFile,
   multiFileImport
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
   const [pageCount, setPageCount] = useState<number>(0);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
@@ -274,21 +274,21 @@ export const ImportStep: React.FC<ImportStepProps> = ({
 
   
   // Validate if file is a PDF
-  const isValidPdfFile = (file: File): boolean => {
-    const validTypes = ['application/pdf'];
-    const validExtensions = ['.pdf'];
-    
-    // Check MIME type
-    if (!validTypes.includes(file.type)) {
-      return false;
-    }
-    
-    // Check file extension
-    const fileName = file.name.toLowerCase();
-    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
-    
-    return hasValidExtension;
-  };
+  // const isValidPdfFile = (file: File): boolean => {
+  //   const validTypes = ['application/pdf'];
+  //   const validExtensions = ['.pdf'];
+  //   
+  //   // Check MIME type
+  //   if (!validTypes.includes(file.type)) {
+  //     return false;
+  //   }
+  //   
+  //   // Check file extension
+  //   const fileName = file.name.toLowerCase();
+  //   const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
+  //   
+  //   return hasValidExtension;
+  // };
 
 
   // Handle Start Over confirmation

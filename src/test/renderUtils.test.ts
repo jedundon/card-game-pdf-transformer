@@ -161,7 +161,7 @@ describe('renderUtils - Critical Mathematical Functions', () => {
     it('should calculate grid positions correctly', () => {
       // Test basic grid math without calling the actual function
       const cols = 3
-      const rows = 3
+      // const rows = 3
       const cardIndex = 5
 
       const col = cardIndex % cols

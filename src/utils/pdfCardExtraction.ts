@@ -126,8 +126,6 @@ export async function extractCardImageFromPdfPage(
     
     // Calculate card grid position
     const { rows, columns } = extractionSettings.grid;
-    const cardWidthPx = sourceWidth / columns;
-    const cardHeightPx = sourceHeight / rows;
     
     // Validate card fits within grid
     if (cardOnPage >= rows * columns) {
@@ -137,9 +135,56 @@ export async function extractCardImageFromPdfPage(
     const cardRow = Math.floor(cardOnPage / columns);
     const cardCol = cardOnPage % columns;
     
-    // Calculate card position within the page
-    const cardX = cropSettings.left + cardCol * cardWidthPx;
-    const cardY = cropSettings.top + cardRow * cardHeightPx;
+    // Calculate card dimensions and position with gutter-fold awareness
+    let cardWidthPx: number;
+    let cardHeightPx: number;
+    let cardX: number;
+    let cardY: number;
+    
+    if (pdfMode?.type === 'gutter-fold' && extractionSettings.gutterWidth && extractionSettings.gutterWidth > 0) {
+      // Gutter-fold mode with gutter width - use gutter-aware calculations
+      if (pdfMode.orientation === 'vertical') {
+        // Vertical gutter: splits page left/right
+        const gutterWidth = extractionSettings.gutterWidth;
+        const availableWidthForCards = sourceWidth - gutterWidth;
+        cardWidthPx = availableWidthForCards / columns;
+        cardHeightPx = sourceHeight / rows;
+        
+        // Adjust X position for cards after the gutter
+        const halfColumns = columns / 2;
+        if (cardCol >= halfColumns) {
+          // Right side cards: add gutter offset
+          cardX = cropSettings.left + (cardCol * cardWidthPx) + gutterWidth;
+        } else {
+          // Left side cards: no gutter offset
+          cardX = cropSettings.left + (cardCol * cardWidthPx);
+        }
+        cardY = cropSettings.top + (cardRow * cardHeightPx);
+      } else {
+        // Horizontal gutter: splits page top/bottom
+        const gutterWidth = extractionSettings.gutterWidth;
+        const availableHeightForCards = sourceHeight - gutterWidth;
+        cardWidthPx = sourceWidth / columns;
+        cardHeightPx = availableHeightForCards / rows;
+        
+        // Adjust Y position for cards after the gutter
+        const halfRows = rows / 2;
+        if (cardRow >= halfRows) {
+          // Bottom cards: add gutter offset
+          cardY = cropSettings.top + (cardRow * cardHeightPx) + gutterWidth;
+        } else {
+          // Top cards: no gutter offset
+          cardY = cropSettings.top + (cardRow * cardHeightPx);
+        }
+        cardX = cropSettings.left + (cardCol * cardWidthPx);
+      }
+    } else {
+      // Standard mode or gutter-fold without gutter width
+      cardWidthPx = sourceWidth / columns;
+      cardHeightPx = sourceHeight / rows;
+      cardX = cropSettings.left + cardCol * cardWidthPx;
+      cardY = cropSettings.top + cardRow * cardHeightPx;
+    }
     
     // Apply individual card cropping if specified
     let finalCardWidth = cardWidthPx;

@@ -313,11 +313,18 @@ export type WorkflowSettings = {
       heightInches: number;
     };
     cardScalePercent: number;
-    bleedMarginInches: number;    rotation: {
+    bleedMarginInches: number;
+    rotation: {
       front: number;
       back: number;
     };
     cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
+    spacing: {
+      horizontal: number;
+      vertical: number;
+    };
+    cardAlignment: 'top-left' | 'center';
+    includeColorCalibration: boolean;
   };
   colorSettings: {
     selectedRegion: any;

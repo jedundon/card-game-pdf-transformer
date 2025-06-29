@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React /*, { useRef } */ from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { DEFAULT_SETTINGS } from '../../../defaults';
 import type { OutputSettings, ExtractionSettings, PdfMode } from '../../../types';
@@ -28,7 +28,7 @@ interface CardPreviewPanelProps {
   onPreviousCard: () => void;
   onNextCard: () => void;
   onRetryPreview: () => void;
-  getCacheKey: (cardId: number, mode: 'front' | 'back', settings: any) => string;
+  // getCacheKey: (cardId: number, mode: 'front' | 'back', settings: any) => string;
   getAvailableCardIds: (type: 'front' | 'back', totalCards: number, pdfMode: PdfMode, activePages: any[], cardsPerPage: number, extractionSettings: ExtractionSettings) => number[];
   countCardsByType: (type: 'front' | 'back', activePages: any[], cardsPerPage: number, pdfMode: PdfMode, extractionSettings: ExtractionSettings) => number;
 }
@@ -64,11 +64,11 @@ export const CardPreviewPanel: React.FC<CardPreviewPanelProps> = ({
   onPreviousCard,
   onNextCard,
   onRetryPreview,
-  getCacheKey,
+  // getCacheKey,
   getAvailableCardIds,
   countCardsByType
 }) => {
-  const previewCacheRef = useRef<Map<string, any>>(new Map());
+  // const previewCacheRef = useRef<Map<string, any>>(new Map());
 
   return (
     <div className="space-y-4">

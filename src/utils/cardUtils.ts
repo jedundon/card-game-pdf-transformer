@@ -1620,10 +1620,10 @@ export function findPairedCard(
   pageIndex: number,
   gridRow: number,
   gridColumn: number,
-  activePages: PageSettings[],
+  _activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  _cardsPerPage: number
 ): { pageIndex: number; gridRow: number; gridColumn: number; cardType: 'front' | 'back' } | null {
   // Only handle pairing in gutter-fold mode
   if (pdfMode.type !== 'gutter-fold') {
