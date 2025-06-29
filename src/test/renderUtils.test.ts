@@ -1,20 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { calculateCardPositioning, calculatePreviewScaling } from '../utils/renderUtils'
-import { OutputSettings } from '../types'
-import { DEFAULT_SETTINGS } from '../defaults'
 
 describe('renderUtils - Critical Mathematical Functions', () => {
-  let mockOutputSettings: OutputSettings
-
   beforeEach(() => {
-    mockOutputSettings = {
-      ...DEFAULT_SETTINGS.outputSettings,
-      cardSize: { width: 2.5, height: 3.5 }, // Standard card size in inches
-      bleedMargin: 0.125, // 1/8 inch bleed
-      scale: 100, // 100% scale
-      imageSizing: 'fit-to-card' as const
-    }
-
     // Reset all mocks
     vi.clearAllMocks()
   })

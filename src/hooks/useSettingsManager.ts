@@ -31,7 +31,12 @@
  */
 
 import { useState, useCallback } from 'react';
-import { PdfMode, PageSettings } from '../types';
+import { 
+  PdfMode, 
+  PageSettings, 
+  ExtractionSettings,
+  OutputSettings
+} from '../types';
 import { 
   DEFAULT_SETTINGS, 
   getDefaultGrid, 
@@ -39,47 +44,6 @@ import {
   getDefaultSettingsForMode 
 } from '../defaults';
 
-/**
- * Extraction settings for card processing
- * 
- * Based on the actual structure used in App.tsx
- */
-export interface ExtractionSettings {
-  /** Grid layout configuration */
-  grid: { rows: number; columns: number };
-  /** Page cropping margins */
-  crop: { top: number; right: number; bottom: number; left: number };
-  /** Gutter width for gutter-fold mode */
-  gutterWidth: number;
-  /** Individual card cropping adjustments */
-  cardCrop: { top: number; right: number; bottom: number; left: number };
-  /** Card rotation settings for front and back */
-  imageRotation: { front: number; back: number };
-  /** List of cards to skip during processing */
-  skippedCards: any[];
-}
-
-/**
- * Output settings for final PDF generation
- * 
- * Based on the actual structure used in defaults.ts
- */
-export interface OutputSettings {
-  /** Page dimensions */
-  pageSize: { width: number; height: number };
-  /** Page offset settings */
-  offset: { horizontal: number; vertical: number };
-  /** Card size settings */
-  cardSize: { widthInches: number; heightInches: number };
-  /** Card scale percentage */
-  cardScalePercent: number;
-  /** Bleed margin in inches */
-  bleedMarginInches: number;
-  /** Card rotation settings */
-  rotation: { front: number; back: number };
-  /** Card image sizing mode */
-  cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
-}
 
 /**
  * Color calibration settings for image processing
