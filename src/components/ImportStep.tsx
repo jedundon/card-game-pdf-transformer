@@ -319,6 +319,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
     // Reset page settings
     onPageSettingsChange([]);
     
+    // Reset all app state (PDF data, settings, localStorage)
+    onResetToDefaults();
+    
     // Close confirmation dialog
     setShowStartOverConfirm(false);
   };

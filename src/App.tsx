@@ -47,6 +47,7 @@ export function App() {
   const handleResetToDefaults = () => {
     clearLocalStorageSettings();
     pdfDataManager.handleClearLastImportedFile();
+    pdfDataManager.clearPdfData();
     settingsManager.resetToDefaults();
     localStorageSync.clearAutoRestoredFlag();
   };
@@ -152,7 +153,12 @@ export function App() {
         </h1>
       </header>
       <main className="flex-1 p-4 md:p-6">
-        <StepIndicator steps={steps.map(s => s.title)} currentStep={stepNavigation.currentStep} />
+        <StepIndicator 
+          steps={steps.map(s => s.title)} 
+          currentStep={stepNavigation.currentStep}
+          onStepClick={stepNavigation.goToStep}
+          isPdfLoaded={!!pdfDataManager.pdfData || multiFileImport.multiFileState.pages.length > 0}
+        />
         
         {/* Import/Export Manager - Always visible */}
         <div className="mt-6" data-import-export-manager>

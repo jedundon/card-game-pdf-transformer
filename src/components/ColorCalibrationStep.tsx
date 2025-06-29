@@ -51,7 +51,7 @@ import {
   getTransformationRange,
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
-import { PREVIEW_CONSTRAINTS, DPI_CONSTANTS } from '../constants';
+import { PREVIEW_CONSTRAINTS } from '../constants';
 
 
 /**
