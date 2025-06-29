@@ -285,7 +285,7 @@ test.describe('Complete Workflow Integration Tests', () => {
         { type: 'image', originalColors: { r: 255, g: 128, b: 64 } }
       ];
       
-      const applyCalibratio n = (colors: { r: number; g: number; b: number }, settings: typeof calibrationSettings) => {
+      const applyCalibration = (colors: { r: number; g: number; b: number }, settings: typeof calibrationSettings) => {
         // Simulate color calibration calculations
         const brightnessFactor = settings.brightness / 100;
         const contrastFactor = settings.contrast / 100;
@@ -312,7 +312,7 @@ test.describe('Complete Workflow Integration Tests', () => {
       
       const calibratedFiles = testFiles.map(file => ({
         ...file,
-        calibratedColors: applyCalibratio n(file.originalColors, calibrationSettings)
+        calibratedColors: applyCalibration(file.originalColors, calibrationSettings)
       }));
       
       return {

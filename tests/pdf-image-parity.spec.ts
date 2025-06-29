@@ -433,7 +433,7 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     await page.waitForLoadState('networkidle');
     
     // Test that preview and export use identical calculations regardless of source type
-    const sourceAgnos ticCalculations = await page.evaluate(() => {
+    const sourceAgnosticCalculations = await page.evaluate(() => {
       // Mock the core calculation functions used in both preview and export
       const calculateFinalCardRenderDimensions = (
         cardSizeInches: { width: number; height: number },
@@ -524,14 +524,14 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
       };
     });
     
-    expect(sourceAgnos ticCalculations.totalTests).toBe(8); // 2 source types × 4 rotations
+    expect(sourceAgnosticCalculations.totalTests).toBe(8); // 2 source types × 4 rotations
     
     // Group results by rotation to compare PDF vs image calculations
     const rotations = [0, 90, 180, 270];
     
     for (const rotation of rotations) {
-      const pdfResult = sourceAgnos ticCalculations.results.find(r => r.rotation === rotation && r.sourceType === 'pdf');
-      const imageResult = sourceAgnos ticCalculations.results.find(r => r.rotation === rotation && r.sourceType === 'image');
+      const pdfResult = sourceAgnosticCalculations.results.find(r => r.rotation === rotation && r.sourceType === 'pdf');
+      const imageResult = sourceAgnosticCalculations.results.find(r => r.rotation === rotation && r.sourceType === 'image');
       
       // Card dimension calculations must be identical regardless of source type
       expect(pdfResult?.cardDimensions.width).toBeCloseTo(imageResult?.cardDimensions.width || 0, 10);
@@ -545,8 +545,8 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     
     // Validate specific calculations at baseline (100% scale, 0° rotation would be)
     // Our test uses 110% scale, 0° rotation
-    const pdfBaseline = sourceAgnos ticCalculations.results.find(r => r.rotation === 0 && r.sourceType === 'pdf');
-    const imageBaseline = sourceAgnos ticCalculations.results.find(r => r.rotation === 0 && r.sourceType === 'image');
+    const pdfBaseline = sourceAgnosticCalculations.results.find(r => r.rotation === 0 && r.sourceType === 'pdf');
+    const imageBaseline = sourceAgnosticCalculations.results.find(r => r.rotation === 0 && r.sourceType === 'image');
     
     // Expected: (2.5 + 0.125*2) * 1.1 = 2.75 * 1.1 = 3.025 inches width
     // Expected: (3.5 + 0.125*2) * 1.1 = 3.75 * 1.1 = 4.125 inches height

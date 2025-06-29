@@ -1,6 +1,4 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
-
 /**
  * Preview Consistency Tests for Card Game PDF Transformer
  * 
@@ -18,8 +16,6 @@ import path from 'path';
  */
 
 test.describe('Preview Consistency Tests', () => {
-  // Test PDF file path (we'll create a simple test PDF)
-  const testPdfPath = path.join(__dirname, 'fixtures', 'test-cards.pdf');
   
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1400, height: 900 });
