@@ -427,3 +427,98 @@ Successful refactoring used structured commits with clear scope:
 4. **Documentation**: Maintain JSDoc comments for complex business logic
 
 This refactoring established a solid foundation for continued development while maintaining full functionality and improving developer experience significantly.
+
+## Debugging Complex State Management Issues
+
+### State Synchronization Anti-Patterns (Learned from GitHub Issue #38)
+
+During implementation of clickable step navigation, we encountered a subtle but critical state management issue that provides important lessons for debugging complex React applications.
+
+#### The Problem: Partial State Clearing
+When implementing "Start Over" functionality, we discovered that `handleResetToDefaults` was only partially clearing application state:
+
+```typescript
+// ❌ PROBLEMATIC: Only partial state clearing
+const handleResetToDefaults = () => {
+  clearLocalStorageSettings();
+  pdfDataManager.handleClearLastImportedFile(); // Only clears lastImportedFileInfo
+  settingsManager.resetToDefaults();
+  localStorageSync.clearAutoRestoredFlag();
+  // Missing: pdfDataManager.clearPdfData() ← Critical omission
+};
+```
+
+**Symptom**: Users could navigate to steps they shouldn't have access to after "Start Over"
+**Root Cause**: `pdfData` remained loaded while other state was cleared
+**Impact**: Conditional logic based on `isPdfLoaded` returned incorrect results
+
+#### The Solution: Complete State Clearing
+```typescript
+// ✅ CORRECT: Complete state clearing
+const handleResetToDefaults = () => {
+  clearLocalStorageSettings();
+  pdfDataManager.handleClearLastImportedFile();
+  pdfDataManager.clearPdfData(); // ← Added missing state clearing
+  settingsManager.resetToDefaults();
+  localStorageSync.clearAutoRestoredFlag();
+};
+```
+
+#### Debugging Methodology for State Issues
+
+1. **Trace State Dependencies**: Map out all state variables that affect conditional logic
+   ```typescript
+   // Example: Step navigation depends on BOTH conditions
+   const isPdfLoaded = !!pdfDataManager.pdfData || multiFileImport.multiFileState.pages.length > 0;
+   ```
+
+2. **Verify Reset Functions**: Ensure all reset/clear functions actually modify the intended state
+   ```typescript
+   // Check what each function actually does:
+   // handleClearLastImportedFile() → only clears lastImportedFileInfo
+   // clearPdfData() → sets pdfData to null (THIS was missing)
+   ```
+
+3. **Test State Transitions**: Verify each user action properly transitions state
+   - Initial load → correct state
+   - After file import → correct state  
+   - After reset action → correct state ← **This failed initially**
+
+4. **Use Consistent Naming**: Functions should clearly indicate their scope
+   ```typescript
+   // Good: Specific about what gets cleared
+   clearPdfData()           // Only clears PDF data
+   clearLastImportedFile()  // Only clears file tracking info
+   resetToDefaults()        // Should clear ALL app state
+   ```
+
+#### Common State Management Pitfalls
+
+1. **Assuming Function Names Match Behavior**: Just because a function is called "reset" doesn't mean it resets everything
+2. **Partial State Updates**: Forgetting to clear all related state variables
+3. **State Drift**: When multiple state managers exist, ensure they stay synchronized
+4. **Testing Only Happy Path**: Always test edge cases like reset/clear operations
+
+#### Prevention Strategies
+
+1. **Centralized State Clearing**: Create comprehensive reset functions that handle all related state
+2. **State Validation**: Add runtime checks for impossible state combinations
+3. **Clear Function Names**: Use specific names that match actual behavior
+4. **Documentation**: Document state dependencies and clearing requirements
+5. **Integration Testing**: Test complete user workflows, not just individual functions
+
+#### Debugging Tools and Techniques
+
+1. **State Logging**: Add temporary logging to track state changes
+   ```typescript
+   console.log('State after reset:', { 
+     pdfData: !!pdfDataManager.pdfData, 
+     multiFilePages: multiFileImport.multiFileState.pages.length 
+   });
+   ```
+
+2. **React DevTools**: Monitor state changes in real-time during user actions
+3. **Conditional Breakpoints**: Set breakpoints that trigger only when state is unexpected
+4. **State Snapshots**: Capture state before/after critical operations
+
+This debugging experience reinforced the importance of thorough state management and complete testing of user workflows, especially reset/clear operations that are often edge cases.
