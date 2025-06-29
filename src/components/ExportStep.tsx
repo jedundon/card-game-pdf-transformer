@@ -23,8 +23,8 @@ import {
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
-import { DPI_CONSTANTS, TIMEOUT_CONSTANTS } from '../constants';
-import type { ExportStepProps, MultiFileImportHook } from '../types';
+import { /* DPI_CONSTANTS, */ TIMEOUT_CONSTANTS } from '../constants';
+import type { ExportStepProps /*, MultiFileImportHook */ } from '../types';
 import jsPDF from 'jspdf';
 
 

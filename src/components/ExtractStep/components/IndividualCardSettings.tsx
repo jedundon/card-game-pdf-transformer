@@ -56,13 +56,13 @@ export const IndividualCardSettings: React.FC<IndividualCardSettingsProps> = ({
   };
 
   const hasCropActive = extractionSettings.cardCrop && (
-    (extractionSettings.cardCrop.top > 0 || extractionSettings.cardCrop.right > 0 || 
-     extractionSettings.cardCrop.bottom > 0 || extractionSettings.cardCrop.left > 0)
+    (extractionSettings.cardCrop?.top > 0 || extractionSettings.cardCrop?.right > 0 || 
+     extractionSettings.cardCrop?.bottom > 0 || extractionSettings.cardCrop?.left > 0)
   );
 
   const totalCrop = hasCropActive ? 
-    (extractionSettings.cardCrop.top || 0) + (extractionSettings.cardCrop.right || 0) + 
-    (extractionSettings.cardCrop.bottom || 0) + (extractionSettings.cardCrop.left || 0) : 0;
+    (extractionSettings.cardCrop?.top || 0) + (extractionSettings.cardCrop?.right || 0) + 
+    (extractionSettings.cardCrop?.bottom || 0) + (extractionSettings.cardCrop?.left || 0) : 0;
 
   return (
     <>

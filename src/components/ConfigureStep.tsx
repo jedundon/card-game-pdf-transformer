@@ -6,8 +6,8 @@ import { PageSizeSettings } from './ConfigureStep/components/PageSizeSettings';
 import { CardPositionSettings } from './ConfigureStep/components/CardPositionSettings';
 import { CardSizeSettings } from './ConfigureStep/components/CardSizeSettings';
 import { CalibrationSection } from './ConfigureStep/components/CalibrationSection';
-import { CardPreviewPanel } from './ConfigureStep/components/CardPreviewPanel';
-import { CalibrationWizardModal } from './ConfigureStep/components/CalibrationWizardModal';
+// import { CardPreviewPanel } from './ConfigureStep/components/CardPreviewPanel';
+// import { CalibrationWizardModal } from './ConfigureStep/components/CalibrationWizardModal';
 import { 
   getActivePagesWithSource, 
   calculateTotalCards, 
@@ -26,9 +26,9 @@ import {
 } from '../utils/renderUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
 import { generateCalibrationPDF, calculateCalibrationSettings } from '../utils/calibrationUtils';
-import { PREVIEW_CONSTRAINTS, DPI_CONSTANTS, TIMEOUT_CONSTANTS } from '../constants';
+import { PREVIEW_CONSTRAINTS, /* DPI_CONSTANTS, */ TIMEOUT_CONSTANTS } from '../constants';
 import { DEFAULT_SETTINGS } from '../defaults';
-import type { ConfigureStepProps, MultiFileImportHook } from '../types';
+import type { ConfigureStepProps /*, MultiFileImportHook */ } from '../types';
 
 export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   pdfData,

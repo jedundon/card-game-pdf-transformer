@@ -156,7 +156,7 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
 
   // --- Overlay: Gutter ---
   const GutterOverlay = ({ scale, renderedPageData }: { scale: number; renderedPageData: RenderedPageData }) => {
-    if (pdfMode.type !== 'gutter-fold' || !(extractionSettings.gutterWidth > 0)) return null;
+    if (pdfMode.type !== 'gutter-fold' || !(extractionSettings.gutterWidth && extractionSettings.gutterWidth > 0)) return null;
     if (!canvasRef.current || !renderedPageData) return null;
     
     const overlayWidth = canvasRef.current.offsetWidth || canvasRef.current.width;
@@ -239,7 +239,7 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
     };
 
     // Gutter-fold mode
-    if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth > 0) {
+    if (pdfMode.type === 'gutter-fold' && extractionSettings.gutterWidth && extractionSettings.gutterWidth > 0) {
       const gutterSizePx = extractionSettings.gutterWidth * scale;
       if (pdfMode.orientation === 'vertical') {
         const cols = extractionSettings.grid.columns;

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef /*, useState */ } from 'react';
 import { Upload } from 'lucide-react';
 import { isValidImageFile } from '../../utils/imageUtils';
 import type { MultiFileImportHook } from '../../types';

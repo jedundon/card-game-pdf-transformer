@@ -190,7 +190,16 @@ export const DEFAULT_SETTINGS = {
       back: 0
     },
     // Card image sizing mode
-    cardImageSizingMode: 'actual-size' as 'actual-size' | 'fit-to-card' | 'fill-card'
+    cardImageSizingMode: 'actual-size' as 'actual-size' | 'fit-to-card' | 'fill-card',
+    // Spacing between cards (for future multi-card layouts)
+    spacing: {
+      horizontal: 0,
+      vertical: 0
+    },
+    // Card alignment within page
+    cardAlignment: 'center' as 'top-left' | 'center',
+    // Include color calibration in output
+    includeColorCalibration: false
   }
 };
 
@@ -304,11 +313,18 @@ export type WorkflowSettings = {
       heightInches: number;
     };
     cardScalePercent: number;
-    bleedMarginInches: number;    rotation: {
+    bleedMarginInches: number;
+    rotation: {
       front: number;
       back: number;
     };
     cardImageSizingMode: 'actual-size' | 'fit-to-card' | 'fill-card';
+    spacing: {
+      horizontal: number;
+      vertical: number;
+    };
+    cardAlignment: 'top-left' | 'center';
+    includeColorCalibration: boolean;
   };
   colorSettings: {
     selectedRegion: any;

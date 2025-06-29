@@ -90,11 +90,11 @@ interface UseMultiFileImportReturn {
   /** Get error for a specific file */
   getFileError: (fileName: string) => string | undefined;
   /** Get image data for a specific file */
-  getImageData: (fileName: string) => ImageFileData | undefined;
+  getImageData: (fileName: string) => ImageFileData | null;
   /** Get all image data */
   getAllImageData: () => Map<string, ImageFileData>;
   /** Get PDF data for a specific file */
-  getPdfData: (fileName: string) => PdfData | undefined;
+  getPdfData: (fileName: string) => PdfData | null;
   /** Get all PDF data */
   getAllPdfData: () => Map<string, PdfData>;
 }
@@ -793,8 +793,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
   /**
    * Get image data for a specific file
    */
-  const getImageData = useCallback((fileName: string): ImageFileData | undefined => {
-    return imageDataStore.get(fileName);
+  const getImageData = useCallback((fileName: string): ImageFileData | null => {
+    return imageDataStore.get(fileName) || null;
   }, [imageDataStore]);
 
   /**
@@ -807,8 +807,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
   /**
    * Get PDF data for a specific file
    */
-  const getPdfData = useCallback((fileName: string): PdfData | undefined => {
-    return pdfDataStore.get(fileName);
+  const getPdfData = useCallback((fileName: string): PdfData | null => {
+    return pdfDataStore.get(fileName) || null;
   }, [pdfDataStore]);
 
   /**

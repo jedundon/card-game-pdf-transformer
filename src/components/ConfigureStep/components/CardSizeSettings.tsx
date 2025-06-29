@@ -5,8 +5,8 @@ import type { OutputSettings } from '../../../types';
 
 interface CardSizeSettingsProps {
   outputSettings: OutputSettings;
-  onCardImageSizingModeChange: (mode: string) => void;
-  onCardSizeChange: (dimension: string, value: number) => void;
+  onCardImageSizingModeChange: (mode: 'actual-size' | 'fit-to-card' | 'fill-card') => void;
+  onCardSizeChange: (dimension: 'widthInches' | 'heightInches', value: number) => void;
   onBleedMarginChange: (value: number) => void;
   onCardSizePreset: (preset: { widthInches: number; heightInches: number }) => void;
   onCardScalePercentChange: (value: number) => void;

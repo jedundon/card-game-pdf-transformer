@@ -1,17 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon /*, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon */ } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
 import { 
   getActivePagesWithSource,
-  calculateTotalCards, 
+  // calculateTotalCards, 
   getCardInfo, 
-  extractCardImageFromCanvas,
-  getAvailableCardIds
+  extractCardImageFromCanvas
+  // getAvailableCardIds
 } from '../utils/cardUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
-import { TIMEOUT_CONSTANTS } from '../constants';
-import type { ExtractStepProps, MultiFileImportHook } from '../types';
+// import { TIMEOUT_CONSTANTS } from '../constants';
+import type { ExtractStepProps /*, MultiFileImportHook */ } from '../types';
 import { useCardDimensions } from './ExtractStep/hooks/useCardDimensions';
 import { GridSettings } from './ExtractStep/components/GridSettings';
 import { GutterSettings } from './ExtractStep/components/GutterSettings';
@@ -65,14 +65,14 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     getActivePagesWithSource(unifiedPages), 
     [unifiedPages]
   );
-  const totalPages = activePages.length;
+  // const totalPages = activePages.length;
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   
   // Calculate total unique cards based on PDF mode and card type
-  const totalCards = useMemo(() => 
-    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
-    [pdfMode, activePages, cardsPerPage]
-  );
+  // const totalCards = useMemo(() => 
+  //   calculateTotalCards(pdfMode, activePages, cardsPerPage), 
+  //   [pdfMode, activePages, cardsPerPage]
+  // );
     // Calculate card front/back identification based on PDF mode
   // Calculate the global card index from current page and card
   const globalCardIndex = currentPage * cardsPerPage + currentCard;
@@ -87,16 +87,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     pageDimensions?.height
   );
   // Calculate total cards of the current card type for context-aware navigation (excluding skipped cards)
-  const totalCardsOfType = useMemo(() => {
-    const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
-    return availableCardIds.length;
-  }, [cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
+  // const totalCardsOfType = useMemo(() => {
+  //   const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+  //   return availableCardIds.length;
+  // }, [cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
 
   // Calculate the position of the current card within cards of the same type (excluding skipped cards)
-  const currentCardPosition = useMemo(() => {
-    const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
-    return availableCardIds.indexOf(cardId) + 1; // 1-based position, -1 if not found (skipped)
-  }, [cardType, cardId, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
+  // const currentCardPosition = useMemo(() => {
+  //   const availableCardIds = getAvailableCardIds(cardType.toLowerCase() as 'front' | 'back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+  //   return availableCardIds.indexOf(cardId) + 1; // 1-based position, -1 if not found (skipped)
+  // }, [cardType, cardId, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]);
 
   // Calculate card dimensions for display with rotation effects
   const cardDimensions = useCardDimensions({
@@ -305,7 +305,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             currentCard={currentCard}
             cardsPerPage={cardsPerPage}
             cardType={cardType}
-            cardId={cardId}
+            cardId={String(cardId)}
             onSettingsChange={onSettingsChange}
           />
         </div>
@@ -331,7 +331,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
 
           <CardPreviewPanel
             cardType={cardType}
-            cardId={cardId}
+            cardId={String(cardId)}
             globalCardIndex={globalCardIndex}
             extractCardImage={extractCardImage}
             renderedPageData={renderedPageData}
