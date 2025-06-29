@@ -424,7 +424,7 @@ test.describe('Complete Workflow Integration Tests', () => {
           layout: { rows: cardsPerColumn, columns: cardsPerRow },
           spacing: { horizontal: horizontalSpacing, vertical: verticalSpacing },
           fitsOnPage: cardsPerRow > 0 && cardsPerColumn > 0,
-          utilizatio n: (totalCardsWidth * totalCardsHeight) / (pageWidth * pageHeight)
+          utilization: (totalCardsWidth * totalCardsHeight) / (pageWidth * pageHeight)
         };
       };
       
@@ -465,8 +465,8 @@ test.describe('Complete Workflow Integration Tests', () => {
     for (const layout of layoutConfigurationWorkflow.layoutResults) {
       expect(layout.spacing.horizontal).toBeGreaterThanOrEqual(0);
       expect(layout.spacing.vertical).toBeGreaterThanOrEqual(0);
-      expect(layout.utilizatio n).toBeGreaterThan(0);
-      expect(layout.utilizatio n).toBeLessThanOrEqual(1);
+      expect(layout.utilization).toBeGreaterThan(0);
+      expect(layout.utilization).toBeLessThanOrEqual(1);
     }
   });
 
