@@ -248,7 +248,7 @@ describe('Preview Consistency - Mathematical Validation', () => {
       const cardHeight = 450
       
       const imageAspectRatio = imageWidth / imageHeight
-      const cardAspectRatio = cardWidth / cardHeight
+      // const cardAspectRatio = cardWidth / cardHeight
       
       // Test each sizing mode (must match preview and export exactly)
       
