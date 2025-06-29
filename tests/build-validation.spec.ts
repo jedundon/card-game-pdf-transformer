@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
 /**
  * Build Validation and Asset Integrity Tests
@@ -557,7 +556,8 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       
       // Test memory usage if available
       let memoryUsage = { used: 0, total: 0, limit: 0 };
-      // @ts-ignore - performance.memory is available in Chrome
+      // @ts-ignore: performance.memory is a Chrome-specific API not in standard types
+      // Used for validating memory consumption during build validation tests
       if (performance.memory) {
         memoryUsage = {
           used: performance.memory.usedJSHeapSize,

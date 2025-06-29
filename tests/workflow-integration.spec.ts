@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
 /**
  * Complete Workflow Integration Tests
@@ -49,10 +48,6 @@ test.describe('Complete Workflow Integration Tests', () => {
     // Step 1: Import Files - Test initial state
     await expect(page.locator('h1')).toContainText('Card Game PDF Transformer');
     await expect(page.locator('text=Import Files')).toBeVisible();
-    
-    // Verify we're on step 1 and other steps are disabled
-    const step1 = page.locator('[data-testid="step-1"], .step-1, .step:nth-child(1)').first();
-    const step2 = page.locator('[data-testid="step-2"], .step-2, .step:nth-child(2)').first();
     
     // Should be able to see step indicators
     await expect(page.locator('text=Import Files')).toBeVisible();
@@ -239,9 +234,7 @@ test.describe('Complete Workflow Integration Tests', () => {
     expect(extractStepWorkflow.gridTests).toHaveLength(3);
     
     // Test specific grid configurations
-    const simplexGrid = extractStepWorkflow.gridTests.find(g => g.name === 'simplex');
     const duplexGrid = extractStepWorkflow.gridTests.find(g => g.name === 'duplex');
-    const gutterFoldGrid = extractStepWorkflow.gridTests.find(g => g.name === 'gutter-fold');
     
     // Duplex should fit comfortably
     expect(duplexGrid?.fitsOnPage).toBe(true);
@@ -289,8 +282,6 @@ test.describe('Complete Workflow Integration Tests', () => {
         // Simulate color calibration calculations
         const brightnessFactor = settings.brightness / 100;
         const contrastFactor = settings.contrast / 100;
-        const saturationFactor = settings.saturation / 100;
-        
         // Apply brightness
         let r = colors.r * brightnessFactor;
         let g = colors.g * brightnessFactor;

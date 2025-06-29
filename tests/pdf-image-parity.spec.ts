@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
 /**
  * PDF vs Image Workflow Visual Parity Tests
@@ -145,8 +144,6 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     
     // Test card positioning calculations for PDF vs image
     const cardPositioning = await page.evaluate(() => {
-      const EXTRACTION_DPI = 300;
-      
       // Simulate identical page content in both formats
       const pageWidth = 2550; // 8.5" * 300 DPI (unified coordinate system)
       const pageHeight = 3300; // 11" * 300 DPI
@@ -332,8 +329,6 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     
     // Test rotation and scaling consistency across file types
     const rotationScalingConsistency = await page.evaluate(() => {
-      const EXTRACTION_DPI = 300;
-      
       // Test card dimensions in extraction DPI
       const baseCardWidth = 750; // 2.5" * 300 DPI
       const baseCardHeight = 1050; // 3.5" * 300 DPI
@@ -352,8 +347,8 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
           const scaleFactor = scale / 100;
           
           // Apply scaling to card with bleed
-          let scaledWidth = cardWithBleedWidth * scaleFactor;
-          let scaledHeight = cardWithBleedHeight * scaleFactor;
+          const scaledWidth = cardWithBleedWidth * scaleFactor;
+          const scaledHeight = cardWithBleedHeight * scaleFactor;
           
           // Apply rotation (dimension swapping)
           let finalWidth = scaledWidth;

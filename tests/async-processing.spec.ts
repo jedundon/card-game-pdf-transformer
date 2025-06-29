@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import path from 'path';
 
 /**
  * Async Processing and Real Function Testing
@@ -65,7 +64,7 @@ test.describe('Async Processing and Real Function Testing', () => {
               ctx.fillRect(0, 0, width, height);
               break;
               
-            case 'gradient':
+            case 'gradient': {
               const gradient = ctx.createLinearGradient(0, 0, width, height);
               gradient.addColorStop(0, '#FF6B35');
               gradient.addColorStop(0.5, '#F7931E');
@@ -73,8 +72,9 @@ test.describe('Async Processing and Real Function Testing', () => {
               ctx.fillStyle = gradient;
               ctx.fillRect(0, 0, width, height);
               break;
+            }
               
-            case 'checkerboard':
+            case 'checkerboard': {
               const squareSize = 20;
               for (let x = 0; x < width; x += squareSize) {
                 for (let y = 0; y < height; y += squareSize) {
@@ -84,6 +84,7 @@ test.describe('Async Processing and Real Function Testing', () => {
                 }
               }
               break;
+            }
           }
           
           // Convert canvas to image
@@ -111,16 +112,18 @@ test.describe('Async Processing and Real Function Testing', () => {
             let imageHeight = sourceImage.height;
             
             switch (sizingMode) {
-              case 'fit-to-card':
+              case 'fit-to-card': {
                 const fitScale = Math.min(targetWidth / sourceImage.width, targetHeight / sourceImage.height);
                 imageWidth = sourceImage.width * fitScale;
                 imageHeight = sourceImage.height * fitScale;
                 break;
-              case 'fill-card':
+              }
+              case 'fill-card': {
                 const fillScale = Math.max(targetWidth / sourceImage.width, targetHeight / sourceImage.height);
                 imageWidth = sourceImage.width * fillScale;
                 imageHeight = sourceImage.height * fillScale;
                 break;
+              }
               // 'actual-size' uses original dimensions
             }
             
@@ -421,7 +424,8 @@ test.describe('Async Processing and Real Function Testing', () => {
     const memoryManagementTest = await page.evaluate(async () => {
       // Monitor memory usage during processing
       const getMemoryUsage = () => {
-        // @ts-ignore - performance.memory is available in Chrome
+        // @ts-ignore: performance.memory is a Chrome-specific API not in standard types
+        // Used for testing memory consumption during async operations
         if (performance.memory) {
           return {
             used: performance.memory.usedJSHeapSize,
@@ -596,49 +600,48 @@ test.describe('Async Processing and Real Function Testing', () => {
       const testAsyncError = async (errorType: string) => {
         const startTime = performance.now();
         
-        try {
-          switch (errorType) {
-            case 'invalid-image-data':
-              // Try to create image with invalid data
-              const img = new Image();
-              return new Promise((resolve, reject) => {
-                img.onload = () => resolve({ success: true, errorType, time: performance.now() - startTime });
-                img.onerror = () => reject(new Error('Invalid image data'));
-                img.src = 'data:image/invalid;base64,invaliddata';
-              });
-              
-            case 'canvas-size-limit':
-              // Try to create oversized canvas
-              const canvas = document.createElement('canvas');
-              canvas.width = 99999; // Likely to exceed browser limits
-              canvas.height = 99999;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) throw new Error('Canvas size exceeded browser limits');
-              return { success: true, errorType, time: performance.now() - startTime };
-              
-            case 'memory-allocation-failure':
-              // Try to allocate huge amount of memory
-              const hugeArray = new Uint8Array(1024 * 1024 * 1024); // 1GB
-              hugeArray.fill(255);
-              return { success: true, errorType, time: performance.now() - startTime };
-              
-            case 'async-timeout':
-              // Simulate operation that takes too long
-              return new Promise((resolve, reject) => {
-                setTimeout(() => {
-                  reject(new Error('Operation timed out'));
-                }, 100);
-                // Start a longer operation
-                setTimeout(() => {
-                  resolve({ success: true, errorType, time: performance.now() - startTime });
-                }, 200);
-              });
-              
-            default:
-              throw new Error(`Unknown error type: ${errorType}`);
+        switch (errorType) {
+          case 'invalid-image-data': {
+            // Try to create image with invalid data
+            const img = new Image();
+            return new Promise((resolve, reject) => {
+              img.onload = () => resolve({ success: true, errorType, time: performance.now() - startTime });
+              img.onerror = () => reject(new Error('Invalid image data'));
+              img.src = 'data:image/invalid;base64,invaliddata';
+            });
           }
-        } catch (error) {
-          throw error;
+            
+          case 'canvas-size-limit': {
+            // Try to create oversized canvas
+            const canvas = document.createElement('canvas');
+            canvas.width = 99999; // Likely to exceed browser limits
+            canvas.height = 99999;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) throw new Error('Canvas size exceeded browser limits');
+            return { success: true, errorType, time: performance.now() - startTime };
+          }
+            
+          case 'memory-allocation-failure': {
+            // Try to allocate huge amount of memory
+            const hugeArray = new Uint8Array(1024 * 1024 * 1024); // 1GB
+            hugeArray.fill(255);
+            return { success: true, errorType, time: performance.now() - startTime };
+          }
+            
+          case 'async-timeout':
+            // Simulate operation that takes too long
+            return new Promise((resolve, reject) => {
+              setTimeout(() => {
+                reject(new Error('Operation timed out'));
+              }, 100);
+              // Start a longer operation
+              setTimeout(() => {
+                resolve({ success: true, errorType, time: performance.now() - startTime });
+              }, 200);
+            });
+            
+          default:
+            throw new Error(`Unknown error type: ${errorType}`);
         }
       };
       

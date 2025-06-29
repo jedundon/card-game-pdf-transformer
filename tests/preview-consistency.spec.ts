@@ -335,19 +335,21 @@ test.describe('Preview Consistency Tests', () => {
             finalHeight = imageHeight;
             break;
             
-          case 'fit-to-card':
+          case 'fit-to-card': {
             // Scale to fit within card boundaries (maintain aspect ratio)
             const fitScale = Math.min(cardWidth / imageWidth, cardHeight / imageHeight);
             finalWidth = imageWidth * fitScale;
             finalHeight = imageHeight * fitScale;
             break;
+          }
             
-          case 'fill-card':
+          case 'fill-card': {
             // Scale to fill card boundaries (maintain aspect ratio, may crop)
             const fillScale = Math.max(cardWidth / imageWidth, cardHeight / imageHeight);
             finalWidth = imageWidth * fillScale;
             finalHeight = imageHeight * fillScale;
             break;
+          }
         }
         
         sizingResults.push({
@@ -549,16 +551,18 @@ test.describe('Preview vs Export Rendering Validation', () => {
         
         // Apply sizing mode
         switch (sizingMode) {
-          case 'fit-to-card':
+          case 'fit-to-card': {
             const fitScale = Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight);
             imageWidth = sourceWidth * fitScale;
             imageHeight = sourceHeight * fitScale;
             break;
-          case 'fill-card':
+          }
+          case 'fill-card': {
             const fillScale = Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
             imageWidth = sourceWidth * fillScale;
             imageHeight = sourceHeight * fillScale;
             break;
+          }
           // 'actual-size' uses original dimensions
         }
         
@@ -613,7 +617,6 @@ test.describe('Preview vs Export Rendering Validation', () => {
     // Validate canvas processing consistency
     const actualSizeResults = canvasValidation.filter(r => r.mode === 'actual-size');
     const fitToCardResults = canvasValidation.filter(r => r.mode === 'fit-to-card');
-    const fillCardResults = canvasValidation.filter(r => r.mode === 'fill-card');
     
     // For actual-size mode, image dimensions should be unchanged
     expect(actualSizeResults[0].processing.imageDimensions).toEqual({ width: 500, height: 700 });
