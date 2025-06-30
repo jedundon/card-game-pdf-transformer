@@ -44,7 +44,7 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
     // Test PDF.js worker availability and functionality
     const pdfWorkerTest = await page.evaluate(async () => {
       // Check if PDF.js is available
-      const pdfJsAvailable = typeof window.pdfjsLib !== 'undefined';
+      const pdfJsAvailable = typeof (window as any).pdfjsLib !== 'undefined';
       
       // Test worker configuration
       let workerConfigured = false;
@@ -54,7 +54,7 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       if (pdfJsAvailable) {
         try {
           // Check if worker is configured
-          const workerSrc = window.pdfjsLib.GlobalWorkerOptions.workerSrc;
+          const workerSrc = (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc;
           workerConfigured = !!workerSrc;
           
           // Test if worker script is accessible (with timeout)
@@ -98,9 +98,9 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
         try {
           // Test basic PDF.js API availability
           const hasRequiredAPI = 
-            typeof window.pdfjsLib.getDocument === 'function' &&
-            typeof window.pdfjsLib.version === 'string' &&
-            typeof window.pdfjsLib.build === 'string';
+            typeof (window as any).pdfjsLib.getDocument === 'function' &&
+            typeof (window as any).pdfjsLib.version === 'string' &&
+            typeof (window as any).pdfjsLib.build === 'string';
           
           pdfJsFunctional = hasRequiredAPI;
         } catch (error) {
@@ -114,8 +114,8 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
         workerScriptAvailable,
         workerCanLoad,
         pdfJsFunctional,
-        workerSrc: pdfJsAvailable ? window.pdfjsLib?.GlobalWorkerOptions?.workerSrc : null,
-        pdfJsVersion: pdfJsAvailable ? window.pdfjsLib?.version : null
+        workerSrc: pdfJsAvailable ? (window as any).pdfjsLib?.GlobalWorkerOptions?.workerSrc : null,
+        pdfJsVersion: pdfJsAvailable ? (window as any).pdfjsLib?.version : null
       };
     });
     
@@ -425,8 +425,8 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       
       // Test critical dependencies are available
       const dependencies = {
-        react: typeof window.React !== 'undefined',
-        pdfjs: typeof window.pdfjsLib !== 'undefined',
+        react: typeof (window as any).React !== 'undefined',
+        pdfjs: typeof (window as any).pdfjsLib !== 'undefined',
         // Test for other critical globals that should be available
         console: typeof console !== 'undefined',
         fetch: typeof fetch !== 'undefined',
@@ -615,11 +615,11 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       const paint = performance.getEntriesByType('paint');
       
       const metrics = {
-        domContentLoaded: navigation.domContentLoadedEventEnd - navigation.navigationStart,
-        loadComplete: navigation.loadEventEnd - navigation.navigationStart,
+        domContentLoaded: navigation.domContentLoadedEventEnd - navigation.fetchStart,
+        loadComplete: navigation.loadEventEnd - navigation.fetchStart,
         firstPaint: paint.find(p => p.name === 'first-paint')?.startTime || 0,
         firstContentfulPaint: paint.find(p => p.name === 'first-contentful-paint')?.startTime || 0,
-        domInteractive: navigation.domInteractive - navigation.navigationStart,
+        domInteractive: navigation.domInteractive - navigation.fetchStart,
         resourceCount: performance.getEntriesByType('resource').length
       };
       

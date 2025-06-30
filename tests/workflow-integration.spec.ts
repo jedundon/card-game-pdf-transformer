@@ -785,16 +785,16 @@ test.describe('Complete Workflow Integration Tests', () => {
     const gridRecovery = errorRecoveryTest.recoveryResults.find(r => r.scenario === 'grid-overflow-recovery');
     const settingsRecovery = errorRecoveryTest.recoveryResults.find(r => r.scenario === 'settings-corruption-recovery');
     
-    expect(fileRecovery?.recoveryActions.resetFileInput).toBe(true);
-    expect(fileRecovery?.recoveryActions.preserveOtherSettings).toBe(true);
+    expect((fileRecovery?.recoveryActions as any)?.resetFileInput).toBe(true);
+    expect((fileRecovery?.recoveryActions as any)?.preserveOtherSettings).toBe(true);
     
-    expect(memoryRecovery?.recoveryActions.showCompressionSuggestion).toBe(true);
-    expect(memoryRecovery?.recoveryActions.preserveWorkflow).toBe(true);
+    expect((memoryRecovery?.recoveryActions as any)?.showCompressionSuggestion).toBe(true);
+    expect((memoryRecovery?.recoveryActions as any)?.preserveWorkflow).toBe(true);
     
-    expect(gridRecovery?.recoveryActions.suggestScaleReduction).toBe(true);
-    expect(gridRecovery?.recoveryActions.recalculateLayout).toBe(true);
+    expect((gridRecovery?.recoveryActions as any)?.suggestScaleReduction).toBe(true);
+    expect((gridRecovery?.recoveryActions as any)?.recalculateLayout).toBe(true);
     
-    expect(settingsRecovery?.recoveryActions.resetToDefaults).toBe(true);
-    expect(settingsRecovery?.recoveryActions.preserveCurrentSession).toBe(true);
+    expect((settingsRecovery?.recoveryActions as any)?.resetToDefaults).toBe(true);
+    expect((settingsRecovery?.recoveryActions as any)?.preserveCurrentSession).toBe(true);
   });
 });

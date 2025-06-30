@@ -101,15 +101,11 @@ test.describe('Visual Regression Tests - Core Application', () => {
     
     // Screenshot step 2 in disabled state
     await expect(page).toHaveScreenshot('step-2-extract-disabled.png');
-        
-        // Test grid controls if visible
-        const gridControls = page.locator('[data-testid="grid-controls"], .grid-controls').first();
-        if (await gridControls.count() > 0) {
-          await expect(gridControls).toHaveScreenshot('step-2-grid-controls.png');
-        }
-      } catch (error) {
-        console.log('Step 2 navigation not available without PDF, which is expected');
-      }
+    
+    // Test grid controls if visible
+    const gridControls = page.locator('[data-testid="grid-controls"], .grid-controls').first();
+    if (await gridControls.count() > 0) {
+      await expect(gridControls).toHaveScreenshot('step-2-grid-controls.png');
     }
   });
 
