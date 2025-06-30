@@ -46,6 +46,9 @@ jobs:
     
     - name: Run Playwright tests
       run: npm run test:e2e
+      timeout-minutes: 15
+      env:
+        CI: true
       
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
