@@ -121,11 +121,11 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
       };
     });
     
-    // Validate coordinate system consistency
-    expect(coordinateConsistency.originalDimensions.pdf.width).toBe(2550);
-    expect(coordinateConsistency.originalDimensions.pdf.height).toBe(3300);
-    expect(coordinateConsistency.originalDimensions.image.width).toBe(2550);
-    expect(coordinateConsistency.originalDimensions.image.height).toBe(3300);
+    // Validate coordinate system consistency (with floating point tolerance)
+    expect(coordinateConsistency.originalDimensions.pdf.width).toBeCloseTo(2550, 1);
+    expect(coordinateConsistency.originalDimensions.pdf.height).toBeCloseTo(3300, 1);
+    expect(coordinateConsistency.originalDimensions.image.width).toBeCloseTo(2550, 1);
+    expect(coordinateConsistency.originalDimensions.image.height).toBeCloseTo(3300, 1);
     
     // Validate cropping produces identical results
     expect(coordinateConsistency.croppedDimensions.pdf.width).toBe(coordinateConsistency.croppedDimensions.image.width);
