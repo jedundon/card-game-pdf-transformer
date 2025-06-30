@@ -13,8 +13,12 @@ interface RenderedPageData {
   fileName: string;
 }
 
+interface PageDimensions {
+  width: number;
+  height: number;
+}
+
 interface PagePreviewPanelProps {
-  pdfData: PdfData | null;
   activePages: any[];
   currentPage: number;
   currentCard: number;
@@ -28,7 +32,7 @@ interface PagePreviewPanelProps {
   getPdfData: (fileName: string) => PdfData | null;
   getImageData: (fileName: string) => any;
   onRenderedPageDataChange: (data: RenderedPageData | null) => void;
-  onPageDimensionsChange: (dimensions: { width: number; height: number } | null) => void;
+  onPageDimensionsChange: (dimensions: PageDimensions | null) => void;
 }
 
 /**
@@ -38,7 +42,6 @@ interface PagePreviewPanelProps {
  * and interactive grid overlays for card selection.
  */
 export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
-  pdfData,
   activePages,
   currentPage,
   currentCard,
@@ -349,7 +352,7 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
     }
     
     // Check if we have the necessary data for the current source type
-    if (currentPageInfo.fileType === 'pdf' && !pdfData) {
+    if (currentPageInfo.fileType === 'pdf' && !getPdfData(currentPageInfo.fileName)) {
       return;
     }
     if (currentPageInfo.fileType === 'image' && !getImageData(currentPageInfo.fileName)) {
@@ -655,13 +658,10 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
               ref={canvasRef}
               className="block"
               style={{ 
-                display: activePages.length > 0 && 
-                         (pdfData || activePages.some(p => p.fileType === 'image'))
-                         ? 'block' : 'none'
+                display: activePages.length > 0 ? 'block' : 'none'
               }}
             />
-            {(activePages.length === 0 || 
-              (!pdfData && !activePages.some(p => p.fileType === 'image'))) && (
+            {activePages.length === 0 && (
               <div className="text-gray-400 text-center p-8">
                 <p>No files loaded or no active pages</p>
               </div>

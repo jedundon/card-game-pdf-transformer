@@ -150,7 +150,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   // Calculate card front/back identification based on PDF mode (using utility function)
   const getCardInfoCallback = useCallback((cardIndex: number) => 
-    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, undefined, undefined), 
+    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height), 
     [activePages, extractionSettings, pdfMode, cardsPerPage]
   );
   // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode

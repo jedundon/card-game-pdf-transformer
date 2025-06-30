@@ -306,6 +306,7 @@ export function getCardInfo(
       // Front cards: sequential numbering based on which front page this is
       const frontPageIndex = countFrontPagesUpTo(activePages, pageIndex) - 1; // 0-indexed
       const globalCardId = frontPageIndex * cardsPerPage + cardOnPage + 1;
+      
       return { type: 'Front', id: globalCardId };
     } else {
       // Back cards: map to corresponding front cards based on logical position
@@ -325,10 +326,9 @@ export function getCardInfo(
         // Cycle through front cards if we have more front cards than back card positions
         const targetFrontCardIndex = backCardGlobalIndex % totalFrontCards;
         correspondingFrontPageIndex = Math.floor(targetFrontCardIndex / cardsPerPage);
-        const targetCardOnPage = targetFrontCardIndex % cardsPerPage;
         
-        // Apply flip edge logic to get the actual card position on the back page
-        let logicalCardOnPage: number;
+        // Apply flip edge logic to determine which front card this back card corresponds to
+        // Instead of trying to match positions, directly calculate the mirrored position
         
         // Determine flip direction based on page orientation and flip edge
         let shouldFlipRows: boolean;
@@ -341,30 +341,36 @@ export function getCardInfo(
           }
         } else {
           // Fallback to original logic if page dimensions not available
+          console.warn('getCardInfo: Page dimensions not available for card ID calculation. Using fallback logic which may produce inconsistent IDs.', {
+            flipEdge: pdfMode.flipEdge,
+            cardIndex,
+            fallbackShouldFlipRows: (pdfMode.flipEdge === 'long')
+          });
           shouldFlipRows = (pdfMode.flipEdge === 'long');
         }
         
-        const row = Math.floor(targetCardOnPage / extractionSettings.grid.columns);
-        const col = targetCardOnPage % extractionSettings.grid.columns;
+        // Mirror the current back card position to find which front card it corresponds to
+        const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
+        const col = cardOnPage % extractionSettings.grid.columns;
         
+        let mirroredCardOnPage: number;
         if (shouldFlipRows) {
           // Flip rows (vertical mirroring)
           const flippedRow = extractionSettings.grid.rows - 1 - row;
-          logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+          mirroredCardOnPage = flippedRow * extractionSettings.grid.columns + col;
         } else {
           // Flip columns (horizontal mirroring)
           const flippedCol = extractionSettings.grid.columns - 1 - col;
-          logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+          mirroredCardOnPage = row * extractionSettings.grid.columns + flippedCol;
         }
         
-        // Only assign back card ID if this matches our current card position
-        if (logicalCardOnPage === cardOnPage) {
-          const globalCardId = correspondingFrontPageIndex * cardsPerPage + targetCardOnPage + 1;
-          return { type: 'Back', id: globalCardId };
-        } else {
-          // This back card position doesn't correspond to a front card
-          return { type: 'Back', id: cardOnPage + 1 };
-        }
+        // Calculate which front page this mirrored position belongs to
+        const targetFrontPageIndex = Math.floor(mirroredCardOnPage / cardsPerPage);
+        const targetCardOnFrontPage = mirroredCardOnPage % cardsPerPage;
+        
+        const globalCardId = targetFrontPageIndex * cardsPerPage + targetCardOnFrontPage + 1;
+        
+        return { type: 'Back', id: globalCardId };
       } else {
         // Normal case: map back pages to front pages proportionally
         if (totalFrontPages === 0) {
@@ -378,7 +384,7 @@ export function getCardInfo(
       }
       
       // Apply flip edge logic for normal cases
-      let logicalCardOnPage: number;
+      let mirroredCardOnPage: number;
       
       // Determine flip direction based on page orientation and flip edge
       let shouldFlipRows: boolean;
@@ -391,23 +397,33 @@ export function getCardInfo(
         }
       } else {
         // Fallback to original logic if page dimensions not available
+        console.warn('getCardInfo: Page dimensions not available for card ID calculation. Using fallback logic which may produce inconsistent IDs.', {
+          flipEdge: pdfMode.flipEdge,
+          cardIndex,
+          fallbackShouldFlipRows: (pdfMode.flipEdge === 'long')
+        });
         shouldFlipRows = (pdfMode.flipEdge === 'long');
       }
       
       const row = Math.floor(cardOnPage / extractionSettings.grid.columns);
       const col = cardOnPage % extractionSettings.grid.columns;
       
+
+      
       if (shouldFlipRows) {
         // Flip rows (vertical mirroring)
         const flippedRow = extractionSettings.grid.rows - 1 - row;
-        logicalCardOnPage = flippedRow * extractionSettings.grid.columns + col;
+        mirroredCardOnPage = flippedRow * extractionSettings.grid.columns + col;
       } else {
         // Flip columns (horizontal mirroring)
         const flippedCol = extractionSettings.grid.columns - 1 - col;
-        logicalCardOnPage = row * extractionSettings.grid.columns + flippedCol;
+        mirroredCardOnPage = row * extractionSettings.grid.columns + flippedCol;
       }
       
-      const globalCardId = correspondingFrontPageIndex * cardsPerPage + logicalCardOnPage + 1;
+      const globalCardId = correspondingFrontPageIndex * cardsPerPage + mirroredCardOnPage + 1;
+      
+
+      
       return { type: 'Back', id: globalCardId };
     }
   } else if (pdfMode.type === 'gutter-fold') {

@@ -538,7 +538,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
   // Calculate card front/back identification based on PDF mode
   const getCardInfoCallback = useCallback((cardIndex: number) => 
-    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, undefined, undefined), 
+    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height), 
     [activePages, extractionSettings, pdfMode, cardsPerPage]
   );
 

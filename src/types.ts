@@ -159,6 +159,8 @@ export interface ExtractionSettings {
   imageRotation?: ImageRotationSettings;
   /** Array of card positions to skip during processing */
   skippedCards?: SkippedCard[];
+  /** Page dimensions for orientation-aware card ID calculations */
+  pageDimensions?: { width: number; height: number };
 }
 
 /**
