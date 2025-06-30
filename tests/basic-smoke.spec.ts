@@ -8,51 +8,36 @@ test.describe('Basic Application Smoke Tests', () => {
     // Should see the main title
     await expect(page.locator('h1')).toContainText('Card Game PDF Transformer');
     
-    // Should see the step indicator (use multiple selector strategies)
-    const stepIndicator = page.locator('[data-testid="step-indicator"], .step-indicator, .wizard-steps, nav[role="tablist"]').first();
+    // Should see the step indicator (it's a flexbox div with numbered circles)
+    const stepIndicator = page.locator('div').filter({ hasText: /^1$/ }).first();
     await expect(stepIndicator).toBeVisible();
     
-    // Should see import step content
-    await expect(page.locator('text=Import Files')).toBeVisible();
+    // Should see import step content - updated step name
+    await expect(page.locator('text=Import PDF')).toBeVisible();
   });
 
   test('should display all wizard steps in navigation', async ({ page }) => {
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
     
-    // Check that all 5 steps are present in the step indicator
+    // Check that all 5 steps are present in the step indicator - updated step names
     const steps = [
-      'Import Files',
+      'Import PDF',
       'Extract Cards', 
-      'Color Calibration',
       'Configure Layout',
+      'Color Calibration',
       'Export'
     ];
     
     for (const step of steps) {
-      // Use more specific selectors to avoid strict mode violations
-      if (step === 'Export') {
-        // Target specifically the step indicator Export, not the settings Export
-        // Use multiple fallback strategies for finding Export in navigation
-        const exportSelectors = [
-          '.step-indicator >> text=Export',
-          'nav >> text=Export', 
-          '[role="tablist"] >> text=Export',
-          '[data-testid="step-indicator"] >> text=Export'
-        ];
-        
-        let exportFound = false;
-        for (const selector of exportSelectors) {
-          const element = page.locator(selector);
-          if (await element.count() > 0) {
-            await expect(element.first()).toBeVisible();
-            exportFound = true;
-            break;
-          }
-        }
-        expect(exportFound).toBe(true);
-      } else {
-        await expect(page.locator(`text=${step}`).first()).toBeVisible();
-      }
+      // Look for step text in the step indicator area
+      await expect(page.locator(`text=${step}`).first()).toBeVisible();
+    }
+    
+    // Also verify the numbered circles (1-5) are present
+    for (let i = 1; i <= 5; i++) {
+      const stepNumber = page.locator('div').filter({ hasText: new RegExp(`^${i}$`) }).first();
+      await expect(stepNumber).toBeVisible();
     }
   });
 
@@ -60,61 +45,40 @@ test.describe('Basic Application Smoke Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // First step should be active/current (use flexible selectors)
-    const firstStepSelectors = [
-      '[data-testid="step-1"]',
-      '.step:first-child',
-      '[aria-current="step"]',
-      '.step.current',
-      '.step.active'
-    ];
+    // First step should be active - look for blue colored step 1
+    const firstStepNumber = page.locator('div').filter({ hasText: /^1$/ }).first();
+    await expect(firstStepNumber).toBeVisible();
     
-    let firstStepFound = false;
-    for (const selector of firstStepSelectors) {
-      const element = page.locator(selector);
-      if (await element.count() > 0) {
-        await expect(element.first()).toBeVisible();
-        firstStepFound = true;
-        break;
-      }
-    }
+    // The first step should have blue background (active), check CSS classes
+    const activeStepDiv = page.locator('div').filter({ hasText: /^1$/ }).locator('..');
+    await expect(activeStepDiv).toHaveClass(/bg-blue-600/);
     
-    // If no specific step indicator found, at least verify Import Files is visible
-    if (!firstStepFound) {
-      await expect(page.locator('text=Import Files')).toBeVisible();
-    }
+    // Import PDF text should be visible and active (blue text)
+    const importText = page.locator('text=Import PDF');
+    await expect(importText).toBeVisible();
+    await expect(importText).toHaveClass(/text-blue-600/);
   });
 
   test('should display file upload area', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Should see file upload drop zone or button (multiple fallbacks)
-    const uploadSelectors = [
-      '[data-testid="file-upload"]',
-      '.upload-zone',
-      'input[type="file"]',
-      '[accept*=".pdf"]',
-      'button:has-text("Upload")',
-      'button:has-text("Choose")',
-      'div:has-text("Drop files")',
-      'div:has-text("Select files")'
-    ];
+    // Should see file upload area based on current UI structure
     
-    let uploadFound = false;
-    for (const selector of uploadSelectors) {
-      const element = page.locator(selector);
-      if (await element.count() > 0) {
-        await expect(element.first()).toBeVisible();
-        uploadFound = true;
-        break;
-      }
-    }
+    // File input should exist (it's hidden but present)
+    const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
+    await expect(fileInput).toBeAttached();
     
-    expect(uploadFound).toBe(true);
+    // Should see the upload button with Upload icon
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    await expect(uploadButton).toBeVisible();
     
-    // Should see instructions for file upload
-    await expect(page.locator('text=PDF')).toBeVisible();
+    // Should see the clickable text link
+    const selectButton = page.locator('button:has-text("Select PDF or image files")');
+    await expect(selectButton).toBeVisible();
+    
+    // Should see instructions mentioning drag & drop and PDF/image files
+    await expect(page.locator('text=/Drag.*drop.*PDF.*image/')).toBeVisible();
   });
 
   test('should be responsive on different screen sizes', async ({ page }) => {
@@ -126,12 +90,12 @@ test.describe('Basic Application Smoke Tests', () => {
       // Core content should be visible
       await expect(page.locator('h1')).toBeVisible();
       
-      // Step indicator with fallbacks
-      const stepIndicator = page.locator('[data-testid="step-indicator"], .step-indicator, .wizard-steps, nav').first();
-      await expect(stepIndicator).toBeVisible();
+      // Step indicator should be visible (numbered circles)
+      const firstStepNumber = page.locator('div').filter({ hasText: /^1$/ }).first();
+      await expect(firstStepNumber).toBeVisible();
       
       // Import step should be accessible
-      await expect(page.locator('text=Import')).toBeVisible();
+      await expect(page.locator('text=Import PDF')).toBeVisible();
     };
     
     // Test different viewports with error handling

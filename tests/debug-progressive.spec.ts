@@ -33,9 +33,9 @@ test.describe('Progressive Debug Tests', () => {
     });
     
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
     
     // Basic assertions
-    expect(response => response.status()).toBe(200);
     expect(consoleErrors).toHaveLength(0);
     expect(pageErrors).toHaveLength(0);
   });
@@ -70,26 +70,13 @@ test.describe('Progressive Debug Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Should have some form of step indicator
-    const stepIndicators = [
-      '[data-testid="step-indicator"]',
-      '.step-indicator',
-      '.wizard-steps',
-      'nav[role="tablist"]',
-      'nav'
-    ];
+    // Should have step navigation with numbered circles
+    const firstStepNumber = page.locator('div').filter({ hasText: /^1$/ });
+    await expect(firstStepNumber.first()).toBeVisible();
     
-    let foundStepIndicator = false;
-    for (const selector of stepIndicators) {
-      const element = page.locator(selector);
-      if (await element.count() > 0) {
-        await expect(element.first()).toBeVisible();
-        foundStepIndicator = true;
-        break;
-      }
-    }
-    
-    expect(foundStepIndicator).toBe(true);
+    // Should have step text labels
+    await expect(page.locator('text=Import PDF')).toBeVisible();
+    await expect(page.locator('text=Extract Cards')).toBeVisible();
   });
 
   // Test 6: First step content
@@ -98,29 +85,17 @@ test.describe('Progressive Debug Tests', () => {
     await page.waitForLoadState('networkidle');
     
     // Should see import-related content
-    const importContent = page.locator('text=Import');
-    await expect(importContent).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
     
-    // Should see some file upload capability
-    const uploadElements = [
-      'input[type="file"]',
-      '[accept*=".pdf"]',
-      'text=Upload',
-      'text=Choose',
-      'text=Drop',
-      'text=Select'
-    ];
+    // Should see file upload capability based on current structure
+    const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
+    await expect(fileInput).toBeAttached();
     
-    let foundUpload = false;
-    for (const selector of uploadElements) {
-      const element = page.locator(selector);
-      if (await element.count() > 0) {
-        foundUpload = true;
-        break;
-      }
-    }
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    await expect(uploadButton).toBeVisible();
     
-    expect(foundUpload).toBe(true);
+    const selectButton = page.locator('button:has-text("Select PDF or image files")');
+    await expect(selectButton).toBeVisible();
   });
 
   // Test 7: JavaScript functionality
@@ -158,16 +133,17 @@ test.describe('Progressive Debug Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Should still see title
-    const title = page.locator('h1');
-    await expect(title).toBeVisible();
+    // Should still see title and basic navigation
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
     
     // Test desktop viewport
     await page.setViewportSize({ width: 1200, height: 800 });
     await page.waitForLoadState('networkidle');
     
-    // Should still see title
-    await expect(title).toBeVisible();
+    // Should still see title and navigation
+    await expect(page.locator('h1')).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
   });
 
   // Test 9: Performance basics
@@ -199,40 +175,18 @@ test.describe('Progressive Debug Tests', () => {
     await expect(page.locator('h1')).toContainText('Card Game PDF Transformer');
     
     // 2. See import step
-    await expect(page.locator('text=Import')).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
     
     // 3. See file upload capability
-    const uploadSelectors = [
-      'input[type="file"]',
-      '[accept*=".pdf"]',
-      'text=Upload',
-      'text=Choose'
-    ];
+    const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
+    await expect(fileInput).toBeAttached();
     
-    let uploadWorks = false;
-    for (const selector of uploadSelectors) {
-      if (await page.locator(selector).count() > 0) {
-        uploadWorks = true;
-        break;
-      }
-    }
-    expect(uploadWorks).toBe(true);
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    await expect(uploadButton).toBeVisible();
     
-    // 4. See step navigation
-    const stepSelectors = [
-      '[data-testid="step-indicator"]',
-      '.step-indicator',
-      'nav'
-    ];
-    
-    let navWorks = false;
-    for (const selector of stepSelectors) {
-      if (await page.locator(selector).count() > 0) {
-        navWorks = true;
-        break;
-      }
-    }
-    expect(navWorks).toBe(true);
+    // 4. See step navigation (numbered circles)
+    const firstStepNumber = page.locator('div').filter({ hasText: /^1$/ });
+    await expect(firstStepNumber.first()).toBeVisible();
     
     // All basic functionality is working
   });
