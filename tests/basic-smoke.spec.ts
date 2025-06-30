@@ -69,8 +69,8 @@ test.describe('Basic Application Smoke Tests', () => {
     const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
     await expect(fileInput).toBeAttached();
     
-    // Should see the upload button with Upload icon
-    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    // Should see the upload button with Upload icon (the circular one)
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"][title="Click to select PDF or image files"]');
     await expect(uploadButton).toBeVisible();
     
     // Should see the clickable text link

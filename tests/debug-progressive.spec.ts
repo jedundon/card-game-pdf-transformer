@@ -91,7 +91,7 @@ test.describe('Progressive Debug Tests', () => {
     const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
     await expect(fileInput).toBeAttached();
     
-    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"][title="Click to select PDF or image files"]');
     await expect(uploadButton).toBeVisible();
     
     const selectButton = page.locator('button:has-text("Select PDF or image files")');
@@ -181,7 +181,7 @@ test.describe('Progressive Debug Tests', () => {
     const fileInput = page.locator('input[type="file"][accept*=".pdf"]');
     await expect(fileInput).toBeAttached();
     
-    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"]');
+    const uploadButton = page.locator('button[aria-label="Select PDF or image files to import"][title="Click to select PDF or image files"]');
     await expect(uploadButton).toBeVisible();
     
     // 4. See step navigation (numbered circles)

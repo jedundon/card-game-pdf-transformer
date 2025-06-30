@@ -138,12 +138,12 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
     if (process.env.CI) {
       // In CI, just verify worker script is available
       expect(pdfWorkerTest.workerSrc).toBeTruthy();
-      expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker\.js$/);
+      expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker(\.min)?\.js$/);
     } else {
       expect(pdfWorkerTest.workerCanLoad).toBe(true);
       expect(pdfWorkerTest.pdfJsFunctional).toBe(true);
       expect(pdfWorkerTest.pdfJsVersion).toBeTruthy();
-      expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker\.js$/);
+      expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker(\.min)?\.js$/);
     }
   });
 
