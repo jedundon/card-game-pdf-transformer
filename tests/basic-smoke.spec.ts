@@ -49,9 +49,9 @@ test.describe('Basic Application Smoke Tests', () => {
     const firstStepNumber = page.locator('div').filter({ hasText: /^1$/ }).first();
     await expect(firstStepNumber).toBeVisible();
     
-    // The first step should have blue background (active), check CSS classes
-    const activeStepDiv = page.locator('div').filter({ hasText: /^1$/ }).locator('..');
-    await expect(activeStepDiv).toHaveClass(/bg-blue-600/);
+    // The first step should have blue background (active), check CSS classes on the circle
+    const activeStepCircle = page.locator('div').filter({ hasText: /^1$/ }).first();
+    await expect(activeStepCircle).toHaveClass(/bg-blue-600/);
     
     // Import PDF text should be visible and active (blue text)
     const importText = page.locator('text=Import PDF');
