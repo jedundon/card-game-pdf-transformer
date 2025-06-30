@@ -372,7 +372,7 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
         imageData: new Map()
       };
     }
-  }, [isValidFile, processSingleFile, singlePdfData]);
+  }, [isValidFile, processSingleFile]);
 
   /**
    * Add files to existing import (append instead of replace)

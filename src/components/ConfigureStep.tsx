@@ -69,7 +69,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
   
   // Get image data from stable map
   const getImageData = useCallback((fileName: string) => {
@@ -90,7 +90,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
   
   // Get PDF data from stable map
   const getPdfData = useCallback((fileName: string) => {
@@ -612,9 +612,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   // Cleanup timeouts on unmount
   useEffect(() => {
+    const settingsTimeout = settingsChangeTimeoutRef.current;
+    const debounceTimeout = debounceTimeoutRef.current;
     return () => {
-      const settingsTimeout = settingsChangeTimeoutRef.current;
-      const debounceTimeout = debounceTimeoutRef.current;
       if (settingsTimeout) {
         clearTimeout(settingsTimeout);
       }

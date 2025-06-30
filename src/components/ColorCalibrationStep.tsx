@@ -410,7 +410,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages, multiFileImport]);
+  }, [multiFileImport]);
   
   // Get image data from stable map
   const getImageData = useCallback((fileName: string) => {
@@ -431,7 +431,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages, multiFileImport]);
+  }, [multiFileImport]);
   
   // Get PDF data from stable map
   const getPdfData = useCallback((fileName: string) => {

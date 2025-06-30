@@ -246,7 +246,8 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   }, [
     dataStoreVersion,
     loadImageThumbnail, 
-    loadPdfThumbnailForPage
+    loadPdfThumbnailForPage,
+    multiFileImport
   ]);
 
   // File processing functions are now unified under processMultipleFiles

@@ -111,7 +111,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
   
   // Get image data from stable map
   const getImageData = useCallback((fileName: string) => {
@@ -132,7 +132,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
   
   // Get PDF data from stable map
   const getPdfData = useCallback((fileName: string) => {
@@ -199,7 +199,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     
     console.warn(`ExtractStep: Unknown file type ${currentPageInfo.fileType} for page ${pageIndex}`);
     return null;
-  }, [extractionSettings, pdfMode, activePages, unifiedPages, getPdfData, getImageData]);
+  }, [extractionSettings, pdfMode, activePages, getPdfData, getImageData]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {

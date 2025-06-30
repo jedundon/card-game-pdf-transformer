@@ -94,7 +94,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
   
   // Create a stable reference to PDF data map to prevent dependency issues
   const pdfDataMap = useMemo(() => {
@@ -110,7 +110,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport]);
 
   // Calculate total cards using unified pages
   const activePages = useMemo(() => 
