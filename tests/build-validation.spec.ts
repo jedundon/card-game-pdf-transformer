@@ -296,8 +296,8 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       // Test if main application components are rendered
       const hasMainTitle = document.querySelector('h1') !== null;
       const hasStepIndicator = document.querySelector('[data-testid="step-indicator"], .step-indicator, .wizard-steps') !== null;
-      const hasImportStep = document.querySelector('text=Import Files') !== null || 
-                           document.body.textContent?.includes('Import Files') || false;
+      const hasImportStep = document.querySelector('text=Import PDF') !== null || 
+                           document.body.textContent?.includes('Import PDF') || false;
       
       // Test if critical React components are mounted
       const hasReactRoot = document.querySelector('#root') !== null;

@@ -45,13 +45,16 @@ test.describe('Complete Workflow Integration Tests', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
-    // Step 1: Import Files - Test initial state
+    // Step 1: Import PDF - Test initial state
     await expect(page.locator('h1')).toContainText('Card Game PDF Transformer');
-    await expect(page.locator('text=Import Files')).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
     
     // Should be able to see step indicators
-    await expect(page.locator('text=Import Files')).toBeVisible();
+    await expect(page.locator('text=Import PDF')).toBeVisible();
     await expect(page.locator('text=Extract Cards')).toBeVisible();
+    await expect(page.locator('text=Configure Layout')).toBeVisible();
+    await expect(page.locator('text=Color Calibration')).toBeVisible();
+    await expect(page.locator('text=Export')).toBeVisible();
     await expect(page.locator('text=Color Calibration')).toBeVisible();
     await expect(page.locator('text=Configure Layout')).toBeVisible();
     await expect(page.locator('text=Export')).toBeVisible();
