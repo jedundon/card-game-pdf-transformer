@@ -840,3 +840,146 @@ The testing framework prioritizes:
 5. **Minimal Maintenance** - Automated testing with clear failure diagnostics
 
 This comprehensive testing approach ensures the card game PDF transformer maintains high quality and reliability as it evolves, catching the "hard to detect" issues that could significantly impact users while providing developers with confidence to make improvements.
+
+## Duplex Mirroring Logic and Card ID Consistency
+
+This section documents critical insights about duplex mode card processing, learned from resolving GitHub Issue #67, to help future development avoid similar consistency bugs.
+
+### Understanding Duplex Mirroring
+
+Duplex mode processes double-sided cards where back cards must be positioned to align with their corresponding front cards when printed on the reverse side of the paper. The key insight is that **the correct mirroring direction depends on both flip edge setting AND page orientation**.
+
+#### Page Orientation Impact
+
+**Portrait Pages (height > width):**
+- **Short Edge Flip**: Cards flip along the short (horizontal) edge → Mirror rows (vertical flip)
+- **Long Edge Flip**: Cards flip along the long (vertical) edge → Mirror columns (horizontal flip)
+
+**Landscape Pages (width > height):**
+- **Short Edge Flip**: Cards flip along the short (vertical) edge → Mirror columns (horizontal flip)  
+- **Long Edge Flip**: Cards flip along the long (horizontal) edge → Mirror rows (vertical flip)
+
+#### Critical Implementation Details
+
+The `getCardInfo()` function in `cardUtils.ts` implements this logic:
+
+```typescript
+// CORRECT: Orientation-aware logic
+if (pageWidth && pageHeight) {
+  const isPortraitPage = pageHeight > pageWidth;
+  if (isPortraitPage) {
+    shouldFlipRows = (pdfMode.flipEdge === 'short'); 
+  } else {
+    shouldFlipRows = (pdfMode.flipEdge === 'long');  
+  }
+} else {
+  // DANGEROUS: Legacy fallback - can cause inconsistent IDs
+  shouldFlipRows = (pdfMode.flipEdge === 'long');
+}
+```
+
+### Architecture for Page Dimension Propagation
+
+To ensure consistent card ID calculation across all workflow steps, page dimensions must be available to all components that call `getCardInfo()`.
+
+#### Current Architecture (Post-Fix)
+
+1. **ExtractStep** captures page dimensions from PDF/image rendering
+2. **Page dimensions stored in `extractionSettings.pageDimensions`** for propagation
+3. **All workflow steps** use `extractionSettings.pageDimensions` in `getCardInfo()` calls
+
+#### Critical Pattern for getCardInfo Calls
+
+**✅ CORRECT - Always pass page dimensions:**
+```typescript
+getCardInfo(
+  cardIndex, 
+  activePages, 
+  extractionSettings, 
+  pdfMode, 
+  cardsPerPage,
+  extractionSettings.pageDimensions?.width,    // ✅ Pass width
+  extractionSettings.pageDimensions?.height    // ✅ Pass height
+)
+```
+
+**❌ DANGEROUS - Never use undefined dimensions:**
+```typescript
+getCardInfo(
+  cardIndex, 
+  activePages, 
+  extractionSettings, 
+  pdfMode, 
+  cardsPerPage,
+  undefined,    // ❌ Triggers inconsistent fallback logic
+  undefined     // ❌ Will break card ID consistency
+)
+```
+
+### Development Guidelines
+
+#### When Adding New Components That Use getCardInfo
+
+1. **Always pass page dimensions** from `extractionSettings.pageDimensions`
+2. **Add page dimensions to useCallback dependencies** if using in callbacks
+3. **Test with both portrait and landscape PDFs** to verify ID consistency
+4. **Verify all duplex flip edge combinations** work correctly
+
+#### When Modifying Existing getCardInfo Calls
+
+1. **Never remove page dimension parameters** without understanding the impact
+2. **Ensure extractionSettings.pageDimensions is populated** before the call
+3. **Test card ID consistency** across Extract → Configure → Export workflow
+4. **Watch for console warnings** about fallback logic usage
+
+#### When Refactoring Page Dimension Handling
+
+1. **Maintain the `extractionSettings.pageDimensions` pattern** for centralized storage
+2. **Update ExtractStep's useEffect** if changing how dimensions are captured
+3. **Verify all workflow steps** receive updated dimensions consistently
+4. **Add integration tests** to prevent regression
+
+### Common Pitfalls and Debugging
+
+#### Symptom: Inconsistent Card IDs Between Steps
+**Root Cause**: Missing or inconsistent page dimensions in `getCardInfo()` calls
+**Fix**: Ensure all components use `extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height`
+
+#### Symptom: Console Warnings About Fallback Logic
+**Root Cause**: Page dimensions not available when `getCardInfo()` is called
+**Investigation Steps**:
+1. Check if ExtractStep has properly set `extractionSettings.pageDimensions`
+2. Verify the component is receiving updated `extractionSettings`
+3. Ensure page rendering has completed before calling `getCardInfo()`
+
+#### Symptom: Wrong Back Card Positioning in Final Export
+**Root Cause**: Export step using different mirroring logic than preview
+**Fix**: Verify ExportStep uses same `getCardInfo()` parameters as other steps
+
+### Testing Card ID Consistency
+
+When testing duplex functionality, always verify:
+
+1. **Cross-Step Consistency**: Same card ID in Extract, Configure, ColorCalibration, and Export
+2. **Orientation Testing**: Test both portrait and landscape PDFs
+3. **Flip Edge Testing**: Test both short edge and long edge flip settings
+4. **Multi-File Testing**: Verify consistency with mixed PDF/image sources
+
+### Legacy Fallback Logic
+
+The fallback logic `shouldFlipRows = (pdfMode.flipEdge === 'long')` exists for backward compatibility but **should never be relied upon** in normal operation. When this fallback is used:
+
+- Console warnings are logged with diagnostic information
+- Card IDs may be inconsistent between workflow steps
+- Users may experience incorrect printing results
+
+**If fallback logic is triggered frequently**, investigate why page dimensions are not being properly captured and propagated.
+
+### Future Development Considerations
+
+1. **Consider making page dimensions required** in `getCardInfo()` signature to prevent accidental omission
+2. **Add TypeScript strict checks** to catch undefined dimension parameters at compile time
+3. **Implement runtime assertions** in development mode to detect inconsistent card ID calculations
+4. **Extend automated tests** to cover all duplex mirroring scenarios comprehensively
+
+This duplex mirroring system is **critical for user satisfaction** - incorrect card positioning wastes physical printing materials and breaks user trust in the application's accuracy.
