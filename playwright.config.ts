@@ -104,5 +104,5 @@ export default defineConfig({
   },
   
   /* Add global setup and teardown for CI debugging */
-  globalSetup: process.env.CI ? require.resolve('./tests/global-setup.ts') : undefined,
+  globalSetup: process.env.CI ? './tests/global-setup.ts' : undefined,
 });

@@ -29,7 +29,13 @@ test.describe('Basic Application Smoke Tests', () => {
     ];
     
     for (const step of steps) {
-      await expect(page.locator(`text=${step}`)).toBeVisible();
+      // Use more specific selectors to avoid strict mode violations
+      if (step === 'Export') {
+        // Target specifically the step indicator Export, not the settings Export
+        await expect(page.locator('.step-indicator text=Export, nav text=Export, [role="tablist"] text=Export').first()).toBeVisible();
+      } else {
+        await expect(page.locator(`text=${step}`).first()).toBeVisible();
+      }
     }
   });
 
