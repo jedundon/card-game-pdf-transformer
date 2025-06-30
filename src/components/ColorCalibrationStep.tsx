@@ -410,7 +410,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport?.multiFileState?.pages, multiFileImport]);
   
   // Get image data from stable map
   const getImageData = useCallback((fileName: string) => {
@@ -431,7 +431,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport?.multiFileState?.pages]);
+  }, [multiFileImport?.multiFileState?.pages, multiFileImport]);
   
   // Get PDF data from stable map
   const getPdfData = useCallback((fileName: string) => {
@@ -1076,7 +1076,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       console.error('Failed to generate test grid PDF:', error);
       alert('Failed to generate test grid PDF. Please try again.');
     }
-  }, [colorSettings, outputSettings, extractCropRegion]);
+  }, [colorSettings, outputSettings, extractCropRegion, currentColorTransformation]);
 
   // Ensure currentCardId is valid for the current view mode
   useEffect(() => {

@@ -424,13 +424,12 @@ test.describe('Async Processing and Real Function Testing', () => {
     const memoryManagementTest = await page.evaluate(async () => {
       // Monitor memory usage during processing
       const getMemoryUsage = () => {
-        // @ts-ignore: performance.memory is a Chrome-specific API not in standard types
-        // Used for testing memory consumption during async operations
-        if (performance.memory) {
+        // Chrome-specific API for memory monitoring
+        if ((performance as any).memory) {
           return {
-            used: performance.memory.usedJSHeapSize,
-            total: performance.memory.totalJSHeapSize,
-            limit: performance.memory.jsHeapSizeLimit
+            used: (performance as any).memory.usedJSHeapSize,
+            total: (performance as any).memory.totalJSHeapSize,
+            limit: (performance as any).memory.jsHeapSizeLimit
           };
         }
         return { used: 0, total: 0, limit: 0 };

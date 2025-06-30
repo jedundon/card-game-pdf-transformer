@@ -1638,8 +1638,7 @@ export function findPairedCard(
   gridColumn: number,
   _activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
-  pdfMode: PdfMode,
-  _cardsPerPage: number
+  pdfMode: PdfMode
 ): { pageIndex: number; gridRow: number; gridColumn: number; cardType: 'front' | 'back' } | null {
   // Only handle pairing in gutter-fold mode
   if (pdfMode.type !== 'gutter-fold') {
@@ -1727,8 +1726,7 @@ export function toggleCardSkipWithPairing(
   skippedCards: SkippedCard[],
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
-  pdfMode: PdfMode,
-  cardsPerPage: number
+  pdfMode: PdfMode
 ): SkippedCard[] {
   // Start with the basic toggle for the clicked card
   let newSkippedCards = toggleCardSkip(pageIndex, gridRow, gridColumn, cardType, skippedCards);
@@ -1737,7 +1735,7 @@ export function toggleCardSkipWithPairing(
   if (pdfMode.type === 'gutter-fold') {
     const pairedCard = findPairedCard(
       pageIndex, gridRow, gridColumn, 
-      activePages, extractionSettings, pdfMode, cardsPerPage
+      activePages, extractionSettings, pdfMode
     );
 
     if (pairedCard) {
@@ -1793,15 +1791,14 @@ export function skipAllInRowWithPairing(
   skippedCards: SkippedCard[],
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
-  pdfMode: PdfMode,
-  cardsPerPage: number
+  pdfMode: PdfMode
 ): SkippedCard[] {
   let newSkips = [...skippedCards];
   
   for (let col = 0; col < gridColumns; col++) {
     newSkips = toggleCardSkipWithPairing(
       pageIndex, gridRow, col, cardType, newSkips,
-      activePages, extractionSettings, pdfMode, cardsPerPage
+      activePages, extractionSettings, pdfMode
     );
   }
   
@@ -1822,15 +1819,14 @@ export function skipAllInColumnWithPairing(
   skippedCards: SkippedCard[],
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
-  pdfMode: PdfMode,
-  cardsPerPage: number
+  pdfMode: PdfMode
 ): SkippedCard[] {
   let newSkips = [...skippedCards];
   
   for (let row = 0; row < gridRows; row++) {
     newSkips = toggleCardSkipWithPairing(
       pageIndex, row, gridColumn, cardType, newSkips,
-      activePages, extractionSettings, pdfMode, cardsPerPage
+      activePages, extractionSettings, pdfMode
     );
   }
   
@@ -2115,8 +2111,7 @@ export async function renderUniversalThumbnail(
 export function calculateCardNumbersForReorderedPages(
   pages: (PageSettings & PageSource)[],
   pdfMode: PdfMode,
-  cardsPerPage: number,
-  _skippedCards: SkippedCard[] = []
+  cardsPerPage: number
 ): Map<number, number[]> {
   const cardNumberMap = new Map<number, number[]>();
   let currentCardId = 1;

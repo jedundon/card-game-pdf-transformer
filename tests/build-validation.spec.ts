@@ -556,13 +556,12 @@ test.describe('Build Validation and Asset Integrity Tests', () => {
       
       // Test memory usage if available
       let memoryUsage = { used: 0, total: 0, limit: 0 };
-      // @ts-ignore: performance.memory is a Chrome-specific API not in standard types
-      // Used for validating memory consumption during build validation tests
-      if (performance.memory) {
+      // Chrome-specific API for memory monitoring
+      if ((performance as any).memory) {
         memoryUsage = {
-          used: performance.memory.usedJSHeapSize,
-          total: performance.memory.totalJSHeapSize,
-          limit: performance.memory.jsHeapSizeLimit
+          used: (performance as any).memory.usedJSHeapSize,
+          total: (performance as any).memory.totalJSHeapSize,
+          limit: (performance as any).memory.jsHeapSizeLimit
         };
       }
       

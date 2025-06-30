@@ -54,8 +54,7 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
       skippedCards,
       activePages,
       extractionSettings,
-      pdfMode,
-      cardsPerPage
+      pdfMode
     );
     onSettingsChange({
       ...extractionSettings,
@@ -72,8 +71,7 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
       skippedCards,
       activePages,
       extractionSettings,
-      pdfMode,
-      cardsPerPage
+      pdfMode
     );
     onSettingsChange({
       ...extractionSettings,
@@ -90,8 +88,7 @@ export const CardSkipControls: React.FC<CardSkipControlsProps> = ({
       skippedCards,
       activePages,
       extractionSettings,
-      pdfMode,
-      cardsPerPage
+      pdfMode
     );
     onSettingsChange({
       ...extractionSettings,
