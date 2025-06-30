@@ -421,8 +421,23 @@ test.describe('Async Processing and Real Function Testing', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
+    // Determine CI-specific parameters outside browser context
+    const isCI = !!process.env.CI;
+    const ciImageSizes = [
+      { name: 'small', width: 400, height: 500 },
+      { name: 'medium', width: 600, height: 800 },
+      { name: 'large', width: 800, height: 1000 },
+      { name: 'xl', width: 1000, height: 1200 }
+    ];
+    const localImageSizes = [
+      { name: 'medium', width: 800, height: 1000 },
+      { name: 'large', width: 1600, height: 2000 },
+      { name: 'xl', width: 2400, height: 3000 },
+      { name: 'xxl', width: 3200, height: 4000 }
+    ];
+    
     // Test memory management with large files
-    const memoryManagementTest = await page.evaluate(async () => {
+    const memoryManagementTest = await page.evaluate(async ({ imageSizes, ciCleanupDelay }) => {
       // Monitor memory usage during processing (CI-safe)
       const getMemoryUsage = () => {
         try {
@@ -500,18 +515,7 @@ test.describe('Async Processing and Real Function Testing', () => {
         });
       };
       
-      // Test with increasingly large images (CI-safe sizes)
-      const imageSizes = process.env.CI ? [
-        { name: 'small', width: 400, height: 500 },
-        { name: 'medium', width: 600, height: 800 },
-        { name: 'large', width: 800, height: 1000 },
-        { name: 'xl', width: 1000, height: 1200 }
-      ] : [
-        { name: 'medium', width: 800, height: 1000 },
-        { name: 'large', width: 1600, height: 2000 },
-        { name: 'xl', width: 2400, height: 3000 },
-        { name: 'xxl', width: 3200, height: 4000 }
-      ];
+      // Use image sizes passed from Node.js context
       
       const memoryBaseline = getMemoryUsage();
       const results = [];
@@ -542,8 +546,8 @@ test.describe('Async Processing and Real Function Testing', () => {
           }
           
           // Additional cleanup for CI environments
-          if (process.env.CI) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+          if (ciCleanupDelay > 0) {
+            await new Promise(resolve => setTimeout(resolve, ciCleanupDelay));
           }
           
           const memoryAfterCleanup = getMemoryUsage();
@@ -583,11 +587,14 @@ test.describe('Async Processing and Real Function Testing', () => {
         maxProcessingTime: Math.max(...results.map(r => r.processingTime)),
         averageCleanupEfficiency: results.reduce((sum, r) => sum + (r.memoryUsage.cleanupEfficiency || 0), 0) / results.length
       };
+    }, { 
+      imageSizes: isCI ? ciImageSizes : localImageSizes,
+      ciCleanupDelay: isCI ? 100 : 0
     });
     
     // Validate memory management (CI-adjusted expectations)
-    const expectedTests = process.env.CI ? 4 : 4; // Keep same for now
-    const maxProcessingTimeThreshold = process.env.CI ? 10000 : 5000;
+    const expectedTests = isCI ? 4 : 4; // Keep same for now
+    const maxProcessingTimeThreshold = isCI ? 10000 : 5000;
     
     expect(memoryManagementTest.totalTests).toBe(expectedTests);
     expect(memoryManagementTest.allSuccessful).toBe(true);
@@ -596,7 +603,7 @@ test.describe('Async Processing and Real Function Testing', () => {
     // Memory cleanup should be reasonably efficient (CI-safe)
     if (memoryManagementTest.memoryBaseline.used > 0) {
       // In CI, memory API might not be available, so cleanup efficiency could be 0
-      if (process.env.CI) {
+      if (isCI) {
         expect(memoryManagementTest.averageCleanupEfficiency).toBeGreaterThanOrEqual(0);
       } else {
         expect(memoryManagementTest.averageCleanupEfficiency).toBeGreaterThan(0);
@@ -609,7 +616,7 @@ test.describe('Async Processing and Real Function Testing', () => {
     expect(results[3].processingTime).toBeGreaterThan(results[0].processingTime); // XXL should take longer than medium
     
     // All sizes should complete successfully (CI-adjusted timeouts)
-    const individualTimeoutThreshold = process.env.CI ? 6000 : 3000;
+    const individualTimeoutThreshold = isCI ? 6000 : 3000;
     
     for (const result of results) {
       expect(result.success).toBe(true);
@@ -780,9 +787,10 @@ test.describe('Async Processing and Real Function Testing', () => {
     expect(asyncErrorHandlingTest.errorsHandledCorrectly).toBeGreaterThan(0); // At least some errors should be caught
     
     // Most error types should be properly handled (CI-adjusted)
+    const isCI = !!process.env.CI;
     const handlingRate = asyncErrorHandlingTest.errorsHandledCorrectly / asyncErrorHandlingTest.totalErrorTests;
     // In CI, some error types might behave differently, so be more lenient
-    if (process.env.CI) {
+    if (isCI) {
       expect(handlingRate).toBeGreaterThanOrEqual(0.5); // At least 50% of errors should be handled
     } else {
       expect(handlingRate).toBeGreaterThan(0.5); // More than 50% for local testing
@@ -817,10 +825,16 @@ test.describe('Async Processing and Real Function Testing', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
     
+    // Determine CI-specific parameters outside browser context
+    const isCI = !!process.env.CI;
+    const iterations = isCI ? 20 : 50;
+    const yieldFrequency = isCI ? 5 : 10;
+    const yieldDelay = isCI ? 10 : 1;
+    
     // Test performance stability over time
-    const performanceStabilityTest = await page.evaluate(async () => {
+    const performanceStabilityTest = await page.evaluate(async ({ iterations, yieldFrequency, yieldDelay }) => {
       // Simulate extended processing session
-      const performMultipleOperations = async (iterations: number) => {
+      const performMultipleOperations = async () => {
         const performanceSamples = [];
         
         for (let i = 0; i < iterations; i++) {
@@ -870,9 +884,8 @@ test.describe('Async Processing and Real Function Testing', () => {
           canvas.height = 1;
           
           // Yield control occasionally (more frequent in CI)
-          const yieldFrequency = process.env.CI ? 5 : 10;
           if (i % yieldFrequency === 0) {
-            await new Promise(resolve => setTimeout(resolve, process.env.CI ? 10 : 1));
+            await new Promise(resolve => setTimeout(resolve, yieldDelay));
           }
         }
         
@@ -880,8 +893,7 @@ test.describe('Async Processing and Real Function Testing', () => {
       };
       
       // Run performance test (reduced iterations for CI)
-      const iterations = process.env.CI ? 20 : 50; // Fewer iterations in CI
-      const samples = await performMultipleOperations(iterations);
+      const samples = await performMultipleOperations();
       
       // Analyze performance trends
       const firstHalfSamples = samples.slice(0, Math.floor(samples.length / 2));
@@ -921,10 +933,10 @@ test.describe('Async Processing and Real Function Testing', () => {
         performanceStable: Math.abs(performanceDegradation) < 0.2, // Less than 20% degradation
         allOperationsCompleted: samples.length === iterations
       };
-    });
+    }, { iterations, yieldFrequency, yieldDelay });
     
     // Validate performance stability (CI-adjusted expectations)
-    const expectedIterations = process.env.CI ? 20 : 50;
+    const expectedIterations = iterations;
     expect(performanceStabilityTest.totalIterations).toBe(expectedIterations);
     expect(performanceStabilityTest.allOperationsCompleted).toBe(true);
     expect(performanceStabilityTest.performanceStable).toBe(true);
@@ -932,8 +944,8 @@ test.describe('Async Processing and Real Function Testing', () => {
     const metrics = performanceStabilityTest.performanceMetrics;
     
     // Performance should be reasonable (CI-adjusted thresholds)
-    const avgTimeThreshold = process.env.CI ? 200 : 100;
-    const maxTimeThreshold = process.env.CI ? 1000 : 500;
+    const avgTimeThreshold = isCI ? 200 : 100;
+    const maxTimeThreshold = isCI ? 1000 : 500;
     
     expect(metrics.avgTime).toBeLessThan(avgTimeThreshold);
     expect(metrics.maxTime).toBeLessThan(maxTimeThreshold);
@@ -950,8 +962,8 @@ test.describe('Async Processing and Real Function Testing', () => {
     expect(metrics.standardDeviation).toBeLessThan(metrics.avgTime); // Low variation
     
     // Validate that no operations failed (all samples should have valid times)
-    const maxOperationTime = process.env.CI ? 2000 : 1000;
-    const maxIteration = process.env.CI ? 20 : 50;
+    const maxOperationTime = isCI ? 2000 : 1000;
+    const maxIteration = iterations;
     
     for (const sample of performanceStabilityTest.samples) {
       expect(sample.operationTime).toBeGreaterThan(0);

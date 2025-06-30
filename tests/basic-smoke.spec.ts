@@ -32,7 +32,24 @@ test.describe('Basic Application Smoke Tests', () => {
       // Use more specific selectors to avoid strict mode violations
       if (step === 'Export') {
         // Target specifically the step indicator Export, not the settings Export
-        await expect(page.locator('.step-indicator text=Export, nav text=Export, [role="tablist"] text=Export').first()).toBeVisible();
+        // Use multiple fallback strategies for finding Export in navigation
+        const exportSelectors = [
+          '.step-indicator >> text=Export',
+          'nav >> text=Export', 
+          '[role="tablist"] >> text=Export',
+          '[data-testid="step-indicator"] >> text=Export'
+        ];
+        
+        let exportFound = false;
+        for (const selector of exportSelectors) {
+          const element = page.locator(selector);
+          if (await element.count() > 0) {
+            await expect(element.first()).toBeVisible();
+            exportFound = true;
+            break;
+          }
+        }
+        expect(exportFound).toBe(true);
       } else {
         await expect(page.locator(`text=${step}`).first()).toBeVisible();
       }

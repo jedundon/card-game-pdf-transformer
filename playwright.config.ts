@@ -42,18 +42,12 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        // Optimize for CI memory usage and stability
+        // Essential CI arguments only - more stable than aggressive optimization
         launchOptions: process.env.CI ? {
           args: [
             '--no-sandbox',
-            '--disable-dev-shm-usage', 
-            '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
-            '--memory-pressure-off',
-            '--max_old_space_size=4096',
-            '--no-zygote',
-            '--single-process'
+            '--disable-dev-shm-usage',
+            '--disable-gpu'
           ]
         } : undefined
       },
