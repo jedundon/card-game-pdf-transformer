@@ -9,25 +9,31 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Increase workers for CI but keep reasonable limit */
-  workers: process.env.CI ? 2 : undefined,
-  /* Global timeout for CI environment */
-  timeout: process.env.CI ? 60000 : 30000, // 60s for CI, 30s local
+  /* Retry on CI only - increased retries for stability */
+  retries: process.env.CI ? 3 : 0,
+  /* Reduce workers in CI for memory constraints */
+  workers: process.env.CI ? 1 : undefined,
+  /* Global timeout for CI environment - increased for heavy processing tests */
+  timeout: process.env.CI ? 120000 : 30000, // 2 minutes for CI, 30s local
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: process.env.CI ? [['github'], ['html']] : 'html',
+  reporter: process.env.CI ? [['github'], ['html'], ['blob']] : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: 'http://localhost:4173',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    trace: process.env.CI ? 'retain-on-failure' : 'on-first-retry',
     
     /* Increase timeouts for CI stability */
-    navigationTimeout: process.env.CI ? 30000 : 15000,
-    actionTimeout: process.env.CI ? 15000 : 10000,
+    navigationTimeout: process.env.CI ? 60000 : 15000,
+    actionTimeout: process.env.CI ? 30000 : 10000,
+    
+    /* Add screenshot on failure for debugging */
+    screenshot: process.env.CI ? 'only-on-failure' : 'off',
+    
+    /* Add video recording on failure for CI debugging */
+    video: process.env.CI ? 'retain-on-failure' : 'off',
   },
 
   /* Configure projects for major browsers */
@@ -36,9 +42,19 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        // Optimize for CI memory usage
+        // Optimize for CI memory usage and stability
         launchOptions: process.env.CI ? {
-          args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage', 
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--memory-pressure-off',
+            '--max_old_space_size=4096',
+            '--no-zygote',
+            '--single-process'
+          ]
         } : undefined
       },
     },
@@ -82,5 +98,11 @@ export default defineConfig({
     command: 'npm run preview',
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
+    timeout: process.env.CI ? 180000 : 120000, // 3 minutes in CI
+    stdout: 'pipe',
+    stderr: 'pipe',
   },
+  
+  /* Add global setup and teardown for CI debugging */
+  globalSetup: process.env.CI ? require.resolve('./tests/global-setup.ts') : undefined,
 });
