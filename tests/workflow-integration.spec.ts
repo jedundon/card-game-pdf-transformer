@@ -33,17 +33,21 @@ test.describe('Complete Workflow Integration Tests', () => {
         }
       `
     });
-    
-    // Clear any existing localStorage/sessionStorage
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
   });
 
   test('Complete single PDF workflow should maintain state through all steps', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
+    
+    // Clear any existing localStorage/sessionStorage after page load
+    await page.evaluate(() => {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (e) {
+        // Ignore if localStorage is not available
+      }
+    });
     
     // Step 1: Import PDF - Test initial state
     await expect(page.locator('h1')).toContainText('Card Game PDF Transformer');

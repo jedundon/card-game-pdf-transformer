@@ -260,13 +260,13 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
         }
         
         // Apply identical processing to all files
-        const cropSettings = { left: 100, top: 150, right: 75, bottom: 100 };
+        const cropSettings = { left: 50, top: 100, right: 50, bottom: 100 };
         const croppedWidth = extractionWidth - cropSettings.left - cropSettings.right;
         const croppedHeight = extractionHeight - cropSettings.top - cropSettings.bottom;
         
-        // Calculate grid for this file
-        const cardWidth = 825; // 2.75" * 300 DPI
-        const cardHeight = 1125; // 3.75" * 300 DPI
+        // Calculate grid for this file (using smaller cards that fit)
+        const cardWidth = 750; // 2.5" * 300 DPI  
+        const cardHeight = 1050; // 3.5" * 300 DPI
         const gridColumns = 3;
         const gridRows = 2;
         
