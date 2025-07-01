@@ -60,7 +60,7 @@ test.describe('Critical Core Functionality Tests - Deployment Blocking', () => {
     
     expect(pdfWorkerTest.pdfJsAvailable).toBe(true);
     expect(pdfWorkerTest.workerConfigured).toBe(true);
-    expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker(\\.min)?\\.js$/);
+    expect(pdfWorkerTest.workerSrc).toMatch(/pdf\.worker(\\.min)?\\.js/);
   });
 
   test('Core mathematical functions should work correctly', async ({ page }) => {

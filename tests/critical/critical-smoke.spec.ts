@@ -43,7 +43,7 @@ test.describe('Critical Smoke Tests - Deployment Blocking', () => {
     await expect(page.locator('text=Extract Cards')).toBeVisible();
     await expect(page.locator('text=Configure Layout')).toBeVisible();
     await expect(page.locator('text=Color Calibration')).toBeVisible();
-    await expect(page.locator('text=Export')).toBeVisible();
+    await expect(page.getByText('Export', { exact: true })).toBeVisible();
     
     // Critical: Step 1 should be active initially
     const activeStep = page.locator('div').filter({ hasText: /^1$/ }).first();
@@ -133,6 +133,8 @@ test.describe('Critical Smoke Tests - Deployment Blocking', () => {
     expect(hasContent).toBe(true);
     
     // Critical: Main UI elements should be rendered
-    await expect(page.locator('[class*="App"], [class*="Step"], main, .wizard')).toHaveCount({ min: 1 });
+    const mainElements = page.locator('[class*="App"], [class*="Step"], main, .wizard');
+    const elementCount = await mainElements.count();
+    expect(elementCount).toBeGreaterThan(0);
   });
 });
