@@ -841,6 +841,102 @@ The testing framework prioritizes:
 
 This comprehensive testing approach ensures the card game PDF transformer maintains high quality and reliability as it evolves, catching the "hard to detect" issues that could significantly impact users while providing developers with confidence to make improvements.
 
+## Deployment and Testing Strategy
+
+### Test-Driven Deployment Philosophy
+
+The application uses a **tiered testing strategy** that prioritizes customer deployments while maintaining comprehensive test coverage. This approach was implemented to ensure customer-facing updates are never blocked by non-critical test edge cases.
+
+#### Testing Tiers
+
+**Tier 1: Critical Tests (Deployment Blocking)**
+- Unit tests (`npm run test:run`)
+- Basic smoke tests
+- Core functionality validation
+- Build integrity checks
+
+**Tier 2: Integration Tests (Informational)**
+- End-to-end Playwright tests (`npm run test:e2e`)
+- Workflow integration scenarios
+- Visual regression tests
+- Performance and edge case validation
+
+#### Deployment Pipeline
+
+```yaml
+Test Job (Critical Tests Must Pass):
+├── Unit Tests ❌→ BLOCK deployment
+├── Build Validation ❌→ BLOCK deployment  
+└── Playwright E2E Tests ❌→ CONTINUE (informational)
+
+Build Job (Runs if Test Job Completes):
+├── Production Build
+└── Asset Generation
+
+Deploy Job (Runs if Build Succeeds):
+└── GitHub Pages Deployment
+```
+
+#### GitHub Actions Configuration
+
+The deployment workflow implements the tiered strategy:
+
+```yaml
+# Critical tests - must pass for deployment
+- name: Run unit tests
+  run: npm run test:run
+  # continue-on-error: false (default)
+
+# Integration tests - informational only  
+- name: Run Playwright tests
+  run: npm run test:e2e
+  continue-on-error: true
+  id: playwright-tests
+
+# Always upload test reports for visibility
+- name: Upload Playwright report
+  if: always()
+  uses: actions/upload-artifact@v4
+```
+
+#### Benefits of This Approach
+
+1. **Customer Priority**: User-facing deployments are never blocked by test edge cases
+2. **Test Visibility**: All test results remain visible through artifacts and reporting
+3. **Developer Confidence**: Critical functionality is still protected by blocking tests
+4. **Rapid Iteration**: Teams can deploy fixes quickly while maintaining quality
+
+#### Development Workflow
+
+**For Developers:**
+- All tests run locally: `npm run test && npm run test:e2e`
+- Both unit and e2e test failures should be addressed
+- Use test reports to understand e2e failures
+
+**For CI/CD:**
+- Unit test failures block deployment (high confidence, stable tests)
+- E2E test failures are reported but don't block deployment
+- Test artifacts provide debugging information
+
+**For Production Monitoring:**
+- Real user monitoring supplements test coverage
+- Production alerts catch issues that tests might miss
+- Balance between test coverage and deployment velocity
+
+#### When to Update This Strategy
+
+**Add to Tier 1 (Blocking)** when:
+- Test covers critical user-facing functionality
+- Test is highly stable and rarely produces false positives
+- Test failure always indicates a real problem
+
+**Keep in Tier 2 (Informational)** when:
+- Test covers edge cases or complex scenarios
+- Test might be sensitive to CI environment differences
+- Test failure needs investigation but shouldn't block users
+
+This deployment strategy ensures that quality testing practices support rather than hinder the delivery of value to customers.
+
 ## Duplex Mirroring Logic and Card ID Consistency
 
 This section documents critical insights about duplex mode card processing, learned from resolving GitHub Issue #67, to help future development avoid similar consistency bugs.
