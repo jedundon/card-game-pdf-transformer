@@ -73,14 +73,14 @@ test.describe('Preview Consistency Tests', () => {
       };
     });
     
-    // Validate the dimension calculations are mathematically correct
-    expect(dimensionValidation.cardWithBleedInches.width).toBe(2.75); // 2.5 + 0.125*2
-    expect(dimensionValidation.cardWithBleedInches.height).toBe(3.75); // 3.5 + 0.125*2
-    expect(dimensionValidation.extractionPixels.width).toBe(825); // 2.75 * 300
-    expect(dimensionValidation.extractionPixels.height).toBe(1125); // 3.75 * 300
-    expect(dimensionValidation.screenPixels.width).toBe(198); // 2.75 * 72
-    expect(dimensionValidation.screenPixels.height).toBe(270); // 3.75 * 72
-    expect(dimensionValidation.conversionRatio).toBe(0.24); // 72/300 = 0.24
+    // Validate the dimension calculations are mathematically correct (with floating point tolerance)
+    expect(dimensionValidation.cardWithBleedInches.width).toBeCloseTo(2.75, 2); // 2.5 + 0.125*2
+    expect(dimensionValidation.cardWithBleedInches.height).toBeCloseTo(3.75, 2); // 3.5 + 0.125*2
+    expect(dimensionValidation.extractionPixels.width).toBeCloseTo(825, 1); // 2.75 * 300
+    expect(dimensionValidation.extractionPixels.height).toBeCloseTo(1125, 1); // 3.75 * 300
+    expect(dimensionValidation.screenPixels.width).toBeCloseTo(198, 1); // 2.75 * 72
+    expect(dimensionValidation.screenPixels.height).toBeCloseTo(270, 1); // 3.75 * 72
+    expect(dimensionValidation.conversionRatio).toBeCloseTo(0.24, 3); // 72/300 = 0.24
   });
 
   test('Grid positioning calculations should be consistent', async ({ page }) => {

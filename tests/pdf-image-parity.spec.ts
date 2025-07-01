@@ -127,9 +127,9 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     expect(coordinateConsistency.originalDimensions.image.width).toBeCloseTo(2550, 1);
     expect(coordinateConsistency.originalDimensions.image.height).toBeCloseTo(3300, 1);
     
-    // Validate cropping produces identical results
-    expect(coordinateConsistency.croppedDimensions.pdf.width).toBe(coordinateConsistency.croppedDimensions.image.width);
-    expect(coordinateConsistency.croppedDimensions.pdf.height).toBe(coordinateConsistency.croppedDimensions.image.height);
+    // Validate cropping produces identical results (with floating point tolerance)
+    expect(coordinateConsistency.croppedDimensions.pdf.width).toBeCloseTo(coordinateConsistency.croppedDimensions.image.width, 1);
+    expect(coordinateConsistency.croppedDimensions.pdf.height).toBeCloseTo(coordinateConsistency.croppedDimensions.image.height, 1);
     
     // Validate grid calculations are identical
     expect(coordinateConsistency.gridCalculations.pdf.horizontalSpacing).toBeCloseTo(coordinateConsistency.gridCalculations.image.horizontalSpacing, 10);
@@ -381,9 +381,9 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
       };
     });
     
-    // Validate base dimensions
-    expect(rotationScalingConsistency.baseCardDimensions.width).toBe(825); // 750 + 75
-    expect(rotationScalingConsistency.baseCardDimensions.height).toBe(1125); // 1050 + 75
+    // Validate base dimensions (with floating point tolerance)
+    expect(rotationScalingConsistency.baseCardDimensions.width).toBeCloseTo(825, 1); // 750 + 75
+    expect(rotationScalingConsistency.baseCardDimensions.height).toBeCloseTo(1125, 1); // 1050 + 75
     expect(rotationScalingConsistency.totalTests).toBe(16); // 4 scales × 4 rotations
     
     // Validate specific test cases
@@ -391,13 +391,13 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
     
     // Test 100% scale, 0° rotation (baseline)
     const baseline = results.find(r => r.scale === 100 && r.rotation === 0);
-    expect(baseline?.afterRotation.width).toBe(825);
-    expect(baseline?.afterRotation.height).toBe(1125);
+    expect(baseline?.afterRotation.width).toBeCloseTo(825, 1);
+    expect(baseline?.afterRotation.height).toBeCloseTo(1125, 1);
     
     // Test 100% scale, 90° rotation (dimensions should swap)
     const rotated90 = results.find(r => r.scale === 100 && r.rotation === 90);
-    expect(rotated90?.afterRotation.width).toBe(1125); // Height becomes width
-    expect(rotated90?.afterRotation.height).toBe(825); // Width becomes height
+    expect(rotated90?.afterRotation.width).toBeCloseTo(1125, 1); // Height becomes width
+    expect(rotated90?.afterRotation.height).toBeCloseTo(825, 1); // Width becomes height
     
     // Test scaling at different percentages
     const scale75 = results.find(r => r.scale === 75 && r.rotation === 0);
