@@ -435,17 +435,17 @@ test.describe('Preview Consistency Tests', () => {
       };
     });
     
-    // Validate coordinate system consistency
-    expect(coordinateValidation.originalDimensions.pdf.width).toBe(2550); // 612 * (300/72)
-    expect(coordinateValidation.originalDimensions.pdf.height).toBe(3300); // 792 * (300/72)
-    expect(coordinateValidation.originalDimensions.image.width).toBe(2550); // Same as PDF in extraction DPI
-    expect(coordinateValidation.originalDimensions.image.height).toBe(3300); // Same as PDF in extraction DPI
+    // Validate coordinate system consistency (with floating point tolerance)
+    expect(coordinateValidation.originalDimensions.pdf.width).toBeCloseTo(2550, 1); // 612 * (300/72)
+    expect(coordinateValidation.originalDimensions.pdf.height).toBeCloseTo(3300, 1); // 792 * (300/72)
+    expect(coordinateValidation.originalDimensions.image.width).toBeCloseTo(2550, 1); // Same as PDF in extraction DPI
+    expect(coordinateValidation.originalDimensions.image.height).toBeCloseTo(3300, 1); // Same as PDF in extraction DPI
     
-    // Validate cropping works identically
-    expect(coordinateValidation.croppedDimensions.pdf.width).toBe(2400); // 2550 - 100 - 50
-    expect(coordinateValidation.croppedDimensions.pdf.height).toBe(3075); // 3300 - 150 - 75
-    expect(coordinateValidation.croppedDimensions.image.width).toBe(2400); // Same as PDF
-    expect(coordinateValidation.croppedDimensions.image.height).toBe(3075); // Same as PDF
+    // Validate cropping works identically (with floating point tolerance)
+    expect(coordinateValidation.croppedDimensions.pdf.width).toBeCloseTo(2400, 1); // 2550 - 100 - 50
+    expect(coordinateValidation.croppedDimensions.pdf.height).toBeCloseTo(3075, 1); // 3300 - 150 - 75
+    expect(coordinateValidation.croppedDimensions.image.width).toBeCloseTo(2400, 1); // Same as PDF
+    expect(coordinateValidation.croppedDimensions.image.height).toBeCloseTo(3075, 1); // Same as PDF
     
     expect(coordinateValidation.conversionFactor).toBeCloseTo(4.167, 3); // 300/72
   });
