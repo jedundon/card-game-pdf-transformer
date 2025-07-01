@@ -851,25 +851,54 @@ The application uses a **tiered testing strategy** that prioritizes customer dep
 
 **Tier 1: Critical Tests (Deployment Blocking)**
 - Unit tests (`npm run test:run`)
-- Basic smoke tests
-- Core functionality validation
-- Build integrity checks
+- Critical E2E tests (`npm run test:e2e:critical`)
+  - Application smoke tests (app loads, navigation works)
+  - Core functionality (PDF.js worker, file upload, mathematical calculations)
+  - Essential preview consistency (basic DPI conversions, card dimensions)
 
-**Tier 2: Integration Tests (Informational)**
-- End-to-end Playwright tests (`npm run test:e2e`)
-- Workflow integration scenarios
-- Visual regression tests
-- Performance and edge case validation
+**Tier 2: Comprehensive Tests (Informational)**
+- Comprehensive E2E tests (`npm run test:e2e:comprehensive`)
+  - Visual regression tests across browsers
+  - Complex workflow integration scenarios
+  - Performance and memory stress tests
+  - Advanced edge cases and error recovery
+
+#### Test File Organization
+
+```
+tests/
+├── critical/                           # DEPLOYMENT BLOCKING
+│   ├── critical-smoke.spec.ts         # App loads, navigation, React mounting
+│   ├── critical-core.spec.ts          # PDF.js worker, file types, canvas, storage
+│   └── critical-preview.spec.ts       # Basic DPI, dimensions, rotation, grid math
+├── comprehensive/                      # INFORMATIONAL ONLY
+│   ├── visual-regression.spec.ts      # UI consistency across browsers
+│   ├── preview-consistency.spec.ts    # Advanced mathematical validation
+│   ├── pdf-image-parity.spec.ts       # Cross-format workflow parity
+│   ├── workflow-integration.spec.ts   # End-to-end user journeys
+│   ├── async-processing.spec.ts       # Performance and memory testing
+│   └── build-validation.spec.ts       # Production asset integrity
+src/test/                              # DEPLOYMENT BLOCKING
+├── renderUtils.test.ts                # Mathematical unit tests
+├── cardUtils.test.ts                  # Grid and positioning logic
+└── previewConsistency.test.ts         # Preview calculation validation
+```
 
 #### Deployment Pipeline
 
 ```yaml
-Test Job (Critical Tests Must Pass):
+Test Job (All Critical Tests Must Pass):
 ├── Unit Tests ❌→ BLOCK deployment
-├── Build Validation ❌→ BLOCK deployment  
-└── Playwright E2E Tests ❌→ CONTINUE (informational)
+├── Critical E2E Tests ❌→ BLOCK deployment
+│   ├── Application smoke tests
+│   ├── Core functionality validation  
+│   └── Essential mathematical accuracy
+└── Comprehensive E2E Tests ❌→ CONTINUE (informational)
+    ├── Visual regression testing
+    ├── Complex integration scenarios
+    └── Performance validation
 
-Build Job (Runs if Test Job Completes):
+Build Job (Runs if ALL Critical Tests Pass):
 ├── Production Build
 └── Asset Generation
 
@@ -879,19 +908,23 @@ Deploy Job (Runs if Build Succeeds):
 
 #### GitHub Actions Configuration
 
-The deployment workflow implements the tiered strategy:
+The deployment workflow implements the hybrid tiered strategy:
 
 ```yaml
-# Critical tests - must pass for deployment
+# Unit tests - must pass for deployment
 - name: Run unit tests
   run: npm run test:run
-  # continue-on-error: false (default)
+  continue-on-error: false
 
-# Integration tests - informational only  
-- name: Run Playwright tests
-  run: npm run test:e2e
+# Critical E2E tests - must pass for deployment
+- name: Run Critical E2E tests (DEPLOYMENT BLOCKING)
+  run: npm run test:e2e:critical
+  continue-on-error: false
+  
+# Comprehensive E2E tests - informational only
+- name: Run Comprehensive E2E tests (INFORMATIONAL)
+  run: npm run test:e2e:comprehensive
   continue-on-error: true
-  id: playwright-tests
 
 # Always upload test reports for visibility
 - name: Upload Playwright report
@@ -901,22 +934,25 @@ The deployment workflow implements the tiered strategy:
 
 #### Benefits of This Approach
 
-1. **Customer Priority**: User-facing deployments are never blocked by test edge cases
-2. **Test Visibility**: All test results remain visible through artifacts and reporting
-3. **Developer Confidence**: Critical functionality is still protected by blocking tests
-4. **Rapid Iteration**: Teams can deploy fixes quickly while maintaining quality
+1. **Customer Priority**: User-facing deployments are never blocked by non-critical test edge cases
+2. **Quality Protection**: Critical functionality is protected by blocking tests that catch "hard to detect" issues
+3. **Test Visibility**: All test results remain visible through artifacts and reporting
+4. **Balanced Strategy**: Core quality gates + deployment velocity
+5. **Clear Categorization**: Teams understand which tests are deployment-critical vs informational
 
 #### Development Workflow
 
 **For Developers:**
-- All tests run locally: `npm run test && npm run test:e2e`
-- Both unit and e2e test failures should be addressed
-- Use test reports to understand e2e failures
+- Run all tests locally: `npm run test && npm run test:e2e`
+- Run only critical tests: `npm run test:run && npm run test:e2e:critical`
+- Both unit and critical e2e test failures should be addressed immediately
+- Comprehensive test failures should be investigated but don't block PRs
 
 **For CI/CD:**
-- Unit test failures block deployment (high confidence, stable tests)
-- E2E test failures are reported but don't block deployment
-- Test artifacts provide debugging information
+- Unit test failures block deployment (mathematical accuracy)
+- Critical E2E test failures block deployment (core functionality)
+- Comprehensive E2E test failures are reported but don't block deployment
+- Test artifacts provide debugging information for all test types
 
 **For Production Monitoring:**
 - Real user monitoring supplements test coverage
@@ -925,17 +961,23 @@ The deployment workflow implements the tiered strategy:
 
 #### When to Update This Strategy
 
-**Add to Tier 1 (Blocking)** when:
-- Test covers critical user-facing functionality
-- Test is highly stable and rarely produces false positives
-- Test failure always indicates a real problem
+**Add to Critical Tests (Tier 1 - Blocking)** when:
+- Test covers critical user-facing functionality that would break the app for ALL users
+- Test is highly stable and rarely produces false positives in CI environments
+- Test failure always indicates a real problem that customers would encounter
+- Test executes quickly (< 30 seconds) and is suitable for fast feedback
 
-**Keep in Tier 2 (Informational)** when:
-- Test covers edge cases or complex scenarios
-- Test might be sensitive to CI environment differences
-- Test failure needs investigation but shouldn't block users
+**Keep in Comprehensive Tests (Tier 2 - Informational)** when:
+- Test covers edge cases, advanced scenarios, or browser-specific behavior
+- Test might be sensitive to CI environment differences or timing issues
+- Test failure needs investigation but represents scenarios most users won't encounter
+- Test involves complex visual regression or performance validation
 
-This deployment strategy ensures that quality testing practices support rather than hinder the delivery of value to customers.
+**Examples of Critical vs Comprehensive:**
+- **Critical**: PDF.js worker loading, basic file upload, core DPI calculations
+- **Comprehensive**: Advanced visual regression, complex multi-file workflows, performance stress tests
+
+This hybrid deployment strategy reconciles the original GitHub Issue #63 requirements (preventing "hard to detect" issues impactful to users) with practical deployment velocity needs, ensuring both quality protection and customer priority.
 
 ## Duplex Mirroring Logic and Card ID Consistency
 

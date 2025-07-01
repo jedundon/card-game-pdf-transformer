@@ -24,7 +24,9 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:critical": "playwright test tests/critical",
+    "test:e2e:comprehensive": "playwright test tests/comprehensive"
   },
   "dependencies": {
     "jspdf": "^3.0.1",
