@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { FileManagerPanel } from './FileManagerPanel';
+import { ExportPageButton } from './shared/ExportPageButton';
 import { PageSizeSettings } from './ConfigureStep/components/PageSizeSettings';
 import { CardPositionSettings } from './ConfigureStep/components/CardPositionSettings';
 import { CardSizeSettings } from './ConfigureStep/components/CardSizeSettings';
@@ -895,9 +896,29 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   </button>
                 </div>
                 
-                {/* Card ID - Right */}
-                <div className="ml-auto text-sm text-gray-500">
-                  {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
+                {/* Card ID and Export Button - Right */}
+                <div className="ml-auto flex items-center gap-3">
+                  <div className="text-sm text-gray-500">
+                    {totalFilteredCards > 0 && currentCardExists ? `Card ID: ${currentCardId}` : 'No cards'}
+                  </div>
+                  
+                  {/* Export Page Button */}
+                  {totalFilteredCards > 0 && currentCardExists && (
+                    <ExportPageButton
+                      cardId={currentCardId}
+                      cardType={viewMode}
+                      pdfData={pdfData}
+                      pdfMode={pdfMode}
+                      extractionSettings={extractionSettings}
+                      outputSettings={outputSettings}
+                      multiFileImport={multiFileImport}
+                      activePages={activePages}
+                      cardsPerPage={cardsPerPage}
+                      className="text-xs"
+                    >
+                      Export Page
+                    </ExportPageButton>
+                  )}
                 </div>
               </div>
             </div>
