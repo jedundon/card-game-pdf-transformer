@@ -8,11 +8,12 @@
 import React, { useState, useCallback } from 'react';
 import { Download, Loader2 } from 'lucide-react';
 import { generateSinglePagePDF, SinglePageExportOptions } from '../../utils/singlePageExport';
+import { PdfData } from '../../types';
 
 export interface ExportPageButtonProps {
   cardId: number;
   cardType: 'front' | 'back';
-  pdfData?: any;
+  pdfData?: PdfData | null;
   pdfMode: SinglePageExportOptions['pdfMode'];
   extractionSettings: SinglePageExportOptions['extractionSettings'];
   outputSettings: SinglePageExportOptions['outputSettings'];

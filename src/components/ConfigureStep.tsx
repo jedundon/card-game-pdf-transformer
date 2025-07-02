@@ -674,7 +674,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [outputSettings.pageSize, outputSettings.cardSize, outputSettings.cardScalePercent, outputSettings.offset, viewMode]);
+  }, [outputSettings, viewMode]);
 
   // Handle calibration measurements and apply settings
   const handleApplyCalibration = useCallback(() => {
@@ -760,7 +760,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       topDistance: '',
       crosshairLength: ''
     });
-  }, [calibrationMeasurements, onSettingsChange]);
+  }, [calibrationMeasurements, outputSettings, onSettingsChange]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({

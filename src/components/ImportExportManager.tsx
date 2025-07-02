@@ -6,15 +6,16 @@ import {
   hasAutoSavedSettings, 
   getAutoSaveTimestamp 
 } from '../utils/localStorageUtils';
+import { PdfMode, PageSettings, ExtractionSettings, OutputSettings, ColorSettings } from '../types';
 
 interface ImportExportManagerProps {
-  pdfMode: any;
-  pageSettings: any;
-  extractionSettings: any;
-  outputSettings: any;
-  colorSettings: any;
+  pdfMode: PdfMode;
+  pageSettings: PageSettings[];
+  extractionSettings: ExtractionSettings;
+  outputSettings: OutputSettings;
+  colorSettings: ColorSettings;
   currentPdfFileName?: string;
-  onLoadSettings: (settings: any) => void;
+  onLoadSettings: (settings: WorkflowSettings) => void;
   onTriggerImportRef?: (triggerFn: () => void) => void;
 }
 

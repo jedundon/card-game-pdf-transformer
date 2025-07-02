@@ -170,8 +170,6 @@ function calculateSequentialId(
  * @param extractionSettings - Grid and override configuration
  * @param pdfMode - PDF processing mode and orientation settings
  * @param cardsPerPage - Number of cards per page (grid rows × columns)
- * @param pageWidth - Optional page width for flip edge calculations
- * @param pageHeight - Optional page height for flip edge calculations
  * @returns Object containing card type ('Front'/'Back') and sequential ID number
  */
 export function getCardInfo(
@@ -179,9 +177,7 @@ export function getCardInfo(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number,
-  _pageWidth?: number,
-  _pageHeight?: number
+  cardsPerPage: number
 ): CardInfo {
   if (!activePages.length) return { type: 'Unknown', id: 0 };
   
@@ -296,7 +292,7 @@ export function getAvailableCardIds(
  * @param cardType - Card type ('front' or 'back')
  * @returns Rotation angle in degrees from output settings
  */
-export function getRotationForCardType(outputSettings: any, cardType: 'front' | 'back'): number {
+export function getRotationForCardType(outputSettings: { rotation?: { front?: number; back?: number } }, cardType: 'front' | 'back'): number {
   return outputSettings.rotation?.[cardType] || 0;
 }
 

@@ -1,6 +1,6 @@
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium } from '@playwright/test';
 
-async function globalSetup(config: FullConfig) {
+async function globalSetup() {
   if (process.env.CI) {
     console.log('🔧 Setting up Playwright for CI environment...');
     

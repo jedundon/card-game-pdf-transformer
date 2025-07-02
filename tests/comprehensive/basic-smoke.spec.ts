@@ -82,7 +82,7 @@ test.describe('Basic Application Smoke Tests', () => {
   });
 
   test('should be responsive on different screen sizes', async ({ page }) => {
-    const testViewport = async (width: number, height: number, name: string) => {
+    const testViewport = async (width: number, height: number) => {
       await page.setViewportSize({ width, height });
       await page.goto('/');
       await page.waitForLoadState('networkidle');
@@ -99,9 +99,9 @@ test.describe('Basic Application Smoke Tests', () => {
     };
     
     // Test different viewports with error handling
-    await testViewport(375, 667, 'mobile');
-    await testViewport(768, 1024, 'tablet');
-    await testViewport(1200, 800, 'desktop');
+    await testViewport(375, 667);
+    await testViewport(768, 1024);
+    await testViewport(1200, 800);
   });
 
   test('should not have console errors on page load', async ({ page }) => {

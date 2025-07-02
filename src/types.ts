@@ -8,6 +8,12 @@
  * **Interface Categories:**
  * - PDF Processing: Types for working with PDF.js and document structure
  * - Configuration: Settings for extraction, output, and processing modes
+ */
+
+import { ColorTransformation } from './utils/colorUtils';
+import { LastImportedFileInfo } from './utils/localStorageUtils';
+
+/**
  * - Card Data: Information about individual cards and their properties
  * - Layout & Positioning: Grid systems, cropping, and spatial configurations
  * - Color Processing: Color transformation and calibration settings
@@ -318,6 +324,74 @@ export interface OutputSettings {
 }
 
 /**
+ * Color calibration grid configuration
+ * 
+ * Defines the dimensions of the color calibration preview grid
+ * used to test different color transformation settings.
+ */
+export interface ColorGridConfig {
+  /** Number of columns in the calibration grid */
+  columns: number;
+  /** Number of rows in the calibration grid */
+  rows: number;
+}
+
+/**
+ * Color transformation range for calibration grid
+ * 
+ * Defines the parameter range for a specific transformation type
+ * across the calibration grid preview.
+ */
+export interface ColorTransformationRange {
+  /** Transformation type (matches ColorTransformation properties) */
+  type: string;
+  /** Minimum value for the transformation */
+  min: number;
+  /** Maximum value for the transformation */
+  max: number;
+}
+
+/**
+ * Complete color calibration settings
+ * 
+ * Contains all color-related configuration including the selected region,
+ * calibration grid setup, transformation ranges, and final adjustments.
+ */
+export interface ColorSettings {
+  /** Selected region for color sampling and preview */
+  selectedRegion: {
+    /** X coordinate of region center in extraction coordinates */
+    x: number;
+    /** Y coordinate of region center in extraction coordinates */
+    y: number;
+    /** Width of region in extraction coordinates */
+    width: number;
+    /** Height of region in extraction coordinates */
+    height: number;
+    /** Source page index */
+    pageIndex: number;
+  } | null;
+  /** Calibration grid configuration */
+  gridConfig: ColorGridConfig;
+  /** Transformation ranges for calibration grid */
+  transformations: {
+    /** Horizontal axis transformation range */
+    horizontal: ColorTransformationRange;
+    /** Vertical axis transformation range */
+    vertical: ColorTransformationRange;
+  };
+  /** Selected preset configuration */
+  selectedPreset: {
+    /** Preset name */
+    name: string;
+    /** Preset transformation values */
+    values: ColorTransformation;
+  } | null;
+  /** Final color adjustments applied to output */
+  finalAdjustments: ColorTransformation;
+}
+
+/**
  * File source information for multi-file support
  * 
  * Tracks metadata about imported files including their type and page count.
@@ -546,7 +620,7 @@ export interface ImportStepProps {
   pdfMode: PdfMode;
   pageSettings: PageSettings[];
   autoRestoredSettings: boolean;
-  lastImportedFileInfo: any | null; // TODO: Define proper type
+  lastImportedFileInfo: LastImportedFileInfo | null;
   onClearLastImportedFile: () => void;
   multiFileImport: MultiFileImportHook;
 }
@@ -570,9 +644,9 @@ export interface ColorCalibrationStepProps {
   pdfMode: PdfMode;
   pageSettings: PageSettings[];
   extractionSettings: ExtractionSettings;
-  colorSettings: any; // TODO: Define proper color settings type
+  colorSettings: ColorSettings;
   multiFileImport: MultiFileImportHook;
-  onSettingsChange: (settings: any) => void; // TODO: Type this properly
+  onSettingsChange: (settings: ColorSettings) => void;
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -598,7 +672,7 @@ export interface ExportStepProps {
   pageSettings: PageSettings[];
   extractionSettings: ExtractionSettings;
   outputSettings: OutputSettings;
-  colorSettings: any; // TODO: Define proper color settings type
+  colorSettings: ColorSettings;
   currentPdfFileName?: string;
   multiFileImport: MultiFileImportHook;
   onPrevious: () => void;

@@ -139,7 +139,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         return newState;
       });
     }, 16),
-    [pages.length] // Add pages.length as dependency since we're using it directly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pages.length] // pages.length dependency is correctly included; throttleDragEvents dependencies are handled internally
   );
 
   // Handle start of drag operation

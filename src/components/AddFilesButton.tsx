@@ -1,9 +1,10 @@
 import React, { useRef } from 'react';
 import { PlusIcon } from 'lucide-react';
+import { MultiFileImportHook } from '../types';
 
 interface AddFilesButtonProps {
   /** Multi-file import hook instance */
-  multiFileImport: any;
+  multiFileImport: MultiFileImportHook;
   /** Called when files are successfully added */
   onFilesAdded?: (files: File[]) => void;
   /** Whether the button should be disabled */

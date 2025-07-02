@@ -8,6 +8,12 @@
  * **Key Responsibilities:**
  * - Define base default values for all application settings
  * - Generate PDF mode-specific grid configurations
+ */
+
+import { SkippedCard, CardTypeOverride } from './types';
+import { ColorTransformation } from './utils/colorUtils';
+
+/**
  * - Calculate appropriate rotation defaults based on printing method
  * - Provide complete workflow settings with mode-aware defaults
  * - Type definitions for settings structure
@@ -299,8 +305,8 @@ export type WorkflowSettings = {
       front: number;
       back: number;
     };
-    skippedCards: any[];
-    cardTypeOverrides: any[];
+    skippedCards: SkippedCard[];
+    cardTypeOverrides: CardTypeOverride[];
   };  outputSettings: {
     pageSize: {
       width: number;
@@ -329,13 +335,22 @@ export type WorkflowSettings = {
     includeColorCalibration: boolean;
   };
   colorSettings: {
-    selectedRegion: any;
+    selectedRegion: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      pageIndex: number;
+    } | null;
     gridConfig: { columns: number; rows: number };
     transformations: {
       horizontal: { type: string; min: number; max: number };
       vertical: { type: string; min: number; max: number };
     };
-    selectedPreset: any;
+    selectedPreset: {
+      name: string;
+      values: ColorTransformation;
+    } | null;
     finalAdjustments: {
       brightness: number;
       contrast: number;

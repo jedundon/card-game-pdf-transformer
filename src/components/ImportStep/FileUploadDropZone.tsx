@@ -1,12 +1,12 @@
 import React, { useRef /*, useState */ } from 'react';
 import { Upload } from 'lucide-react';
 import { isValidImageFile } from '../../utils/imageUtils';
-import type { MultiFileImportHook } from '../../types';
+import type { MultiFileImportHook, PdfData, PageSettings } from '../../types';
 
 interface FileUploadDropZoneProps {
   multiFileImport: MultiFileImportHook;
-  onFileSelect: (pdfData: any, fileName: string, file?: File) => void;
-  onPageSettingsChange: (settings: any[]) => void;
+  onFileSelect: (pdfData: PdfData | null, fileName: string, file?: File) => void;
+  onPageSettingsChange: (settings: PageSettings[]) => void;
   onStartOverClick: () => void;
   fileName: string;
   setFileName: (name: string) => void;

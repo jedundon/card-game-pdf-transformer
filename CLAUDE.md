@@ -36,23 +36,12 @@ This is a React-based card game file transformation tool with a 5-step wizard th
 - Settings can be saved/loaded via `SettingsManager.tsx`
 
 ### File Processing Architecture
-The application supports both PDF and image files through a unified processing pipeline:
+Supports both PDF and image files through unified processing pipeline:
 
-#### PDF File Processing
-- **PDF.js Integration**: Uses `pdfjs-dist` for PDF parsing and rendering
-- **Worker Setup**: PDF.js worker copied to public/ directory for browser compatibility
-- **Coordinate System**: PDF coordinates (72 DPI) converted to extraction DPI (300 DPI)
-
-#### Image File Processing  
-- **Multi-Format Support**: Handles PNG, JPG, JPEG files through HTML5 Canvas API
-- **ImageFileData**: Structured data format for consistent image handling
-- **Coordinate System**: Native image pixels treated as extraction DPI (300 DPI)
-
-#### Unified Processing Pipeline
-- **Card Extraction**: Source-aware utility functions in `utils/cardUtils.ts` handle both PDF and image sources
-- **DPI Standardization**: All measurements normalized to extraction DPI (300) for consistent calculations
-- **Unified Rendering**: Shared `renderUtils.ts` ensures preview and export use identical calculations for both file types
-- **Multi-File Import**: `useMultiFileImport` hook manages mixed PDF/image sessions with unified page ordering
+- **PDF Processing**: PDF.js integration, worker setup, 72 DPI → 300 DPI conversion
+- **Image Processing**: PNG/JPG/JPEG via Canvas API, native pixels as 300 DPI
+- **Unified Pipeline**: Source-aware utilities in `cardUtils.ts`, DPI standardization (300), shared `renderUtils.ts`
+- **Multi-File Import**: `useMultiFileImport` hook manages mixed PDF/image sessions
 
 ### Rendering Architecture and Consistency
 The application uses a unified rendering system to ensure perfect consistency between preview and final output:
@@ -100,884 +89,269 @@ Card identification logic varies significantly between modes and is centralized 
 - **Responsive Design**: Uses CSS Grid and Flexbox for layouts
 - **Preview System**: Real-time card preview with proper scaling calculations
 
-## Development Guidelines
+## Development Standards
 
-### TypeScript Configuration
-- Strict mode enabled with comprehensive linting rules
-- Uses React JSX transform
-- Bundler module resolution for Vite compatibility
+### Code Organization & TypeScript
+- **Strict TypeScript**: Comprehensive linting, React JSX transform, bundler resolution
+- **Separation of Concerns**: Business logic in utility files, props properly typed
+- **Constants**: Centralized to avoid magic numbers
+- **Quality**: ESLint for React/TypeScript, no unused variables, comprehensive build checks
 
-### Code Organization
-- Business logic separated into utility files
-- Component props properly typed with interfaces
-- Constants centralized to avoid magic numbers
-- PDF processing logic abstracted from UI components
+### Common Patterns and Pitfalls
 
-### Testing and Quality
-- ESLint configured for React and TypeScript
-- No unused variables/parameters allowed
-- Comprehensive TypeScript checking in build process
+**Rendering Consistency:**
+- Use unified functions from `renderUtils.ts` (no duplicate logic)
+- Apply rotation via canvas processing, not CSS transforms
+- Use card container dimensions for clipping; image dimensions for scaling
 
-## Common Development Patterns and Pitfalls
+**DPI and Scaling:**
+- Extraction: 300 DPI, Screen: 72-96 DPI
+- Always convert between DPI contexts properly
+- Preview scaling accounts for both DPI conversion and viewport constraints
 
-### Rendering Consistency Issues
-**Problem**: Preview and export showing different results
-**Solution**: Always use unified rendering functions from `renderUtils.ts` rather than duplicating logic
+**Canvas Processing:**
+- Use canvas for rotation and clipping (pixel-perfect control)
+- Transform order: center → rotate → draw
+- Set canvas to final output size, not image size
+- Handle rotation by swapping width/height for 90°/270°
 
-**Problem**: Double rotation or incorrect rotation display
-**Solution**: Apply rotation via canvas processing, not CSS transforms, to avoid conflicts
+### Multi-File Architecture
 
-**Problem**: Images not properly clipped to card boundaries
-**Solution**: Use card container dimensions for clipping; image dimensions for internal scaling
+**CRITICAL: Coordinate System Consistency**
 
-### DPI and Scaling Considerations
-- Extraction always at 300 DPI (EXTRACTION_DPI)
-- Screen display at 72-96 DPI (SCREEN_DPI) 
-- Preview scaling must account for both DPI conversion and viewport constraints
-- Always convert between DPI contexts when moving between extraction, processing, and display
+All calculations must use same coordinate system for PDF and image files:
+- **Extraction DPI (300)**: All measurements in extraction DPI pixels
+- **PDF files**: Convert from 72 DPI to extraction DPI
+- **Image files**: Treat native pixels as extraction DPI
+- **UI inputs**: Crop values, dimensions in extraction DPI pixels
 
-### Canvas Processing Best Practices
-- Use canvas for both rotation and clipping to maintain pixel-perfect control
-- Apply transformations in correct order: center → rotate → draw
-- Set canvas dimensions to final output size, not image size
-- Handle rotation by swapping width/height for 90°/270° rotations
-
-## Multi-File Architecture Considerations
-
-### PDF vs Image File Handling
-The application supports both PDF and image files (PNG, JPG) through a unified interface, but there are critical architectural considerations:
-
-#### Coordinate System Consistency
-**CRITICAL**: All coordinate calculations (crops, dimensions, positioning) must use the same coordinate system for both PDF and image files.
-
-**Standard Approach**:
-- **Extraction DPI (300)**: All measurements internally in extraction DPI pixels
-- **PDF files**: Convert from PDF.js coordinates (72 DPI) to extraction DPI
-- **Image files**: Treat native pixels as extraction DPI (assume 300 DPI)
-- **UI inputs**: Crop values, dimensions are in extraction DPI pixels
-
-**Implementation Pattern**:
+**Implementation Pattern:**
 ```typescript
 // ✅ CORRECT: Unified coordinate system
 if (sourceType === 'image') {
-  sourceWidth = pageDimensions.width; // Use native pixels as extraction DPI
+  sourceWidth = pageDimensions.width; // Native pixels as extraction DPI
 } else {
-  sourceWidth = (renderedData.width / previewScale) * extractionScale; // Convert PDF to extraction DPI
+  sourceWidth = (renderedData.width / previewScale) * extractionScale; // Convert PDF
 }
-
-// ✅ CORRECT: Crop values always in extraction DPI
-const croppedWidth = sourceWidth - cropLeft - cropRight;
 ```
 
-**Anti-Patterns to Avoid**:
-```typescript
-// ❌ WRONG: Different coordinate systems
-if (sourceType === 'image') {
-  // Using native pixels directly
-} else {
-  // Using extraction DPI
-}
-
-// ❌ WRONG: Inconsistent scaling
-const scale = pdfData ? extractionScale : 1.0; // Different behavior by type
-```
-
-#### Data Source Validation
-When supporting multiple file types, always validate data sources properly:
-
+**Data Source Validation:**
 ```typescript
 // ✅ CORRECT: Check for either data source
 const hasValidDataSource = pdfData || (renderedPageData?.sourceType === 'image');
-if (!hasValidDataSource || !otherRequiredData) return null;
-
-// ❌ WRONG: Only checking one source type
-if (!pdfData || !otherRequiredData) return null; // Fails for images
 ```
 
-#### Preview and Extraction Consistency
-**Critical Pattern**: Ensure preview calculations match extraction calculations exactly:
+**Common Pitfalls:**
+1. Don't assume all images are at extraction DPI
+2. Avoid duplicating scaling calculations between preview and extraction
+3. Be careful with `if (pdfData)` checks that exclude image files
+4. Ensure crop/grid values mean same thing for all file types
 
-- **Preview overlays**: Use same scaling logic as actual extraction
-- **Dimension display**: Calculate using same formulas as extraction
-- **Coordinate conversion**: Apply same transformations in both paths
-
-#### Common Pitfalls with Multi-File Support
-1. **DPI Assumptions**: Don't assume all images are at extraction DPI
-2. **Scaling Logic**: Avoid duplicating scaling calculations between preview and extraction
-3. **Conditional Logic**: Be careful with `if (pdfData)` checks that exclude image files
-4. **Settings Interpretation**: Ensure crop/grid values mean the same thing for all file types
-
-### Debugging Multi-File Issues
-When debugging PDF vs image discrepancies:
-
-1. **Check coordinate systems**: Are measurements in the same units?
-2. **Trace scaling calculations**: Do preview and extraction use same formulas?
-3. **Validate data sources**: Are conditionals excluding valid image data?
-4. **Compare end-to-end**: Do identical layouts produce identical results?
-
-### Testing Multi-File Features
-- Create identical content in both PDF and image formats
-- Process with identical settings through both pipelines  
-- Compare pixel-perfect results at each stage
-- Verify preview matches final extraction for both file types
+**Debugging Multi-File Issues:**
+- Check coordinate systems use same units
+- Verify preview and extraction use same formulas
+- Validate conditionals don't exclude valid image data
+- Compare end-to-end results for identical layouts
 
 ## Component Architecture and Refactoring Insights
 
-### Major Refactoring (December 2024)
-The codebase underwent a comprehensive component decomposition that transformed three massive components into a modular, maintainable architecture. This section documents key architectural insights and best practices discovered during this process.
+### Component Architecture (Dec 2024 Refactoring)
+Comprehensive decomposition transformed massive components into modular, maintainable architecture.
 
-#### Component Decomposition Results
-- **ImportStep.tsx**: 874+ → 582 lines (-292 lines, -33%)
-- **ExtractStep.tsx**: 1778+ → ~800 lines (-978 lines, -55%) 
-- **ConfigureStep.tsx**: 1647+ → ~600 lines (-1047 lines, -64%)
-- **Total**: ~2,317 lines reduced, 22 focused components created
+#### Refactoring Results (Dec 2024)
+- **3 massive components** → **22 focused components**
+- **~2,317 lines reduced** across ImportStep, ExtractStep, ConfigureStep
 
-### Architectural Patterns Established
-
-#### Component Structure Standards
+**Component Structure:**
 ```
 src/components/
-├── [StepName].tsx                    # Main step component (slim coordinator)
+├── [StepName].tsx                    # Main coordinator (slim)
 ├── [StepName]/
 │   ├── components/                   # Step-specific UI components
-│   │   ├── [FeatureSection].tsx     # Logical feature groupings
-│   │   └── [UIElement].tsx          # Reusable UI elements
-│   └── hooks/                       # Step-specific custom hooks
-│       └── use[Feature].ts          # Extracted business logic
+│   └── hooks/                       # Extracted business logic
 ```
 
 #### TypeScript Interface Design
-**Best Practice**: Create comprehensive prop interfaces with JSDoc documentation:
-
+Create comprehensive prop interfaces with JSDoc documentation:
 ```typescript
 interface ComponentProps {
   /** Primary data or state */
   data: DataType;
-  /** Event handlers with descriptive names */
   onDataChange: (newData: DataType) => void;
-  /** Optional configuration */
   config?: ConfigType;
 }
-
-/**
- * Brief component description explaining its single responsibility
- * 
- * Detailed explanation of component purpose, key features, and usage context.
- * Include any important behavioral notes or dependencies.
- */
-export const Component: React.FC<ComponentProps> = ({ ... }) => {
 ```
 
-#### Component Responsibility Guidelines
-1. **Single Responsibility**: Each component should handle one logical UI concern
-2. **80-200 Lines**: Target component size for optimal maintainability
-3. **Pure Props**: Avoid direct imports of global state when possible
-4. **Event Boundaries**: Clear event handler interfaces between components
+**Component Guidelines:**
+1. Single responsibility (one logical UI concern)
+2. 80-200 lines for optimal maintainability  
+3. Pure props (avoid direct global state imports)
+4. Clear event handler interfaces
 
-### Critical Icon Import Pattern
-**IMPORTANT**: Lucide React icon imports changed naming convention. Always use base names:
+### Critical Patterns
 
-```typescript
-// ✅ CORRECT: Use base icon names
-import { Printer, Upload, Ruler, RotateCcw } from 'lucide-react';
+**Icon Imports**: Always use base names (`Printer`, not `PrinterIcon`) to avoid runtime errors
 
-// ❌ WRONG: Old "Icon" suffix pattern (will cause runtime errors)
-import { PrinterIcon, UploadIcon, RulerIcon, RotateCcwIcon } from 'lucide-react';
-```
+**Custom Hooks**: Extract when useState patterns become complex, useMemo dependencies grow large, or multiple components need similar logic
 
-### Custom Hook Extraction Patterns
+**Error Handling:**
+- Specific error messages (timeouts, memory issues)
+- Race conditions with timeouts for better UX
+- Progressive enhancement with graceful degradation
 
-#### When to Extract Hooks
-- **Complex State Logic**: When useState patterns become complex
-- **Expensive Calculations**: When useMemo dependencies grow large
-- **Reusable Patterns**: When multiple components need similar logic
+### State Management Patterns
 
-#### Example: useCardDimensions Hook
-```typescript
-// ✅ GOOD: Extracted complex calculation with memoization
-export const useCardDimensions = (
-  extractionSettings: ExtractionSettings,
-  outputSettings: OutputSettings
-) => {
-  return useMemo(() => {
-    // Complex calculation logic here
-    return { widthPx, heightPx, widthInches, heightInches };
-  }, [extractionSettings.grid, outputSettings.cardSize]);
-};
-```
-
-### Error Handling and User Experience
-
-#### Progressive Enhancement Pattern
-```typescript
-// ✅ PATTERN: Graceful degradation with specific error messages
-const [error, setError] = useState<string>('');
-
-try {
-  // Risky operation
-} catch (error) {
-  let errorMessage = 'Operation failed';
-  
-  if (error instanceof Error) {
-    if (error.message.includes('timeout')) {
-      errorMessage = 'Operation timed out. Please try again.';
-    } else if (error.message.includes('memory')) {
-      errorMessage = 'Not enough memory. Try refreshing the page.';
-    }
-  }
-  
-  setError(errorMessage);
-}
-```
-
-#### Timeout and Performance Patterns
-```typescript
-// ✅ PATTERN: Race conditions with timeouts for better UX
-const extractPromise = extractCardImage(cardIndex);
-const timeoutPromise = new Promise<null>((_, reject) => 
-  setTimeout(() => reject(new Error('Extraction timed out')), 10000)
-);
-
-const result = await Promise.race([extractPromise, timeoutPromise]);
-```
-
-### State Management Insights
-
-#### Multi-File State Complexity
-The multi-file import system revealed important patterns for complex state management:
-
-1. **Unified Data Models**: Always use consistent data structures across file types
-2. **Source Awareness**: Components should know whether they're handling PDF or image data
-3. **Stable References**: Use useMemo for data maps to prevent unnecessary re-renders
-
-```typescript
-// ✅ PATTERN: Stable reference pattern for complex data
-const imageDataMap = useMemo(() => {
-  const map = new Map();
-  pages.forEach(page => {
-    if (page.fileType === 'image') {
-      map.set(page.fileName, getImageData(page.fileName));
-    }
-  });
-  return map;
-}, [pages]); // Only recreate when pages change
-```
-
-#### Debounced Settings Pattern
-```typescript
-// ✅ PATTERN: Debounced settings for expensive operations
-const debouncedSettingsChange = useCallback((newSettings: any) => {
-  if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  
-  pendingSettingsRef.current = newSettings;
-  timeoutRef.current = setTimeout(() => {
-    if (pendingSettingsRef.current) {
-      onSettingsChange(pendingSettingsRef.current);
-      pendingSettingsRef.current = null;
-    }
-  }, 300);
-}, [onSettingsChange]);
-```
+**Multi-File Complexity:**
+1. Unified data models across file types
+2. Source awareness (PDF vs image data)
+3. Stable references with useMemo to prevent re-renders
+4. Debounced settings (300ms delay for expensive operations)
 
 ### Performance Optimizations Discovered
 
-#### Canvas Processing Efficiency
-- **Batch Operations**: Group canvas operations to minimize context switches
-- **Image Caching**: Cache processed images with timestamp-based expiration
-- **Progressive Loading**: Load thumbnails in batches to avoid overwhelming the browser
+#### Performance Optimizations
+- **Canvas Processing**: Batch operations, minimize context switches
+- **Image Caching**: Timestamp-based expiration with LRU eviction
+- **Progressive Loading**: Load thumbnails in batches
+- **Memory Management**: Bounded cache with automatic cleanup
 
-#### Memory Management
-```typescript
-// ✅ PATTERN: Bounded cache with LRU eviction
-if (cache.size > MAX_CACHE_SIZE) {
-  const entries = Array.from(cache.entries());
-  entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-  // Remove oldest entries
-  for (let i = 0; i < EVICTION_COUNT; i++) {
-    cache.delete(entries[i][0]);
-  }
-}
-```
+### Development Best Practices
 
-### Development Workflow Insights
-
-#### Git Commit Strategy
-Successful refactoring used structured commits with clear scope:
+**Git Commit Strategy:**
 - `Extract [ComponentName] component from [ParentComponent]`
 - `Fix [specific issue] causing [error description]`
 - `Add [feature] with [implementation detail]`
 
-#### Testing During Refactoring
-1. **Incremental Validation**: Test functionality after each component extraction
-2. **Cross-Browser Testing**: Verify icon imports and component rendering
-3. **Error Boundary Testing**: Ensure error handling works in degraded states
+**Adding New Features:**
+1. Start small, follow established patterns
+2. TypeScript first - define interfaces before implementation
+3. Test edge cases and multi-file scenarios
+4. Use memoization and debouncing appropriately
 
-### Future Development Guidelines
+**Maintenance:**
+1. Keep components under 300 lines
+2. Review useEffect dependencies regularly
+3. Update TypeScript interfaces when adding features
+4. Maintain JSDoc comments for complex logic
 
-#### When Adding New Features
-1. **Start Small**: Create focused components following established patterns
-2. **TypeScript First**: Define interfaces before implementation
-3. **Test Edge Cases**: Consider multi-file scenarios and error states
-4. **Performance Conscious**: Use memoization and debouncing appropriately
+### State Management Debugging
 
-#### Maintenance Best Practices
-1. **Component Size Monitoring**: Keep components under 300 lines
-2. **Dependency Auditing**: Regularly review useEffect dependencies
-3. **Interface Evolution**: Update TypeScript interfaces when adding features
-4. **Documentation**: Maintain JSDoc comments for complex business logic
+**Common Issue: Partial State Clearing** (GitHub Issue #38)
 
-This refactoring established a solid foundation for continued development while maintaining full functionality and improving developer experience significantly.
+Problem: "Start Over" only partially cleared state, leaving `pdfData` loaded while clearing other state.
 
-## Debugging Complex State Management Issues
-
-### State Synchronization Anti-Patterns (Learned from GitHub Issue #38)
-
-During implementation of clickable step navigation, we encountered a subtle but critical state management issue that provides important lessons for debugging complex React applications.
-
-#### The Problem: Partial State Clearing
-When implementing "Start Over" functionality, we discovered that `handleResetToDefaults` was only partially clearing application state:
-
-```typescript
-// ❌ PROBLEMATIC: Only partial state clearing
-const handleResetToDefaults = () => {
-  clearLocalStorageSettings();
-  pdfDataManager.handleClearLastImportedFile(); // Only clears lastImportedFileInfo
-  settingsManager.resetToDefaults();
-  localStorageSync.clearAutoRestoredFlag();
-  // Missing: pdfDataManager.clearPdfData() ← Critical omission
-};
-```
-
-**Symptom**: Users could navigate to steps they shouldn't have access to after "Start Over"
-**Root Cause**: `pdfData` remained loaded while other state was cleared
-**Impact**: Conditional logic based on `isPdfLoaded` returned incorrect results
-
-#### The Solution: Complete State Clearing
+**Solution Pattern:**
 ```typescript
 // ✅ CORRECT: Complete state clearing
 const handleResetToDefaults = () => {
   clearLocalStorageSettings();
   pdfDataManager.handleClearLastImportedFile();
-  pdfDataManager.clearPdfData(); // ← Added missing state clearing
+  pdfDataManager.clearPdfData(); // Critical: clear ALL related state
   settingsManager.resetToDefaults();
   localStorageSync.clearAutoRestoredFlag();
 };
 ```
 
-#### Debugging Methodology for State Issues
+**Debugging Methodology:**
+1. **Trace Dependencies**: Map state variables affecting conditional logic
+2. **Verify Reset Functions**: Ensure functions actually clear intended state
+3. **Test State Transitions**: Verify each user action transitions state correctly
+4. **Use Clear Naming**: Functions should indicate their exact scope
 
-1. **Trace State Dependencies**: Map out all state variables that affect conditional logic
-   ```typescript
-   // Example: Step navigation depends on BOTH conditions
-   const isPdfLoaded = !!pdfDataManager.pdfData || multiFileImport.multiFileState.pages.length > 0;
-   ```
+**Prevention Strategies:**
+- Centralized state clearing with comprehensive reset functions
+- State validation with runtime checks
+- Clear, specific function names matching behavior
+- Integration testing of complete user workflows
 
-2. **Verify Reset Functions**: Ensure all reset/clear functions actually modify the intended state
-   ```typescript
-   // Check what each function actually does:
-   // handleClearLastImportedFile() → only clears lastImportedFileInfo
-   // clearPdfData() → sets pdfData to null (THIS was missing)
-   ```
+## Testing & Deployment
 
-3. **Test State Transitions**: Verify each user action properly transitions state
-   - Initial load → correct state
-   - After file import → correct state  
-   - After reset action → correct state ← **This failed initially**
+### Testing Architecture
 
-4. **Use Consistent Naming**: Functions should clearly indicate their scope
-   ```typescript
-   // Good: Specific about what gets cleared
-   clearPdfData()           // Only clears PDF data
-   clearLastImportedFile()  // Only clears file tracking info
-   resetToDefaults()        // Should clear ALL app state
-   ```
+Four-layer testing framework catching "hard to detect" issues:
+1. **Unit Testing** - Mathematical functions and business logic
+2. **Visual Regression** - Cross-browser UI consistency  
+3. **Integration Testing** - Complete workflows and multi-file processing
+4. **Build Validation** - Production asset integrity
 
-#### Common State Management Pitfalls
-
-1. **Assuming Function Names Match Behavior**: Just because a function is called "reset" doesn't mean it resets everything
-2. **Partial State Updates**: Forgetting to clear all related state variables
-3. **State Drift**: When multiple state managers exist, ensure they stay synchronized
-4. **Testing Only Happy Path**: Always test edge cases like reset/clear operations
-
-#### Prevention Strategies
-
-1. **Centralized State Clearing**: Create comprehensive reset functions that handle all related state
-2. **State Validation**: Add runtime checks for impossible state combinations
-3. **Clear Function Names**: Use specific names that match actual behavior
-4. **Documentation**: Document state dependencies and clearing requirements
-5. **Integration Testing**: Test complete user workflows, not just individual functions
-
-#### Debugging Tools and Techniques
-
-1. **State Logging**: Add temporary logging to track state changes
-   ```typescript
-   console.log('State after reset:', { 
-     pdfData: !!pdfDataManager.pdfData, 
-     multiFilePages: multiFileImport.multiFileState.pages.length 
-   });
-   ```
-
-2. **React DevTools**: Monitor state changes in real-time during user actions
-3. **Conditional Breakpoints**: Set breakpoints that trigger only when state is unexpected
-4. **State Snapshots**: Capture state before/after critical operations
-
-This debugging experience reinforced the importance of thorough state management and complete testing of user workflows, especially reset/clear operations that are often edge cases.
-
-## Comprehensive Testing Framework
-
-The application includes a comprehensive testing framework that catches "hard to detect" issues before they reach users. This testing infrastructure implements GitHub Issue #63 requirements and provides automated validation across all critical application areas.
-
-### Testing Architecture Overview
-
-The testing framework consists of four complementary layers:
-
-1. **Unit Testing** - Mathematical functions and business logic validation
-2. **Visual Regression Testing** - UI consistency across browsers and updates  
-3. **Integration Testing** - Complete workflow and multi-file processing
-4. **Build Validation** - Production asset integrity and performance
-
-### Test Files Structure
-
-```
-tests/                           # Playwright E2E and visual regression tests
-├── visual-regression.spec.ts    # All 5 wizard steps visual testing
-├── preview-consistency.spec.ts  # Mathematical consistency validation
-├── pdf-image-parity.spec.ts     # PDF vs image workflow parity
-├── workflow-integration.spec.ts # End-to-end workflow testing
-├── async-processing.spec.ts     # Real async processing validation
-├── build-validation.spec.ts     # Production build integrity
-└── basic-smoke.spec.ts         # Basic application startup tests
-
-src/test/                       # Unit tests for business logic
-├── renderUtils.test.ts         # Render utility mathematical functions
-├── cardUtils.test.ts          # Card positioning and grid logic
-├── previewConsistency.test.ts # Preview vs export consistency
-└── setup.ts                   # Test environment configuration
-```
-
-### Available Test Commands
-
+### Test Commands
 ```bash
-# Unit Testing (Vitest)
-npm run test          # Run tests in watch mode during development
-npm run test:run      # Run tests once (used in CI/CD)
-npm run test:coverage # Run with coverage report
+# Unit Testing
+npm run test          # Watch mode development
+npm run test:run      # Single run (CI/CD)
+npm run test:coverage # Coverage report
 
-# Visual Regression Testing (Playwright)
-npm run test:e2e      # Run all Playwright tests
-npm run test:e2e:ui   # Run with interactive UI for debugging
-
-# Combined Testing
-npm run build         # Includes TypeScript check and build validation
+# E2E Testing
+npm run test:e2e         # All Playwright tests
+npm run test:e2e:critical      # Deployment-blocking tests only
+npm run test:e2e:comprehensive # Full test suite
+npm run test:e2e:ui      # Interactive debugging
 ```
 
-### Developer Testing Guidelines
+### Testing Guidelines
 
-#### When to Write Tests
-
-**Always Write Tests For:**
+**Always Test:**
 - Mathematical functions (DPI conversions, scaling, rotation)
-- Core business logic (card positioning, grid calculations)
-- Critical user workflows (file upload, extraction, export)
-- Bug fixes (add test that reproduces the bug first)
+- Core business logic (card positioning, grid calculations) 
+- Critical workflows (file upload, extraction, export)
+- Bug fixes (reproduce bug first)
 
-**Consider Tests For:**
-- Complex UI components with business logic
-- Error handling and recovery scenarios
-- Performance-critical operations
+**Test Structure:**
+- Unit tests: `src/test/[sourceFile].test.ts`
+- E2E tests: `tests/[feature].spec.ts`
+- Use `toBeCloseTo(expected, precision)` for floating-point math
+- Disable animations in visual tests for consistency
 
-#### Unit Testing Best Practices
+### Critical Test Areas
 
-**Location**: Place unit tests in `src/test/` directory alongside source code
+**Mathematical Functions**: DPI conversions (72↔300↔96), scaling accuracy, rotation dimension swapping, grid positioning
 
-**Naming Convention**: `[sourceFile].test.ts` (e.g., `renderUtils.test.ts`)
+**Preview vs Export Consistency**: Same mathematical functions, identical coordinate systems, consistent DPI logic
 
-**Test Structure**:
-```typescript
-import { describe, it, expect } from 'vitest'
-import { functionToTest } from '../utils/targetFile'
+**Multi-File Workflows**: Unified coordinate system, consistent pipeline, identical PDF/image results
 
-describe('Module Name', () => {
-  describe('specific function or feature', () => {
-    it('should describe expected behavior in specific scenario', () => {
-      // Arrange
-      const input = { /* test data */ }
-      
-      // Act
-      const result = functionToTest(input)
-      
-      // Assert
-      expect(result).toBe(expectedValue)
-      expect(result.property).toBeCloseTo(expectedFloat, precision)
-    })
-  })
-})
-```
-
-**Mathematical Testing Guidelines**:
-- Use `toBeCloseTo(expected, precision)` for floating-point comparisons
-- Test edge cases: zero values, extreme scales, boundary conditions
-- Validate both input/output values and intermediate calculations
-- Test mathematical relationships (e.g., area preservation during rotation)
-
-#### Visual Regression Testing Guidelines
-
-**Location**: Place visual tests in `tests/` directory
-
-**When to Add Visual Tests**:
-- New UI components or wizard steps
-- Changes to layout or styling systems
-- Cross-browser compatibility requirements
-
-**Visual Test Structure**:
-```typescript
-import { test, expect } from '@playwright/test'
-
-test.describe('Feature Name', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.setViewportSize({ width: 1400, height: 900 })
-    // Disable animations for consistent testing
-    await page.addStyleTag({
-      content: `*, *::before, *::after { 
-        animation-duration: 0s !important; 
-        transition-duration: 0s !important; 
-      }`
-    })
-  })
-
-  test('should render component correctly', async ({ page }) => {
-    await page.goto('/')
-    await page.waitForLoadState('networkidle')
-    
-    // Interact with component if needed
-    await page.click('[data-testid="button"]')
-    
-    // Take screenshot for comparison
-    await expect(page).toHaveScreenshot('feature-state.png')
-  })
-})
-```
-
-#### Integration Testing Guidelines
-
-**Focus Areas**:
-- Complete user workflows (upload → extract → configure → export)
-- Multi-file processing with mixed PDF/image files
-- Error recovery and state management
-- Settings persistence and loading
-
-**Integration Test Pattern**:
-```typescript
-test('complete workflow should maintain data consistency', async ({ page }) => {
-  // Test entire user journey
-  await page.goto('/')
-  
-  // Simulate file upload
-  const uploadData = await page.evaluate(() => {
-    // Mock file processing logic
-    return { /* simulated results */ }
-  })
-  
-  // Validate each step maintains data integrity
-  expect(uploadData.property).toBe(expectedValue)
-})
-```
-
-### Testing Critical Areas
-
-#### Mathematical Functions
-**Why Critical**: Errors in DPI conversions, scaling, or positioning directly impact user output
-
-**Test Requirements**:
-- Validate all DPI conversions (72 ↔ 300 ↔ 96 DPI)
-- Test scaling accuracy at various percentages
-- Verify rotation dimension swapping (90°, 270°)
-- Check grid positioning calculations
-- Validate aspect ratio preservation
-
-**Example**:
-```typescript
-it('should convert DPI accurately', () => {
-  const inches = 2.5
-  const extractionPixels = inches * 300  // 750
-  const screenPixels = inches * 72       // 180
-  
-  const converted = extractionPixels * (72 / 300)
-  expect(converted).toBe(screenPixels)
-})
-```
-
-#### Preview vs Export Consistency
-**Why Critical**: Users rely on preview accuracy for print planning
-
-**Test Requirements**:
-- Same mathematical functions used in preview and export
-- Identical coordinate system handling
-- Consistent DPI conversion logic
-- Matching rotation and scaling calculations
-
-#### Multi-File Workflows
-**Why Critical**: PDF and image files must produce identical results
-
-**Test Requirements**:
-- Unified coordinate system validation
-- Consistent processing pipeline
-- Identical output for same content
-- Cross-file-type compatibility
-
-### CI/CD Integration
-
-The testing framework automatically runs in GitHub Actions on:
-- Every pull request
-- Every push to main branch
-- Manual workflow triggers
-
-**CI/CD Test Sequence**:
-1. **Setup** - Install dependencies and browsers
-2. **Unit Tests** - Run all mathematical and logic validation
-3. **Build** - Verify TypeScript compilation and asset integrity
-4. **Visual Regression** - Cross-browser UI consistency testing
-5. **Integration** - Complete workflow validation
-
-**Failure Handling**:
-- Unit test failures block PR merging
-- Visual regression changes require manual review
-- Build failures prevent deployment
-- Test artifacts saved for debugging
-
-### Debugging Test Failures
-
-#### Unit Test Failures
-```bash
-# Run specific test file
-npm run test -- renderUtils.test.ts
-
-# Run with verbose output
-npm run test -- --reporter=verbose
-
-# Run in watch mode for iterative debugging
-npm run test
-```
-
-#### Visual Regression Failures
-```bash
-# Run with UI for interactive debugging
-npm run test:e2e:ui
-
-# Update visual baselines (after confirming changes are intentional)
-npm run test:e2e -- --update-snapshots
-
-# Run specific test file
-npm run test:e2e -- tests/visual-regression.spec.ts
-```
-
-#### Common Test Issues
-
-**Floating Point Precision**:
-```typescript
-// ❌ WRONG: Exact equality for floating point
-expect(result).toBe(2.33333333)
-
-// ✅ CORRECT: Use precision tolerance
-expect(result).toBeCloseTo(2.333, 3)
-```
-
-**Async Operations**:
-```typescript
-// ✅ CORRECT: Wait for operations to complete
-await page.waitForLoadState('networkidle')
-await page.waitForSelector('[data-testid="result"]')
-```
-
-**Animation Interference**:
-```typescript
-// ✅ CORRECT: Disable animations for consistent testing
-await page.addStyleTag({
-  content: `*, *::before, *::after { 
-    animation-duration: 0s !important; 
-    transition-duration: 0s !important; 
-  }`
-})
-```
-
-### Test Maintenance
-
-#### Updating Tests for New Features
-
-1. **Add unit tests** for new mathematical functions
-2. **Update visual regression tests** for UI changes
-3. **Extend integration tests** for new workflows
-4. **Update test documentation** in CLAUDE.md
-
-#### When Visual Baselines Need Updates
-
-**Legitimate Updates**:
-- Intentional UI/UX improvements
-- New feature additions
-- Cross-browser rendering updates
-
-**Process**:
-1. Review visual diff in test report
-2. Confirm changes are intentional
-3. Run `npm run test:e2e -- --update-snapshots`
-4. Commit updated baseline images
-
-#### Performance Considerations
-
-- Unit tests should complete in < 2 seconds
-- Visual regression tests should complete in < 5 minutes
-- Use `test.setTimeout()` for longer operations
-- Mock expensive operations when possible
-
-### Testing Philosophy
-
-The testing framework prioritizes:
-
-1. **Impact over Coverage** - Focus on critical user-affecting functionality
-2. **Mathematical Accuracy** - Validate all calculations that affect output
-3. **Visual Consistency** - Ensure UI remains stable across updates
-4. **Developer Productivity** - Catch issues early in development cycle
-5. **Minimal Maintenance** - Automated testing with clear failure diagnostics
-
-This comprehensive testing approach ensures the card game PDF transformer maintains high quality and reliability as it evolves, catching the "hard to detect" issues that could significantly impact users while providing developers with confidence to make improvements.
-
-## Deployment and Testing Strategy
-
-### Test-Driven Deployment Philosophy
-
-The application uses a **tiered testing strategy** that prioritizes customer deployments while maintaining comprehensive test coverage. This approach was implemented to ensure customer-facing updates are never blocked by non-critical test edge cases.
-
-#### Testing Tiers
+### Tiered Testing Strategy
 
 **Tier 1: Critical Tests (Deployment Blocking)**
 - Unit tests (`npm run test:run`)
 - Critical E2E tests (`npm run test:e2e:critical`)
-  - Application smoke tests (app loads, navigation works)
-  - Core functionality (PDF.js worker, file upload, mathematical calculations)
-  - Essential preview consistency (basic DPI conversions, card dimensions)
+  - App startup, navigation, PDF.js worker
+  - Core functionality (file upload, mathematical calculations)
+  - Essential preview consistency (DPI, dimensions, rotation)
 
 **Tier 2: Comprehensive Tests (Informational)**
-- Comprehensive E2E tests (`npm run test:e2e:comprehensive`)
-  - Visual regression tests across browsers
-  - Complex workflow integration scenarios
+- Full E2E suite (`npm run test:e2e:comprehensive`)
+  - Visual regression across browsers
+  - Complex integration scenarios
   - Performance and memory stress tests
-  - Advanced edge cases and error recovery
 
-#### Test File Organization
-
-```
-tests/
-├── critical/                           # DEPLOYMENT BLOCKING
-│   ├── critical-smoke.spec.ts         # App loads, navigation, React mounting
-│   ├── critical-core.spec.ts          # PDF.js worker, file types, canvas, storage
-│   └── critical-preview.spec.ts       # Basic DPI, dimensions, rotation, grid math
-├── comprehensive/                      # INFORMATIONAL ONLY
-│   ├── visual-regression.spec.ts      # UI consistency across browsers
-│   ├── preview-consistency.spec.ts    # Advanced mathematical validation
-│   ├── pdf-image-parity.spec.ts       # Cross-format workflow parity
-│   ├── workflow-integration.spec.ts   # End-to-end user journeys
-│   ├── async-processing.spec.ts       # Performance and memory testing
-│   └── build-validation.spec.ts       # Production asset integrity
-src/test/                              # DEPLOYMENT BLOCKING
-├── renderUtils.test.ts                # Mathematical unit tests
-├── cardUtils.test.ts                  # Grid and positioning logic
-└── previewConsistency.test.ts         # Preview calculation validation
-```
-
-#### Deployment Pipeline
+### Deployment Pipeline
 
 ```yaml
-Test Job (All Critical Tests Must Pass):
+CI/CD Flow:
 ├── Unit Tests ❌→ BLOCK deployment
-├── Critical E2E Tests ❌→ BLOCK deployment
-│   ├── Application smoke tests
-│   ├── Core functionality validation  
-│   └── Essential mathematical accuracy
+├── Critical E2E Tests ❌→ BLOCK deployment  
 └── Comprehensive E2E Tests ❌→ CONTINUE (informational)
-    ├── Visual regression testing
-    ├── Complex integration scenarios
-    └── Performance validation
 
-Build Job (Runs if ALL Critical Tests Pass):
-├── Production Build
-└── Asset Generation
-
-Deploy Job (Runs if Build Succeeds):
+Deployment:
+├── Production Build (if all critical tests pass)
 └── GitHub Pages Deployment
 ```
 
-#### GitHub Actions Configuration
+### Test Debugging
 
-The deployment workflow implements the hybrid tiered strategy:
+**Common Issues:**
+- Use `toBeCloseTo(value, precision)` for floating-point comparisons
+- Wait for `page.waitForLoadState('networkidle')` in E2E tests
+- Disable animations with CSS for visual consistency
 
-```yaml
-# Unit tests - must pass for deployment
-- name: Run unit tests
-  run: npm run test:run
-  continue-on-error: false
-
-# Critical E2E tests - must pass for deployment
-- name: Run Critical E2E tests (DEPLOYMENT BLOCKING)
-  run: npm run test:e2e:critical
-  continue-on-error: false
-  
-# Comprehensive E2E tests - informational only
-- name: Run Comprehensive E2E tests (INFORMATIONAL)
-  run: npm run test:e2e:comprehensive
-  continue-on-error: true
-
-# Always upload test reports for visibility
-- name: Upload Playwright report
-  if: always()
-  uses: actions/upload-artifact@v4
+**Update Visual Baselines:**
+```bash
+npm run test:e2e -- --update-snapshots  # After confirming changes
 ```
 
-#### Benefits of This Approach
+**Testing Philosophy:** Impact over coverage, mathematical accuracy, visual consistency, minimal maintenance
 
-1. **Customer Priority**: User-facing deployments are never blocked by non-critical test edge cases
-2. **Quality Protection**: Critical functionality is protected by blocking tests that catch "hard to detect" issues
-3. **Test Visibility**: All test results remain visible through artifacts and reporting
-4. **Balanced Strategy**: Core quality gates + deployment velocity
-5. **Clear Categorization**: Teams understand which tests are deployment-critical vs informational
-
-#### Development Workflow
-
-**For Developers:**
-- Run all tests locally: `npm run test && npm run test:e2e`
-- Run only critical tests: `npm run test:run && npm run test:e2e:critical`
-- Both unit and critical e2e test failures should be addressed immediately
-- Comprehensive test failures should be investigated but don't block PRs
-
-**For CI/CD:**
-- Unit test failures block deployment (mathematical accuracy)
-- Critical E2E test failures block deployment (core functionality)
-- Comprehensive E2E test failures are reported but don't block deployment
-- Test artifacts provide debugging information for all test types
-
-**For Production Monitoring:**
-- Real user monitoring supplements test coverage
-- Production alerts catch issues that tests might miss
-- Balance between test coverage and deployment velocity
-
-#### When to Update This Strategy
-
-**Add to Critical Tests (Tier 1 - Blocking)** when:
-- Test covers critical user-facing functionality that would break the app for ALL users
-- Test is highly stable and rarely produces false positives in CI environments
-- Test failure always indicates a real problem that customers would encounter
-- Test executes quickly (< 30 seconds) and is suitable for fast feedback
-
-**Keep in Comprehensive Tests (Tier 2 - Informational)** when:
-- Test covers edge cases, advanced scenarios, or browser-specific behavior
-- Test might be sensitive to CI environment differences or timing issues
-- Test failure needs investigation but represents scenarios most users won't encounter
-- Test involves complex visual regression or performance validation
-
-**Examples of Critical vs Comprehensive:**
-- **Critical**: PDF.js worker loading, basic file upload, core DPI calculations
-- **Comprehensive**: Advanced visual regression, complex multi-file workflows, performance stress tests
-
-This hybrid deployment strategy reconciles the original GitHub Issue #63 requirements (preventing "hard to detect" issues impactful to users) with practical deployment velocity needs, ensuring both quality protection and customer priority.
 
 ## Duplex Mirroring Logic and Card ID Consistency
 
