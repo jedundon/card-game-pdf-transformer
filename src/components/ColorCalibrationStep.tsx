@@ -25,7 +25,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
-import { FileManagerPanel } from './FileManagerPanel';
 import { PrecisionSliderInput } from './PrecisionSliderInput';
 import { ExportPageButton } from './shared/ExportPageButton';
 import { 
@@ -1100,14 +1099,6 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         />
       </div>
       
-      {/* File Management Panel */}
-      {multiFileImport.getFileList().length > 0 && (
-        <FileManagerPanel 
-          multiFileImport={multiFileImport}
-          expanded={false}
-          compact={true}
-        />
-      )}
       
       {!pdfData && multiFileImport.multiFileState.pages.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">

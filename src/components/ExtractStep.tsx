@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
-import { FileManagerPanel } from './FileManagerPanel';
 import { 
   getActivePagesWithSource,
   getCardInfo, 
@@ -259,14 +258,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         />
       </div>
       
-      {/* File Management Panel */}
-      {multiFileImport.getFileList().length > 0 && (
-        <FileManagerPanel 
-          multiFileImport={multiFileImport}
-          expanded={false}
-          compact={true}
-        />
-      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <PageCropSettings

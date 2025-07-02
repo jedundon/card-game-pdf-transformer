@@ -288,15 +288,6 @@ export function VirtualScrollList<T extends VirtualScrollItem>({
     });
   }, [virtualItems, height, totalSize, smoothScrolling]);
 
-  // Handle empty state
-  if (items.length === 0 && emptyComponent) {
-    return (
-      <div className={`${className} flex items-center justify-center`} style={{ height }}>
-        {emptyComponent}
-      </div>
-    );
-  }
-
   // Check if item is in visible viewport (not just rendered)
   const isItemVisible = useCallback((index: number): boolean => {
     const item = virtualItems[index];
@@ -307,6 +298,15 @@ export function VirtualScrollList<T extends VirtualScrollItem>({
 
     return item.start < viewportEnd && item.end > viewportStart;
   }, [virtualItems, scrollTop, height]);
+
+  // Handle empty state
+  if (items.length === 0 && emptyComponent) {
+    return (
+      <div className={`${className} flex items-center justify-center`} style={{ height }}>
+        {emptyComponent}
+      </div>
+    );
+  }
 
   return (
     <div className={className} style={{ height, overflow: 'hidden', position: 'relative' }}>
