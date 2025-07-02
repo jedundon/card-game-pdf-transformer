@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon, ZoomInIcon, ZoomOutIcon, FileIcon, ImageIcon } from 'lucide-react';
-import { isCardSkipped, calculateTotalCards } from '../../../utils/cardUtils';
+import { isCardSkipped, countCardsByType } from '../../../utils/cardUtils';
 import type { PdfData, ExtractionSettings, PdfMode } from '../../../types';
 
 interface RenderedPageData {
@@ -71,19 +71,14 @@ export const PagePreviewPanel: React.FC<PagePreviewPanelProps> = ({
 
   // Calculate total cards of the current card type for navigation display
   const totalCardsOfType = useMemo(() => {
-    const totalCards = calculateTotalCards(pdfMode, activePages, cardsPerPage);
-    
-    if (pdfMode.type === 'duplex') {
-      // In duplex mode, front and back cards have the same count
-      return totalCards;
-    } else if (pdfMode.type === 'gutter-fold') {
-      // In gutter-fold mode, front and back cards have the same count (each page has both)
-      return totalCards;
-    } else {
-      // In simplex mode, all cards are treated as the same type
-      return totalCards;
-    }
-  }, [pdfMode, activePages, cardsPerPage]);
+    return countCardsByType(
+      cardType.toLowerCase() as 'front' | 'back',
+      activePages,
+      cardsPerPage,
+      pdfMode,
+      extractionSettings
+    );
+  }, [cardType, activePages, cardsPerPage, pdfMode, extractionSettings]);
 
   // --- Helper: Centralize overlay scale factor ---
   const getOverlayScaleFactor = useCallback((renderedPageData: RenderedPageData | null) => {
