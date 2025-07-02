@@ -14,6 +14,7 @@ import { GridSettings } from './ExtractStep/components/GridSettings';
 import { GutterSettings } from './ExtractStep/components/GutterSettings';
 import { PageCropSettings } from './ExtractStep/components/PageCropSettings';
 import { CardSkipControls } from './ExtractStep/components/CardSkipControls';
+import { CardTypeOverrideControls } from './ExtractStep/components/CardTypeOverrideControls';
 import { PagePreviewPanel } from './ExtractStep/components/PagePreviewPanel';
 import { CardPreviewPanel } from './ExtractStep/components/CardPreviewPanel';
 import { IndividualCardSettings } from './ExtractStep/components/IndividualCardSettings';
@@ -293,6 +294,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             currentPage={currentPage}
             currentCard={currentCard}
             cardsPerPage={cardsPerPage}
+            cardType={cardType}
+            cardId={String(cardId)}
+            onSettingsChange={onSettingsChange}
+          />
+
+          <CardTypeOverrideControls
+            pdfMode={pdfMode}
+            extractionSettings={extractionSettings}
+            currentPage={currentPage}
+            currentCard={currentCard}
             cardType={cardType}
             cardId={String(cardId)}
             onSettingsChange={onSettingsChange}

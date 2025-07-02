@@ -62,3 +62,13 @@ export {
   getActivePagesWithSource,
   calculateTotalCardsForMixedContent
 } from './cardMultiFile';
+
+// Card type override functions
+export {
+  toggleCardTypeOverride,
+  setCardTypeOverride,
+  removeCardTypeOverride,
+  getCardTypeOverride,
+  clearAllCardTypeOverrides,
+  getCardTypeOverrideStatus
+} from './cardOverrides';

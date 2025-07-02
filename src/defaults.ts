@@ -166,7 +166,8 @@ export const DEFAULT_SETTINGS = {
       front: 0,
       back: 0
     },
-    skippedCards: []
+    skippedCards: [],
+    cardTypeOverrides: []
   },  outputSettings: {
     pageSize: {
       width: 3.5,
@@ -299,6 +300,7 @@ export type WorkflowSettings = {
       back: number;
     };
     skippedCards: any[];
+    cardTypeOverrides: any[];
   };  outputSettings: {
     pageSize: {
       width: number;

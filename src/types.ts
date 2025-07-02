@@ -128,6 +128,23 @@ export interface SkippedCard {
 }
 
 /**
+ * Card type override
+ * 
+ * Allows manual override of a card's front/back type designation,
+ * superseding the automatic assignment from processing mode.
+ */
+export interface CardTypeOverride {
+  /** Index in activePages array (0-based) */
+  pageIndex: number;
+  /** Row position in extraction grid (0-based) */
+  gridRow: number;
+  /** Column position in extraction grid (0-based) */
+  gridColumn: number;
+  /** Manually assigned card type */
+  cardType: 'front' | 'back';
+}
+
+/**
  * Image rotation settings
  * 
  * Defines rotation angles to apply to card images during extraction.
@@ -159,6 +176,8 @@ export interface ExtractionSettings {
   imageRotation?: ImageRotationSettings;
   /** Array of card positions to skip during processing */
   skippedCards?: SkippedCard[];
+  /** Array of card type overrides for manual front/back assignment */
+  cardTypeOverrides?: CardTypeOverride[];
   /** Page dimensions for orientation-aware card ID calculations */
   pageDimensions?: { width: number; height: number };
 }
