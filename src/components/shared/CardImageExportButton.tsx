@@ -62,7 +62,11 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
   // Calculate total cards for display
   const totalCards = React.useMemo(() => {
     try {
-      const activePages = getActivePagesWithSource(pageSettings, multiFileImport);
+      // Get unified page data using same logic as ExtractStep
+      const activePages = multiFileImport.multiFileState.pages.length > 0 
+        ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
+        : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+      
       const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
       return calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
     } catch (error) {
@@ -73,7 +77,10 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
 
   // Generate base filename for the zip
   const generateBaseFilename = useCallback(() => {
-    const activePages = getActivePagesWithSource(pageSettings, multiFileImport);
+    // Get unified page data using same logic as ExtractStep
+    const activePages = multiFileImport.multiFileState.pages.length > 0 
+      ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
+      : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
     
     if (activePages.length === 1) {
       // Single file - use its name

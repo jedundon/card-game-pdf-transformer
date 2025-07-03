@@ -76,8 +76,11 @@ async function extractCardImageData(
 ): Promise<string | null> {
   const { pdfData, pdfMode, extractionSettings, pageSettings, multiFileImport } = options;
   
-  // Get active pages with source information
-  const activePages = getActivePagesWithSource(pageSettings, multiFileImport);
+  // Get unified page data using same logic as ExtractStep
+  const activePages = multiFileImport.multiFileState.pages.length > 0 
+    ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
+    : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+  
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   
   try {
@@ -97,6 +100,9 @@ async function extractCardImageData(
       
       if (!currentPageInfo || !currentPageInfo.fileType) {
         console.warn(`Invalid page info for page ${pageIndex}:`, currentPageInfo);
+        console.warn(`Multi-file mode: ${multiFileImport.multiFileState.pages.length > 0}`);
+        console.warn(`Active pages length: ${activePages.length}`);
+        console.warn(`All active pages:`, activePages);
         return null;
       }
       
@@ -234,7 +240,12 @@ export async function exportCardImagesAsZip(
   } = options;
   
   const zip = new JSZip();
-  const activePages = getActivePagesWithSource(pageSettings, multiFileImport);
+  
+  // Get unified page data using same logic as ExtractStep
+  const activePages = multiFileImport.multiFileState.pages.length > 0 
+    ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
+    : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+  
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   const totalCards = calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
   
