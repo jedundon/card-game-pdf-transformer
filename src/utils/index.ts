@@ -9,6 +9,7 @@ export * from './card';
 // Other utilities
 export * from './calibrationUtils';
 export * from './cacheUtils';
+export * from './cardImageExport';
 export * from './errorUtils';
 export * from './multiFileUtils';
 export * from './performanceUtils';
@@ -16,3 +17,4 @@ export * from './renderUtils';
 
 // Re-export types
 export type { ErrorContext, ErrorType, FormattedError } from './errorUtils';
+export type { CardImageExportOptions, ExportedCard } from './cardImageExport';

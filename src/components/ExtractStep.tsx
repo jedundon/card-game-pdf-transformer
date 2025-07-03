@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
+import { CardImageExportButton } from './shared/CardImageExportButton';
 import { 
   getActivePagesWithSource,
   getCardInfo, 
@@ -339,6 +340,22 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           />
         </div>
       </div>
+      
+      {/* Export Section */}
+      <div className="border-t pt-6 mt-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">Export Card Images</h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Export all extracted cards as individual PNG images in a labeled zip file for use in external tools or prototyping.
+        </p>
+        <CardImageExportButton
+          pdfData={pdfData}
+          pdfMode={pdfMode}
+          extractionSettings={extractionSettings}
+          pageSettings={pageSettings}
+          multiFileImport={multiFileImport}
+        />
+      </div>
+      
       <div className="flex justify-between mt-6">
         <button onClick={onPrevious} className="flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300">
           <ChevronLeftIcon size={16} className="mr-2" />
