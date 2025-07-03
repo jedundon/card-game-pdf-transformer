@@ -2,18 +2,21 @@
  * @fileoverview Card Image Export Utilities
  * 
  * Provides functionality to export all extracted card images as a labeled zip file
- * directly from the Extract Step. Supports both PDF and image file sources with
- * consistent filename conventions and memory-efficient processing.
+ * directly from the Extract Step. Supports single PDF files, multi-file workflows,
+ * and image files (PNG/JPG) with consistent filename conventions and memory-efficient
+ * processing.
  */
 
 import JSZip from 'jszip';
 import { 
   extractCardImage,
+  extractCardImageFromCanvas,
   getCardInfo,
   getActivePagesWithSource,
   calculateTotalCardsForMixedContent,
   isCardSkipped
 } from './cardUtils';
+import { extractCardImageFromPdfPage } from './pdfCardExtraction';
 import type { 
   PdfData, 
   PdfMode, 
@@ -48,7 +51,7 @@ function generateCardFilename(
   cardId: number,
   cardType: 'front' | 'back',
   originalFilename: string,
-  extension: string = 'png'
+  extension = 'png'
 ): string {
   // Clean the original filename by removing extension and invalid characters
   const cleanFilename = originalFilename
@@ -65,6 +68,7 @@ function generateCardFilename(
 
 /**
  * Extract image data from card using appropriate extraction method
+ * Supports both single PDF files and multi-file workflows (PDF + images)
  */
 async function extractCardImageData(
   cardIndex: number,
@@ -74,10 +78,84 @@ async function extractCardImageData(
   
   // Get active pages with source information
   const activePages = getActivePagesWithSource(pageSettings, multiFileImport);
+  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   
   try {
-    // For single PDF files
-    if (pdfData) {
+    // Check if we're in multi-file mode or single PDF mode
+    if (multiFileImport.multiFileState.pages.length > 0) {
+      // Multi-file mode: determine file type and use appropriate extraction method
+      
+      // Calculate which page this card belongs to
+      const pageIndex = Math.floor(cardIndex / cardsPerPage);
+      
+      if (pageIndex >= activePages.length || pageIndex < 0) {
+        console.warn(`Invalid page index ${pageIndex} for card ${cardIndex} (activePages.length: ${activePages.length})`);
+        return null;
+      }
+      
+      const currentPageInfo = activePages[pageIndex];
+      
+      if (!currentPageInfo || !currentPageInfo.fileType) {
+        console.warn(`Invalid page info for page ${pageIndex}:`, currentPageInfo);
+        return null;
+      }
+      
+      if (currentPageInfo.fileType === 'pdf') {
+        // Multi-file PDF extraction
+        const filePdfData = multiFileImport.getPdfData(currentPageInfo.fileName);
+        if (!filePdfData) {
+          console.warn(`No PDF data available for file ${currentPageInfo.fileName} on page ${pageIndex}`);
+          return null;
+        }
+        
+        // Calculate card position within the page
+        const cardOnPage = cardIndex % cardsPerPage;
+        // Use the original page index from the current page info (1-based)
+        const actualPageNumber = currentPageInfo.originalPageIndex + 1;
+        
+        try {
+          return await extractCardImageFromPdfPage(
+            filePdfData,
+            actualPageNumber,
+            cardOnPage,
+            extractionSettings,
+            cardIndex, // globalCardIndex
+            activePages,
+            pdfMode
+          );
+        } catch (error) {
+          console.error(`Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
+          return null;
+        }
+        
+      } else if (currentPageInfo.fileType === 'image') {
+        // Image file extraction
+        const imageData = multiFileImport.getImageData(currentPageInfo.fileName);
+        if (!imageData) {
+          console.error(`No image data found for file: ${currentPageInfo.fileName}`);
+          return null;
+        }
+        
+        try {
+          return await extractCardImageFromCanvas(
+            cardIndex,
+            imageData,
+            pdfMode,
+            activePages,
+            extractionSettings
+          );
+        } catch (error) {
+          console.error(`Failed to extract card ${cardIndex} from image file ${currentPageInfo.fileName}:`, error);
+          return null;
+        }
+        
+      } else {
+        console.warn(`Unknown file type ${currentPageInfo.fileType} for page ${pageIndex}`);
+        return null;
+      }
+      
+    } else if (pdfData) {
+      // Single PDF file mode (legacy support)
       return await extractCardImage(
         cardIndex,
         pdfData,
@@ -86,12 +164,12 @@ async function extractCardImageData(
         pageSettings,
         extractionSettings
       );
+      
+    } else {
+      console.warn(`No valid data source found for card ${cardIndex}`);
+      return null;
     }
     
-    // TODO: For multi-file sources or image files, implement proper canvas-based extraction
-    // For now, skip multi-file sources until we can properly implement the extraction
-    console.warn(`Multi-file card extraction not yet supported for export. Skipping card ${cardIndex}.`);
-    return null;
   } catch (error) {
     console.error(`Failed to extract card ${cardIndex}:`, error);
     return null;
@@ -100,6 +178,7 @@ async function extractCardImageData(
 
 /**
  * Get source filename for a card based on its page source
+ * Supports both single-file and multi-file workflows
  */
 function getSourceFilename(
   cardIndex: number,
@@ -109,19 +188,28 @@ function getSourceFilename(
   cardsPerPage: number
 ): string {
   try {
-    const cardInfo = getCardInfo(
-      cardIndex,
-      activePages,
-      extractionSettings,
-      pdfMode,
-      cardsPerPage
-    );
-    
-    // Get page info from card index and cards per page
+    // Calculate which page this card belongs to
     const pageIndex = Math.floor(cardIndex / cardsPerPage);
-    if (cardInfo && pageIndex >= 0 && pageIndex < activePages.length) {
+    
+    if (pageIndex >= 0 && pageIndex < activePages.length) {
       const page = activePages[pageIndex];
-      return page.fileName || 'unknown-file';
+      
+      // For multi-file workflows, use the actual filename from the page
+      if (page.fileName) {
+        return page.fileName;
+      }
+      
+      // For single-file workflows, try to get filename from page data
+      if (page.filename) {
+        return page.filename;
+      }
+      
+      // Fallback: generate a descriptive name based on page info
+      if (page.fileType === 'pdf') {
+        return `pdf-page-${pageIndex + 1}`;
+      } else if (page.fileType === 'image') {
+        return `image-page-${pageIndex + 1}`;
+      }
     }
   } catch (error) {
     console.error(`Failed to get source filename for card ${cardIndex}:`, error);
@@ -291,7 +379,7 @@ export async function exportCardImagesAsZip(
 /**
  * Download zip file with automatic filename generation
  */
-export function downloadZipFile(blob: Blob, baseFilename: string = 'card-images'): void {
+export function downloadZipFile(blob: Blob, baseFilename = 'card-images'): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   
