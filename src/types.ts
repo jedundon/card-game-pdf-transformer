@@ -54,6 +54,17 @@ export interface PageSettings {
   originalPageIndex?: number;
   /** Display order for page reordering (0-based) */
   displayOrder?: number;
+  /** Page rotation in degrees (0, 90, 180, 270) */
+  rotation?: number;
+  /** Page scale factor (1.0 = 100%) */
+  scale?: number;
+  /** Custom crop adjustments for this page */
+  customCrop?: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
 }
 
 /**
