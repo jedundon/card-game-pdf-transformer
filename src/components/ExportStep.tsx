@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
+import { MultiStreamExportManager } from './shared/MultiStreamExportManager';
 import { 
   getActivePagesWithSource,
   calculateTotalCards,
@@ -615,17 +616,43 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }
   };
 
+  // State for controlling export mode
+  const [showAdvancedExport, setShowAdvancedExport] = useState(false);
+
+  // Check if multi-file state has groups or page types for advanced export
+  const hasAdvancedFeatures = useMemo(() => {
+    const hasPageTypes = multiFileImport.multiFileState.pages.some((page: any) => page.pageType && page.pageType !== 'card');
+    const hasGroups = multiFileImport.multiFileState.pageGroups && multiFileImport.multiFileState.pageGroups.length > 0;
+    return hasPageTypes || hasGroups;
+  }, [multiFileImport.multiFileState.pages, multiFileImport.multiFileState.pageGroups]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-800">Export PDFs</h2>
         
-        {/* Add Files button */}
-        <AddFilesButton 
-          multiFileImport={multiFileImport}
-          variant="subtle"
-          size="sm"
-        />
+        <div className="flex items-center space-x-3">
+          {/* Advanced Export Toggle */}
+          {hasAdvancedFeatures && (
+            <button
+              onClick={() => setShowAdvancedExport(!showAdvancedExport)}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                showAdvancedExport 
+                  ? 'bg-indigo-100 text-indigo-800' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {showAdvancedExport ? 'Basic Export' : 'Advanced Export'}
+            </button>
+          )}
+          
+          {/* Add Files button */}
+          <AddFilesButton 
+            multiFileImport={multiFileImport}
+            variant="subtle"
+            size="sm"
+          />
+        </div>
       </div>
       
       
@@ -728,7 +755,26 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           </div>
         </div>
       </div>
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
+
+      {/* Advanced Export System */}
+      {showAdvancedExport && hasAdvancedFeatures && (
+        <MultiStreamExportManager
+          pages={unifiedPages}
+          groups={multiFileImport.multiFileState.pageGroups || []}
+          pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings || {}}
+          globalExtractionSettings={extractionSettings}
+          globalOutputSettings={outputSettings}
+          globalColorSettings={colorSettings}
+          pdfMode={pdfMode}
+          pdfData={pdfData}
+          multiFileImport={multiFileImport}
+          disabled={exportStatus === 'processing'}
+        />
+      )}
+
+      {/* Basic Export System */}
+      {!showAdvancedExport && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="bg-gray-50 p-4 border-b border-gray-200">
           <h3 className="text-lg font-medium text-gray-800">Output Files</h3>
         </div>
@@ -869,7 +915,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
+
       <div className="flex justify-start mt-6">
         <button onClick={onPrevious} className="flex items-center bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300">
           <ChevronLeftIcon size={16} className="mr-2" />
