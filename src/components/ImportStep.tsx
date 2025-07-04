@@ -7,7 +7,7 @@ import { renderPageThumbnail } from '../utils/cardUtils';
 import { PageReorderTable } from './PageReorderTable';
 import { FileManagerPanel } from './FileManagerPanel';
 import { /* isValidImageFile, */ createImageThumbnail } from '../utils/imageUtils';
-import { TIMEOUT_CONSTANTS } from '../constants';
+import { TIMEOUT_CONSTANTS, PERFORMANCE_CONSTANTS } from '../constants';
 import type { ImportStepProps /*, MultiFileImportHook */ } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
@@ -151,19 +151,51 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   useEffect(() => {
     // Only run in single-file mode (when no multi-file pages exist)
     if (pdfData && pageSettings.length > 0 && multiFileImport.multiFileState.pages.length === 0) {
-      // Start loading thumbnails progressively - load first few immediately
-      const immediateLoadCount = Math.min(5, pageSettings.length);
+      const totalPages = pageSettings.length;
+      const isLargePdf = totalPages > PERFORMANCE_CONSTANTS.LARGE_PDF_PAGE_THRESHOLD;
+      
+      // Adjust loading strategy based on PDF size
+      const maxConcurrent = isLargePdf 
+        ? PERFORMANCE_CONSTANTS.MAX_CONCURRENT_THUMBNAILS_LARGE 
+        : PERFORMANCE_CONSTANTS.MAX_CONCURRENT_THUMBNAILS_NORMAL;
+        
+      const immediateLoadCount = Math.min(maxConcurrent, totalPages);
+      
+      // Load first batch immediately
       for (let i = 0; i < immediateLoadCount; i++) {
         loadThumbnail(i);
       }
       
-      // Load remaining thumbnails with a delay to avoid overwhelming the browser
-      if (pageSettings.length > immediateLoadCount) {
-        setTimeout(() => {
-          for (let i = immediateLoadCount; i < pageSettings.length; i++) {
-            setTimeout(() => loadThumbnail(i), i * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY); // Stagger loading by 100ms
-          }
-        }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+      // Load remaining thumbnails in controlled batches for large PDFs
+      if (totalPages > immediateLoadCount) {
+        if (isLargePdf) {
+          // For large PDFs, use slower batch loading with memory management
+          let batchStart = immediateLoadCount;
+          const batchSize = maxConcurrent;
+          
+          const loadNextBatch = () => {
+            if (batchStart >= totalPages) return;
+            
+            const batchEnd = Math.min(batchStart + batchSize, totalPages);
+            for (let i = batchStart; i < batchEnd; i++) {
+              setTimeout(() => loadThumbnail(i), (i - batchStart) * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
+            }
+            
+            batchStart = batchEnd;
+            if (batchStart < totalPages) {
+              setTimeout(loadNextBatch, PERFORMANCE_CONSTANTS.LARGE_PDF_BATCH_DELAY);
+            }
+          };
+          
+          setTimeout(loadNextBatch, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+        } else {
+          // For normal PDFs, use original progressive loading
+          setTimeout(() => {
+            for (let i = immediateLoadCount; i < totalPages; i++) {
+              setTimeout(() => loadThumbnail(i), (i - immediateLoadCount) * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
+            }
+          }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+        }
       }
     }
   }, [pdfData, pageSettings.length, loadThumbnail, multiFileImport.multiFileState.pages.length]);
@@ -216,8 +248,17 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         return () => clearTimeout(retryTimeout);
       }
       
-      // Start loading thumbnails progressively
-      const immediateLoadCount = Math.min(5, pages.length);
+      // Performance-aware thumbnail loading for multi-file imports
+      const totalPages = pages.length;
+      const isLargeImport = totalPages > PERFORMANCE_CONSTANTS.LARGE_PDF_PAGE_THRESHOLD;
+      
+      const maxConcurrent = isLargeImport 
+        ? PERFORMANCE_CONSTANTS.MAX_CONCURRENT_THUMBNAILS_LARGE 
+        : PERFORMANCE_CONSTANTS.MAX_CONCURRENT_THUMBNAILS_NORMAL;
+        
+      const immediateLoadCount = Math.min(maxConcurrent, totalPages);
+      
+      // Load first batch immediately
       for (let i = 0; i < immediateLoadCount; i++) {
         const page = pages[i];
         if (page.fileType === 'image') {
@@ -227,20 +268,50 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         }
       }
       
-      // Load remaining thumbnails with a delay
-      if (pages.length > immediateLoadCount) {
-        setTimeout(() => {
-          for (let i = immediateLoadCount; i < pages.length; i++) {
-            setTimeout(() => {
-              const page = pages[i];
-              if (page.fileType === 'image') {
-                loadImageThumbnail(i, page.fileName);
-              } else if (page.fileType === 'pdf') {
-                loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
-              }
-            }, i * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
-          }
-        }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+      // Load remaining thumbnails in controlled batches for large imports
+      if (totalPages > immediateLoadCount) {
+        if (isLargeImport) {
+          // For large imports, use slower batch loading
+          let batchStart = immediateLoadCount;
+          const batchSize = maxConcurrent;
+          
+          const loadNextBatch = () => {
+            if (batchStart >= totalPages) return;
+            
+            const batchEnd = Math.min(batchStart + batchSize, totalPages);
+            for (let i = batchStart; i < batchEnd; i++) {
+              setTimeout(() => {
+                const page = pages[i];
+                if (page.fileType === 'image') {
+                  loadImageThumbnail(i, page.fileName);
+                } else if (page.fileType === 'pdf') {
+                  loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
+                }
+              }, (i - batchStart) * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
+            }
+            
+            batchStart = batchEnd;
+            if (batchStart < totalPages) {
+              setTimeout(loadNextBatch, PERFORMANCE_CONSTANTS.LARGE_PDF_BATCH_DELAY);
+            }
+          };
+          
+          setTimeout(loadNextBatch, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+        } else {
+          // For normal imports, use original progressive loading
+          setTimeout(() => {
+            for (let i = immediateLoadCount; i < totalPages; i++) {
+              setTimeout(() => {
+                const page = pages[i];
+                if (page.fileType === 'image') {
+                  loadImageThumbnail(i, page.fileName);
+                } else if (page.fileType === 'pdf') {
+                  loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
+                }
+              }, (i - immediateLoadCount) * TIMEOUT_CONSTANTS.CANVAS_DEBOUNCE_DELAY);
+            }
+          }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
+        }
       }
     }
   }, [

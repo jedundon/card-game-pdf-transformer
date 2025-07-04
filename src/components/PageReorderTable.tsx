@@ -137,16 +137,15 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   });
 
   // Operation history for undo/redo
-  const operationHistory = useOperationHistory<(PageSettings & PageSource)[]>({
-    initialState: pages,
+  const operationHistory = useOperationHistory({
     maxHistorySize: 20
   });
 
   // Page grouping functionality
-  const pageGrouping = usePageGrouping({
-    pages,
-    initialGroups: pageGroups,
-    onGroupsChange: onPageGroupsChange
+  const pageGrouping = usePageGrouping(pageGroups, {
+    maxGroups: 50,
+    defaultGroupColor: '#3b82f6',
+    autoExpandNew: true
   });
 
   // Group creation modal state
@@ -154,7 +153,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handlers for integrated functionality
   const handlePagesUpdate = useCallback((updatedPages: (PageSettings & PageSource)[]) => {
-    operationHistory.saveState(pages);
+    operationHistory.recordOperation(
+      'Update pages',
+      pages,
+      updatedPages,
+      'modify'
+    );
     onPagesUpdate(updatedPages);
   }, [pages, operationHistory, onPagesUpdate]);
 
@@ -190,8 +194,17 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle group assignment
   const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
-    const updatedGroups = pageGrouping.assignPagesToGroup([pageIndex], groupId);
-    onPageGroupsChange(updatedGroups);
+    if (groupId) {
+      pageGrouping.addPagesToGroup(groupId, [pageIndex]);
+    } else {
+      // Remove page from all groups
+      pageGrouping.groups.forEach(group => {
+        if (group.pageIndices.includes(pageIndex)) {
+          pageGrouping.removePagesFromGroup(group.id, [pageIndex]);
+        }
+      });
+    }
+    onPageGroupsChange(pageGrouping.groups);
   }, [pageGrouping, onPageGroupsChange]);
 
   // Card numbers not available until extraction settings are configured
@@ -660,13 +673,13 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                         disabled={disabled}
                       >
                         <option value="">No Group</option>
-                        {pageGroups.map((group) => (
+                        {pageGrouping.groups.map((group) => (
                           <option key={group.id} value={group.id}>
                             {group.name}
                           </option>
                         ))}
                       </select>
-                      {pageGroups.length === 0 && (
+                      {pageGrouping.groups.length === 0 && (
                         <button
                           onClick={() => setShowGroupModal(true)}
                           className="p-1 text-gray-400 hover:text-indigo-600"

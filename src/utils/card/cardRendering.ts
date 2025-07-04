@@ -10,7 +10,7 @@
  * - Memory usage monitoring and optimization
  */
 
-import { DPI_CONSTANTS } from '../../constants';
+import { DPI_CONSTANTS, TIMEOUT_CONSTANTS } from '../../constants';
 import { PdfData, PdfPage, ImageFileData } from '../../types';
 import { thumbnailCache, createCacheKey, estimateDataSize } from '../cacheUtils';
 
@@ -125,10 +125,10 @@ export async function renderPageThumbnail(
       viewport: scaledViewport
     };
     
-    // Render with timeout
+    // Render with timeout (use timeout from constants)
     const renderPromise = page.render(renderContext).promise;
     const renderTimeout = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error(`Thumbnail rendering timed out for page ${pageNumber}`)), 8000)
+      setTimeout(() => reject(new Error(`Thumbnail rendering timed out for page ${pageNumber}`)), TIMEOUT_CONSTANTS.THUMBNAIL_RENDERING_TIMEOUT)
     );
     
     await Promise.race([renderPromise, renderTimeout]);

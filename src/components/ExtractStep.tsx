@@ -113,7 +113,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport]);
+  }, [multiFileImport.multiFileState.pages.length, multiFileImport.getAllImageData]);
   
   // Get image data from stable map
   const getImageData = useCallback((fileName: string) => {
@@ -134,7 +134,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       });
     }
     return map;
-  }, [multiFileImport]);
+  }, [multiFileImport.multiFileState.pages.length, multiFileImport.getAllPdfData]);
   
   // Get PDF data from stable map
   const getPdfData = useCallback((fileName: string) => {

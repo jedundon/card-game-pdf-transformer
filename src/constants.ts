@@ -147,10 +147,35 @@ export const TIMEOUT_CONSTANTS = {
   COLOR_TRANSFORMATION_TIMEOUT: 15000,
   /** Render calculation timeout (10 seconds) - for dimension and layout calculations */
   RENDER_CALCULATION_TIMEOUT: 10000,
+  /** Thumbnail rendering timeout (15 seconds) - increased for large/complex PDFs */
+  THUMBNAIL_RENDERING_TIMEOUT: 15000,
   /** Settings debounce delay (500ms) - prevents excessive API calls during user input */
   SETTINGS_DEBOUNCE_DELAY: 500,
   /** Preview update delay (250ms) - balances responsiveness with performance */
   PREVIEW_UPDATE_DELAY: 250,
   /** Canvas operation debounce (100ms) - prevents excessive canvas redraws */
   CANVAS_DEBOUNCE_DELAY: 100
+} as const;
+
+/**
+ * Performance optimization constants for large documents
+ * 
+ * These thresholds determine when to apply different performance strategies
+ * based on document size to maintain good user experience.
+ */
+export const PERFORMANCE_CONSTANTS = {
+  /** Page count above which to consider a PDF "large" */
+  LARGE_PDF_PAGE_THRESHOLD: 20,
+  /** Page count above which to consider a PDF "very large" */
+  VERY_LARGE_PDF_PAGE_THRESHOLD: 50,
+  /** Maximum concurrent thumbnail renders for large PDFs */
+  MAX_CONCURRENT_THUMBNAILS_LARGE: 3,
+  /** Maximum concurrent thumbnail renders for normal PDFs */
+  MAX_CONCURRENT_THUMBNAILS_NORMAL: 5,
+  /** Delay between thumbnail batches for large PDFs (ms) */
+  LARGE_PDF_BATCH_DELAY: 1000,
+  /** Number of visible thumbnails to preload ahead */
+  THUMBNAIL_PRELOAD_BUFFER: 5,
+  /** Maximum memory threshold before aggressive cleanup (MB) */
+  MEMORY_CLEANUP_THRESHOLD: 200
 } as const;
