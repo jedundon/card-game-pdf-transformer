@@ -46,6 +46,8 @@ export interface PageSettings {
   skip?: boolean;
   /** Card type designation for duplex/gutter-fold modes ('front' or 'back') */
   type?: 'front' | 'back';
+  /** Page type for specialized processing ('card', 'rule', 'skip') */
+  pageType?: 'card' | 'rule' | 'skip';
   /** Source file information for multi-file support */
   sourceFile?: string;
   /** Original page index within the source file (0-based) */
@@ -454,6 +456,10 @@ export interface MultiFileImportState {
   isProcessing: boolean;
   /** Error messages for failed file imports */
   errors: Record<string, string>;
+  /** Page type configurations */
+  pageTypeSettings: Record<string, PageTypeSettings>;
+  /** Page groups for organization */
+  pageGroups: PageGroup[];
 }
 
 /**
@@ -469,6 +475,70 @@ export interface CardInfo {
   id: number;
 }
 
+/**
+ * Page type settings for specialized processing
+ * 
+ * Defines default settings and processing parameters for each page type.
+ * This allows different pages to have different extraction and output settings.
+ */
+export interface PageTypeSettings {
+  /** Page type identifier */
+  pageType: 'card' | 'rule' | 'skip';
+  /** Display name for the page type */
+  displayName: string;
+  /** Default extraction settings for this page type */
+  defaultExtractionSettings?: Partial<ExtractionSettings>;
+  /** Default output settings for this page type */
+  defaultOutputSettings?: Partial<OutputSettings>;
+  /** Default color settings for this page type */
+  defaultColorSettings?: Partial<ColorSettings>;
+  /** Whether this page type should be processed by default */
+  isProcessed: boolean;
+  /** Color scheme for UI indicators */
+  colorScheme: {
+    /** Primary color for badges and indicators */
+    primary: string;
+    /** Background color for UI elements */
+    background: string;
+    /** Text color for high contrast */
+    text: string;
+  };
+}
+
+/**
+ * Page group for organizing pages
+ * 
+ * Allows users to group related pages together for batch operations
+ * and specialized processing settings.
+ */
+export interface PageGroup {
+  /** Unique identifier for the group */
+  id: string;
+  /** User-defined name for the group */
+  name: string;
+  /** Array of page indices that belong to this group */
+  pageIndices: number[];
+  /** Group type: 'auto' for system-created, 'manual' for user-created */
+  type: 'auto' | 'manual';
+  /** Group-specific settings that override defaults */
+  settings?: {
+    /** Extraction settings for this group */
+    extraction?: Partial<ExtractionSettings>;
+    /** Output settings for this group */
+    output?: Partial<OutputSettings>;
+    /** Color settings for this group */
+    color?: Partial<ColorSettings>;
+  };
+  /** Visual color for group indicators */
+  color?: string;
+  /** Whether this group is currently selected */
+  isSelected?: boolean;
+  /** Creation timestamp */
+  createdAt: number;
+  /** Last modified timestamp */
+  modifiedAt: number;
+}
+
 // Settings for import/export
 export interface AppSettings {
   pdfMode: PdfMode;
@@ -476,6 +546,10 @@ export interface AppSettings {
   extractionSettings: ExtractionSettings;
   outputSettings: OutputSettings;
   colorTransformationSettings?: ColorTransformationSettings;
+  /** Page type configurations */
+  pageTypeSettings?: Record<string, PageTypeSettings>;
+  /** Page groups for organization */
+  pageGroups?: PageGroup[];
 }
 
 // Card dimensions

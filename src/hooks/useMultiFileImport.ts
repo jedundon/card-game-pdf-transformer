@@ -40,6 +40,7 @@ import {
   validateImageFileSize 
 } from '../utils/imageUtils';
 import { SUPPORTED_FILE_TYPES } from '../constants';
+import { initializePageTypeSettings, detectPageType } from '../utils/pageTypeDefaults';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -116,7 +117,9 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     },
     originalPageOrder: [],
     isProcessing: false,
-    errors: {}
+    errors: {},
+    pageTypeSettings: initializePageTypeSettings(),
+    pageGroups: []
   });
 
   // Single PDF reference for backward compatibility
@@ -260,9 +263,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
 
             // Create page entries for this PDF file
             for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+              const detectedPageType = detectPageType(pageIndex, pdf.numPages, file.name);
               const page: PageSettings & PageSource = {
-                skip: false,
+                skip: detectedPageType === 'skip',
                 type: pageIndex % 2 === 0 ? 'front' : 'back', // Default alternating
+                pageType: detectedPageType,
                 fileName: file.name,
                 originalPageIndex: pageIndex,
                 fileType: 'pdf',
@@ -292,9 +297,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
             newFiles.push(fileSource);
 
             // Create single page entry for this image file
+            const detectedPageType = detectPageType(0, 1, file.name);
             const page: PageSettings & PageSource = {
-              skip: false,
+              skip: detectedPageType === 'skip',
               type: 'front', // Images default to front type
+              pageType: detectedPageType,
               fileName: file.name,
               originalPageIndex: 0, // Images are always single "page"
               fileType: 'image',
@@ -436,9 +443,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
 
             // Create page entries for this PDF file
             for (let pageIndex = 0; pageIndex < pdf.numPages; pageIndex++) {
+              const detectedPageType = detectPageType(pageIndex, pdf.numPages, file.name);
               const page: PageSettings & PageSource = {
-                skip: false,
+                skip: detectedPageType === 'skip',
                 type: pageIndex % 2 === 0 ? 'front' : 'back', // Default alternating
+                pageType: detectedPageType,
                 fileName: file.name,
                 originalPageIndex: pageIndex,
                 fileType: 'pdf',
@@ -468,9 +477,11 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
             addedFiles.push(fileSource);
 
             // Create single page entry for this image file
+            const detectedPageType = detectPageType(0, 1, file.name);
             const page: PageSettings & PageSource = {
-              skip: false,
+              skip: detectedPageType === 'skip',
               type: 'front', // Images default to front type
+              pageType: detectedPageType,
               fileName: file.name,
               originalPageIndex: 0, // Images are always single "page"
               fileType: 'image',
@@ -769,7 +780,9 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
       },
       originalPageOrder: [],
       isProcessing: false,
-      errors: {}
+      errors: {},
+      pageTypeSettings: initializePageTypeSettings(),
+      pageGroups: []
     });
     setSinglePdfData(null);
     setPdfDataStore(new Map());

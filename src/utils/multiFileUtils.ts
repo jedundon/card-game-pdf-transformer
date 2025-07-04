@@ -34,6 +34,7 @@ import { FILE_SIZE_LIMITS } from '../constants';
 import { 
   isValidImageFile 
 } from './imageUtils';
+import { initializePageTypeSettings } from './pageTypeDefaults';
 
 /**
  * Validate if a file is a supported PDF
@@ -295,7 +296,9 @@ export function createInitialMultiFileState(): MultiFileImportState {
     },
     originalPageOrder: [],
     isProcessing: false,
-    errors: {}
+    errors: {},
+    pageTypeSettings: initializePageTypeSettings(),
+    pageGroups: []
   };
 }
 
