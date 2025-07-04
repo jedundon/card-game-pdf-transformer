@@ -20,7 +20,7 @@ import React, { useState, useCallback } from 'react';
 import { 
   RotateCw, 
   RotateCcw, 
-  Flip, 
+  FlipHorizontal, 
   ZoomIn, 
   ZoomOut, 
   Crop,
@@ -198,7 +198,7 @@ export const BatchOperationToolbar: React.FC<BatchOperationToolbarProps> = ({
     {
       type: 'rotation',
       description: 'Rotate 180°',
-      icon: <Flip className="w-4 h-4" />,
+      icon: <FlipHorizontal className="w-4 h-4" />,
       action: () => rotatePages(180)
     },
     // Scaling operations

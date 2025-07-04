@@ -26,7 +26,7 @@ import {
   File, 
   FileText,
   Package,
-  Progress,
+  Loader2,
   CheckCircle,
   AlertCircle,
   X,
@@ -689,7 +689,7 @@ startxref
                 <div className="flex items-center space-x-3">
                   {stream.status === 'completed' && <CheckCircle className="w-5 h-5 text-green-600" />}
                   {stream.status === 'error' && <AlertCircle className="w-5 h-5 text-red-600" />}
-                  {stream.status === 'processing' && <Progress className="w-5 h-5 text-blue-600 animate-spin" />}
+                  {stream.status === 'processing' && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
                   {stream.status === 'pending' && <File className="w-5 h-5 text-gray-400" />}
                   {stream.status === 'cancelled' && <X className="w-5 h-5 text-gray-400" />}
 
