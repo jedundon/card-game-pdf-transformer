@@ -24,12 +24,14 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon } from 'lucide-react';
+import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon, Plus, Users, Tag } from 'lucide-react';
 import { 
   PageSettings, 
   PageSource, 
   PdfMode, 
-  PageReorderState
+  PageReorderState,
+  PageGroup,
+  PageTypeSettings
 } from '../types';
 import { 
   // calculateCardNumbersForReorderedPages // Removed - card numbers not available until extraction settings
@@ -45,14 +47,16 @@ import {
   createKeyboardHandlers,
   throttleDragEvents
 } from '../utils/dragDropUtils';
+import { usePageSelection } from '../hooks/usePageSelection';
+import { useOperationHistory } from '../hooks/useOperationHistory';
+import { usePageGrouping } from '../hooks/usePageGrouping';
+import { BatchOperationToolbar } from './shared/BatchOperationToolbar';
 
 interface PageReorderTableProps {
   /** Combined pages from all imported files with source tracking */
   pages: (PageSettings & PageSource)[];
   /** Current PDF processing mode affecting card numbering */
   pdfMode: PdfMode;
-  /** Grid settings for calculating cards per page */
-  // gridSettings: { rows: number; columns: number }; // Not needed until extraction step
   /** Callback when pages are reordered */
   onPagesReorder: (newPages: (PageSettings & PageSource)[]) => void;
   /** Callback when a page's settings are changed */
@@ -71,6 +75,17 @@ interface PageReorderTableProps {
   thumbnailErrors: Record<number, boolean>;
   /** Callback to load a thumbnail for a specific page */
   onThumbnailLoad: (pageIndex: number) => void;
+  
+  /** Page type settings for dropdowns and auto-detection */
+  pageTypeSettings: Record<string, PageTypeSettings>;
+  /** Page groups for group assignment */
+  pageGroups: PageGroup[];
+  /** Callback when page groups change */
+  onPageGroupsChange: (groups: PageGroup[]) => void;
+  /** Callback when multiple pages are updated (for batch operations) */
+  onPagesUpdate: (updatedPages: (PageSettings & PageSource)[]) => void;
+  /** Whether the component is disabled */
+  disabled?: boolean;
 }
 
 /**
@@ -82,7 +97,6 @@ interface PageReorderTableProps {
 export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   pages,
   pdfMode,
-  // gridSettings, // Not needed until extraction step
   onPagesReorder,
   onPageSettingsChange,
   onPageRemove,
@@ -91,7 +105,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   thumbnails,
   thumbnailLoading,
   thumbnailErrors,
-  onThumbnailLoad
+  onThumbnailLoad,
+  pageTypeSettings,
+  pageGroups,
+  onPageGroupsChange,
+  onPagesUpdate,
+  disabled = false
 }) => {
   // Drag and drop state
   const [dragState, setDragState] = useState<PageReorderState>({
@@ -109,6 +128,71 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   
   // Row height for drop position calculations
   const ROW_HEIGHT = 64; // Approximate height of table rows in pixels
+
+  // Page selection functionality
+  const pageSelection = usePageSelection({
+    pages,
+    maxSelections: pages.length,
+    persistSelection: false
+  });
+
+  // Operation history for undo/redo
+  const operationHistory = useOperationHistory<(PageSettings & PageSource)[]>({
+    initialState: pages,
+    maxHistorySize: 20
+  });
+
+  // Page grouping functionality
+  const pageGrouping = usePageGrouping({
+    pages,
+    initialGroups: pageGroups,
+    onGroupsChange: onPageGroupsChange
+  });
+
+  // Group creation modal state
+  const [showGroupModal, setShowGroupModal] = useState(false);
+
+  // Handlers for integrated functionality
+  const handlePagesUpdate = useCallback((updatedPages: (PageSettings & PageSource)[]) => {
+    operationHistory.saveState(pages);
+    onPagesUpdate(updatedPages);
+  }, [pages, operationHistory, onPagesUpdate]);
+
+  const handleGroupsChange = useCallback((groups: PageGroup[]) => {
+    onPageGroupsChange(groups);
+  }, [onPageGroupsChange]);
+
+  const handleConfirmOperation = useCallback((operation: string, details: any) => {
+    console.log(`Confirmed operation: ${operation}`, details);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    const previousState = operationHistory.undo();
+    if (previousState) {
+      onPagesUpdate(previousState);
+    }
+  }, [operationHistory, onPagesUpdate]);
+
+  const handleRedo = useCallback(() => {
+    const nextState = operationHistory.redo();
+    if (nextState) {
+      onPagesUpdate(nextState);
+    }
+  }, [operationHistory, onPagesUpdate]);
+
+  // Handle page type change
+  const handlePageTypeChange = useCallback((pageIndex: number, pageType: string) => {
+    const updatedPages = pages.map((page, index) =>
+      index === pageIndex ? { ...page, pageType } : page
+    );
+    handlePagesUpdate(updatedPages);
+  }, [pages, handlePagesUpdate]);
+
+  // Handle group assignment
+  const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
+    const updatedGroups = pageGrouping.assignPagesToGroup([pageIndex], groupId);
+    onPageGroupsChange(updatedGroups);
+  }, [pageGrouping, onPageGroupsChange]);
 
   // Card numbers not available until extraction settings are configured
   // const cardsPerPage = gridSettings.rows * gridSettings.columns;
@@ -222,8 +306,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     );
   }, [pages, onPagesReorder]);
 
-  // Handle page type change
-  const handlePageTypeChange = useCallback((pageIndex: number, type: string) => {
+  // Handle card type change (front/back)
+  const handleCardTypeChange = useCallback((pageIndex: number, type: string) => {
     onPageSettingsChange(pageIndex, { type: type as 'front' | 'back' });
   }, [onPageSettingsChange]);
 
@@ -406,6 +490,23 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         )}
       </div>
       
+      {/* Batch Operations Toolbar */}
+      {pageSelection.selectionState.hasSelection && (
+        <div className="mb-4">
+          <BatchOperationToolbar
+            selectedPages={pageSelection.getSelectedPages()}
+            allPages={pages}
+            pageTypeSettings={pageTypeSettings}
+            onPagesUpdate={handlePagesUpdate}
+            onConfirmOperation={handleConfirmOperation}
+            canUndo={operationHistory.canUndo}
+            canRedo={operationHistory.canRedo}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+          />
+        </div>
+      )}
+
       <div className="border border-gray-200 rounded-md overflow-hidden relative">
         {/* Drop line indicator */}
         <div style={getDropLineStyle()} />
@@ -415,6 +516,21 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">
                 {/* Drag handle column */}
               </th>
+              <th className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-10">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  checked={pageSelection.selectionState.isAllSelected}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      pageSelection.selectAll();
+                    } else {
+                      pageSelection.clearSelection();
+                    }
+                  }}
+                  disabled={disabled}
+                />
+              </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Page
               </th>
@@ -423,6 +539,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Source
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Page Type
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Group
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Type
@@ -464,6 +586,23 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
+                  {/* Selection checkbox */}
+                  <td className="px-2 py-4 whitespace-nowrap text-center">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={pageSelection.selectionState.selectedItems.has(index)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          pageSelection.selectItem(index);
+                        } else {
+                          pageSelection.deselectItem(index);
+                        }
+                      }}
+                      disabled={disabled}
+                    />
+                  </td>
+
                   {/* Page number */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                     {index + 1}
@@ -495,13 +634,57 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
+                  {/* Page Type dropdown (card/rule/skip) */}
+                  <td className="px-4 py-4 whitespace-nowrap text-sm">
+                    <select
+                      value={page.pageType || 'card'}
+                      onChange={(e) => handlePageTypeChange(index, e.target.value)}
+                      className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={disabled}
+                    >
+                      {Object.entries(pageTypeSettings).map(([type, settings]) => (
+                        <option key={type} value={type}>
+                          {settings.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
 
-                  {/* Page type */}
+                  {/* Group assignment */}
+                  <td className="px-4 py-4 whitespace-nowrap text-sm">
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={pageGrouping.getPageGroup(index)?.id || ''}
+                        onChange={(e) => handleGroupAssignment(index, e.target.value || null)}
+                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={disabled}
+                      >
+                        <option value="">No Group</option>
+                        {pageGroups.map((group) => (
+                          <option key={group.id} value={group.id}>
+                            {group.name}
+                          </option>
+                        ))}
+                      </select>
+                      {pageGroups.length === 0 && (
+                        <button
+                          onClick={() => setShowGroupModal(true)}
+                          className="p-1 text-gray-400 hover:text-indigo-600"
+                          title="Create new group"
+                          disabled={disabled}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Page type (front/back) */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
                     {pdfMode.type === 'duplex' && !page?.skip ? (
                       <select 
                         value={page?.type || 'front'} 
-                        onChange={e => handlePageTypeChange(index, e.target.value)} 
+                        onChange={e => handleCardTypeChange(index, e.target.value)} 
                         className="border border-gray-300 rounded px-2 py-1 text-sm"
                       >
                         <option value="front">Front</option>

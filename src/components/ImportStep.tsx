@@ -15,7 +15,6 @@ import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
 import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
 import { ProcessingModeSelector } from './ImportStep/ProcessingModeSelector';
 import { FileUploadDropZone } from './ImportStep/FileUploadDropZone';
-import { PageTypeSelector } from './ImportStep/PageTypeSelector';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -558,48 +557,28 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     loadThumbnail(pageIndex);
                   }
                 }}
+                pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings || {}}
+                pageGroups={multiFileImport.multiFileState.pageGroups || []}
+                onPageGroupsChange={(groups) => {
+                  multiFileImport.updatePageGroups(groups);
+                }}
+                onPagesUpdate={(updatedPages) => {
+                  if (multiFileImport.multiFileState.pages.length > 0) {
+                    multiFileImport.updateAllPageSettings(updatedPages);
+                  } else {
+                    // Single-file mode - extract core page settings
+                    const corePageSettings = updatedPages.map(page => ({
+                      skip: page.skip || false,
+                      type: page.type || 'front',
+                      pageType: page.pageType,
+                      originalPageIndex: page.originalPageIndex
+                    }));
+                    onPageSettingsChange(corePageSettings);
+                  }
+                }}
               />
           )}
 
-          {/* Page Type Selector - Show when pages are available and not loading */}
-          {(pdfData || multiFileImport.multiFileState.pages.length > 0) && !isLoading && (
-            <div className="mt-6">
-              <PageTypeSelector
-                pages={multiFileImport.multiFileState.pages.length > 0 
-                  ? multiFileImport.multiFileState.pages 
-                  : pageSettings.map((settings, index) => ({
-                      ...settings,
-                      fileName: fileName || 'document.pdf',
-                      originalPageIndex: index,
-                      fileType: 'pdf' as const,
-                      displayOrder: index
-                    }))
-                }
-                pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings}
-                onPagesChange={(updatedPages) => {
-                  try {
-                    if (multiFileImport.multiFileState.pages.length > 0) {
-                      // Multi-file mode
-                      multiFileImport.updateAllPageSettings(updatedPages);
-                    } else {
-                      // Single-file mode - extract core page settings
-                      const corePageSettings = updatedPages.map(page => ({
-                        skip: page.skip || false,
-                        type: page.type || ('front' as const),
-                        pageType: page.pageType,
-                        originalPageIndex: page.originalPageIndex
-                      }));
-                      onPageSettingsChange(corePageSettings);
-                    }
-                  } catch (error) {
-                    console.error('Error updating page types:', error);
-                  }
-                }}
-                disabled={isLoading}
-                showBatchOperations={true}
-              />
-            </div>
-          )}
 
       {/* Thumbnail Popup */}
       <ThumbnailPopup

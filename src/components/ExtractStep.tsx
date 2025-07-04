@@ -2,12 +2,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { CardImageExportButton } from './shared/CardImageExportButton';
-import { PageSelectionManager } from './shared/PageSelectionManager';
-import { BatchOperationToolbar } from './shared/BatchOperationToolbar';
-import { PageGroupManager } from './shared/PageGroupManager';
-import { usePageSelection } from '../hooks/usePageSelection';
-import { useOperationHistory } from '../hooks/useOperationHistory';
-import { usePageGrouping } from '../hooks/usePageGrouping';
 import { 
   getActivePagesWithSource,
   getCardInfo, 
@@ -44,9 +38,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   const [pageDimensions, setPageDimensions] = useState<{ width: number; height: number } | null>(null);
   const renderingRef = useRef(false);
   
-  // Batch operations state
-  const [showBatchOperations, setShowBatchOperations] = useState(false);
-  
   // Unified page data handling for both single PDF and multi-file sources
   const unifiedPages = useMemo(() => {
     if (multiFileImport.multiFileState.pages.length > 0) {
@@ -67,30 +58,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
   
-  // Page selection and batch operations
-  const pageSelection = usePageSelection(unifiedPages, {
-    maxSelection: 100,
-    onSelectionLimitReached: (limit) => {
-      alert(`Maximum selection limit reached: ${limit} pages`);
-    }
-  });
-
-  const operationHistory = useOperationHistory({
-    maxHistorySize: 20,
-    onHistoryChange: (canUndo, canRedo) => {
-      // Could update UI state here if needed
-    }
-  });
-
-  const pageGrouping = usePageGrouping(
-    multiFileImport.multiFileState.pageGroups,
-    {
-      maxGroups: 50,
-      onGroupLimitReached: (limit) => {
-        alert(`Maximum group limit reached: ${limit} groups`);
-      }
-    }
-  );
   
   const activePages = useMemo(() => 
     getActivePagesWithSource(unifiedPages), 
@@ -280,65 +247,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
   }, [pageDimensions, extractionSettings, onSettingsChange]);
 
-  // Batch operation handlers
-  const handlePagesUpdate = useCallback((updatedPages: any[]) => {
-    // Record operation in history
-    operationHistory.recordOperation(
-      'Batch page update',
-      unifiedPages,
-      updatedPages,
-      'batch'
-    );
-
-    // Update pages based on current mode
-    if (multiFileImport.multiFileState.pages.length > 0) {
-      // Multi-file mode
-      multiFileImport.updateAllPageSettings(updatedPages);
-    } else {
-      // Single-file mode - this is a placeholder for now
-      // In a real implementation, we'd need to update pageSettings
-      console.warn('Batch operations not yet fully supported in single-file mode');
-    }
-  }, [unifiedPages, operationHistory, multiFileImport]);
-
-  const handleConfirmOperation = useCallback((message: string, callback: () => void) => {
-    if (window.confirm(message)) {
-      callback();
-    }
-  }, []);
-
-  const handleUndo = useCallback(() => {
-    const previousState = operationHistory.undo();
-    if (previousState && multiFileImport.multiFileState.pages.length > 0) {
-      multiFileImport.updateAllPageSettings(previousState);
-    }
-  }, [operationHistory, multiFileImport]);
-
-  const handleRedo = useCallback(() => {
-    const nextState = operationHistory.redo();
-    if (nextState && multiFileImport.multiFileState.pages.length > 0) {
-      multiFileImport.updateAllPageSettings(nextState);
-    }
-  }, [operationHistory, multiFileImport]);
-
-  // Page grouping handlers
-  const handleGroupsChange = useCallback((updatedGroups: any[]) => {
-    pageGrouping.setGroups(updatedGroups);
-    
-    // Update the multi-file import state with new groups
-    if (multiFileImport.multiFileState.pages.length > 0) {
-      const currentState = multiFileImport.multiFileState;
-      multiFileImport.reset();
-      
-      // Restore state with updated groups
-      setTimeout(() => {
-        Object.assign(multiFileImport.multiFileState, {
-          ...currentState,
-          pageGroups: updatedGroups
-        });
-      }, 0);
-    }
-  }, [pageGrouping, multiFileImport]);
 
   return (
     <div className="space-y-6">
@@ -435,68 +343,6 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         </div>
       </div>
       
-      {/* Batch Operations Section */}
-      {unifiedPages.length > 1 && (
-        <div className="border-t pt-6 mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Batch Operations</h3>
-            <button
-              onClick={() => setShowBatchOperations(!showBatchOperations)}
-              className="text-sm text-indigo-600 hover:text-indigo-500"
-            >
-              {showBatchOperations ? 'Hide' : 'Show'} Batch Operations
-            </button>
-          </div>
-          
-          {showBatchOperations && (
-            <div className="space-y-4">
-              <PageSelectionManager
-                pages={unifiedPages}
-                selectedPages={pageSelection.selectionState.selectedPages}
-                onSelectionChange={(selectedIndices) => {
-                  // Update selection via the hook's methods
-                  const currentlySelected = pageSelection.selectionState.selectedPages;
-                  
-                  // Find newly selected and deselected pages
-                  const newlySelected = Array.from(selectedIndices).filter(i => !currentlySelected.has(i));
-                  const newlyDeselected = Array.from(currentlySelected).filter(i => !selectedIndices.has(i));
-                  
-                  // Apply changes
-                  newlySelected.forEach(i => pageSelection.togglePageSelection(i, true));
-                  newlyDeselected.forEach(i => pageSelection.togglePageSelection(i, false));
-                }}
-                showControls={true}
-                enableKeyboardShortcuts={true}
-              />
-              
-              {pageSelection.selectionState.hasSelection && (
-                <BatchOperationToolbar
-                  selectedPages={pageSelection.getSelectedPages()}
-                  allPages={unifiedPages}
-                  pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings}
-                  onPagesUpdate={handlePagesUpdate}
-                  onConfirmOperation={handleConfirmOperation}
-                  canUndo={operationHistory.canUndo}
-                  canRedo={operationHistory.canRedo}
-                  onUndo={handleUndo}
-                  onRedo={handleRedo}
-                />
-              )}
-
-              {/* Page Group Manager */}
-              <PageGroupManager
-                pages={unifiedPages}
-                groups={pageGrouping.groups}
-                pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings}
-                onGroupsChange={handleGroupsChange}
-                onPagesChange={handlePagesUpdate}
-                selectedPages={pageSelection.selectionState.selectedPages}
-                disabled={false}
-              />
-            </div>
-          )}
-        </div>
-      )}
       
       {/* Export Section */}
       <div className="border-t pt-6 mt-6">
