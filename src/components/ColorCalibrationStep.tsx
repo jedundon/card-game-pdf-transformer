@@ -38,8 +38,21 @@ import {
   calculateFinalCardRenderDimensions,
   calculateCardPositioning,
   calculatePreviewScaling,
-  processCardImageForRendering
+  processCardImageForRendering,
+  CardRenderDimensions,
+  CardPositioning
 } from '../utils/renderUtils';
+
+// Type for preview scaling result from calculatePreviewScaling
+interface PreviewScaling {
+  scale: number;
+  previewPageWidth: number;
+  previewPageHeight: number;
+  previewCardWidth: number;
+  previewCardHeight: number;
+  previewX: number;
+  previewY: number;
+}
 import { generateColorCalibrationPDF } from '../utils/calibrationUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
 import { 
@@ -52,6 +65,16 @@ import {
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
 import { PREVIEW_CONSTRAINTS } from '../constants';
+import {
+  PdfData,
+  PdfMode,
+  ExtractionSettings,
+  OutputSettings,
+  PageSettings,
+  PageSource,
+  ColorSettings,
+  MultiFileImportHook
+} from '../types';
 
 
 /**
@@ -104,7 +127,7 @@ const GridPreview: React.FC<GridPreviewProps> = ({
     type: string,
     value: number
   ): void => {
-    (transformation as any)[type] = value;
+    (transformation as unknown as Record<string, number>)[type] = value;
   }, []);
 
   // Generate grid images with transformations
@@ -354,20 +377,20 @@ const GridPreview: React.FC<GridPreviewProps> = ({
 };
 
 interface ColorCalibrationStepProps {
-  pdfData: any;
-  pdfMode: any;
-  extractionSettings: any;
-  outputSettings: any;
-  pageSettings: any;
+  pdfData: PdfData | null;
+  pdfMode: PdfMode;
+  extractionSettings: ExtractionSettings;
+  outputSettings: OutputSettings;
+  pageSettings: PageSettings[];
   cardDimensions: {
     widthPx: number;
     heightPx: number;
     widthInches: number;
     heightInches: number;
   } | null;
-  colorSettings: any;
-  multiFileImport: any; // Add multiFileImport as a prop
-  onColorSettingsChange: (settings: any) => void;
+  colorSettings: ColorSettings;
+  multiFileImport: MultiFileImportHook;
+  onColorSettingsChange: (settings: ColorSettings) => void;
   onPrevious: () => void;
   onNext: () => void;
 }
@@ -389,9 +412,9 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
   const [colorTransformedPreviewUrl, setColorTransformedPreviewUrl] = useState<string | null>(null);
   const [cardRenderData, setCardRenderData] = useState<{
-    renderDimensions: any;
-    positioning: any;
-    previewScaling: any;
+    renderDimensions: CardRenderDimensions;
+    positioning: CardPositioning;
+    previewScaling: PreviewScaling;
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
@@ -400,7 +423,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const imageDataMap = useMemo(() => {
     const map = new Map();
     if (multiFileImport?.multiFileState?.pages) {
-      multiFileImport.multiFileState.pages.forEach((page: any) => {
+      multiFileImport.multiFileState.pages.forEach((page: PageSettings & PageSource) => {
         if (page.fileType === 'image') {
           const imageData = multiFileImport.getImageData(page.fileName);
           if (imageData) {
@@ -421,7 +444,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   const pdfDataMap = useMemo(() => {
     const map = new Map();
     if (multiFileImport?.multiFileState?.pages) {
-      multiFileImport.multiFileState.pages.forEach((page: any) => {
+      multiFileImport.multiFileState.pages.forEach((page: PageSettings & PageSource) => {
         if (page.fileType === 'pdf') {
           const pdfData = multiFileImport.getPdfData(page.fileName);
           if (pdfData) {
@@ -509,7 +532,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       return multiFileImport.multiFileState.pages;
     } else if (pageSettings.length > 0) {
       // Fallback: convert pageSettings to unified format for backward compatibility
-      return pageSettings.map((page: any, index: number) => ({
+      return pageSettings.map((page: PageSettings, index: number) => ({
         ...page,
         fileName: 'current.pdf', // Default filename for single PDF mode
         fileType: 'pdf' as const,
@@ -2142,7 +2165,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                         const verticalType = colorSettings?.transformations?.vertical?.type || 'contrast';
                         
                         // Check if horizontal axis parameter has non-neutral user setting
-                        const horizontalUserValue = (currentColorTransformation as any)[horizontalType];
+                        const horizontalUserValue = (currentColorTransformation as Record<string, number>)[horizontalType];
                         let horizontalIsNeutral = false;
                         if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(horizontalType)) {
                           horizontalIsNeutral = horizontalUserValue === 0;
@@ -2155,7 +2178,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                         }
                         
                         // Check if vertical axis parameter has non-neutral user setting
-                        const verticalUserValue = (currentColorTransformation as any)[verticalType];
+                        const verticalUserValue = (currentColorTransformation as Record<string, number>)[verticalType];
                         let verticalIsNeutral = false;
                         if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(verticalType)) {
                           verticalIsNeutral = verticalUserValue === 0;

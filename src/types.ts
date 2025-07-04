@@ -10,8 +10,8 @@
  * - Configuration: Settings for extraction, output, and processing modes
  */
 
-import { ColorTransformation } from './utils/colorUtils';
 import { LastImportedFileInfo } from './utils/localStorageUtils';
+import { ColorTransformation } from './utils/colorUtils';
 
 /**
  * - Card Data: Information about individual cards and their properties
@@ -188,30 +188,6 @@ export interface ExtractionSettings {
   pageDimensions?: { width: number; height: number };
 }
 
-/**
- * Color transformation settings
- * 
- * Defines color adjustments to apply to card images for print optimization.
- * Values use professional color correction ranges and terminology.
- */
-export interface ColorTransformation {
-  /** Brightness adjustment (-100 to +100) */
-  brightness: number;
-  /** Contrast multiplier (0.5 to 2.0) */
-  contrast: number;
-  /** Saturation adjustment (-100 to +100) */
-  saturation: number;
-  /** Hue shift in degrees (-180 to +180) */
-  hue: number;
-  /** Gamma correction (0.5 to 2.0) */
-  gamma: number;
-  /** Vibrance adjustment (-100 to +100, selective saturation) */
-  vibrance: number;
-  /** Highlight recovery (-50 to +50) */
-  highlightRecovery: number;
-  /** Shadow recovery (-50 to +50) */
-  shadowRecovery: number;
-}
 
 /**
  * Color transformation settings per card type
