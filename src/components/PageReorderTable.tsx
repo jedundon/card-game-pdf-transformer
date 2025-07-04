@@ -591,12 +591,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     <input
                       type="checkbox"
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      checked={pageSelection.selectionState.selectedItems.has(index)}
+                      checked={pageSelection.selectionState.selectedPages.has(index)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          pageSelection.selectItem(index);
+                          pageSelection.togglePageSelection(index, true);
                         } else {
-                          pageSelection.deselectItem(index);
+                          pageSelection.togglePageSelection(index, false);
                         }
                       }}
                       disabled={disabled}
