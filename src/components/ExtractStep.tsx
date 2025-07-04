@@ -4,8 +4,10 @@ import { AddFilesButton } from './AddFilesButton';
 import { CardImageExportButton } from './shared/CardImageExportButton';
 import { PageSelectionManager } from './shared/PageSelectionManager';
 import { BatchOperationToolbar } from './shared/BatchOperationToolbar';
+import { PageGroupManager } from './shared/PageGroupManager';
 import { usePageSelection } from '../hooks/usePageSelection';
 import { useOperationHistory } from '../hooks/useOperationHistory';
+import { usePageGrouping } from '../hooks/usePageGrouping';
 import { 
   getActivePagesWithSource,
   getCardInfo, 
@@ -79,6 +81,16 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
       // Could update UI state here if needed
     }
   });
+
+  const pageGrouping = usePageGrouping(
+    multiFileImport.multiFileState.pageGroups,
+    {
+      maxGroups: 50,
+      onGroupLimitReached: (limit) => {
+        alert(`Maximum group limit reached: ${limit} groups`);
+      }
+    }
+  );
   
   const activePages = useMemo(() => 
     getActivePagesWithSource(unifiedPages), 
@@ -309,6 +321,25 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     }
   }, [operationHistory, multiFileImport]);
 
+  // Page grouping handlers
+  const handleGroupsChange = useCallback((updatedGroups: any[]) => {
+    pageGrouping.setGroups(updatedGroups);
+    
+    // Update the multi-file import state with new groups
+    if (multiFileImport.multiFileState.pages.length > 0) {
+      const currentState = multiFileImport.multiFileState;
+      multiFileImport.reset();
+      
+      // Restore state with updated groups
+      setTimeout(() => {
+        Object.assign(multiFileImport.multiFileState, {
+          ...currentState,
+          pageGroups: updatedGroups
+        });
+      }, 0);
+    }
+  }, [pageGrouping, multiFileImport]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -451,6 +482,17 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
                   onRedo={handleRedo}
                 />
               )}
+
+              {/* Page Group Manager */}
+              <PageGroupManager
+                pages={unifiedPages}
+                groups={pageGrouping.groups}
+                pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings}
+                onGroupsChange={handleGroupsChange}
+                onPagesChange={handlePagesUpdate}
+                selectedPages={pageSelection.selectionState.selectedPages}
+                disabled={false}
+              />
             </div>
           )}
         </div>
