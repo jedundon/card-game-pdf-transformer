@@ -423,6 +423,7 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     // Check if we have either state-based or HTML5-based drag info
     const hasActiveDrag = isDraggingBetweenGroups || e.dataTransfer.types.includes('text/x-page-index');
     
+    
     if (!hasActiveDrag) return;
     
     // Determine source group ID
@@ -597,6 +598,30 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
               onDragOver={(e) => handleGroupDragOver(e, group.id)}
               onDragLeave={(e) => handleGroupDragLeave(e, group.id)}
               onDrop={(e) => handleGroupDrop(e, group.id)}
+              onMouseEnter={(e) => {
+                // Handle mouse-based inter-group drag (when not using HTML5 drag)
+                if (isDraggingBetweenGroups && draggedPageInfo && group.id !== draggedPageInfo.sourceGroupId) {
+                  setDragOverGroupId(group.id);
+                }
+              }}
+              onMouseLeave={(e) => {
+                // Handle mouse-based inter-group drag leave
+                if (isDraggingBetweenGroups && dragOverGroupId === group.id) {
+                  setDragOverGroupId(null);
+                }
+              }}
+              onMouseUp={(e) => {
+                // Handle mouse-based drop (when not using HTML5 drag)
+                if (isDraggingBetweenGroups && draggedPageInfo && group.id !== draggedPageInfo.sourceGroupId && dragOverGroupId === group.id) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handlePageGroupChange(draggedPageInfo.localIndex, group.id, draggedPageInfo.sourceGroupId);
+                  // Reset drag state
+                  setDraggedPageInfo(null);
+                  setIsDraggingBetweenGroups(false);
+                  setDragOverGroupId(null);
+                }
+              }}
             >
               {/* Group Header */}
               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">

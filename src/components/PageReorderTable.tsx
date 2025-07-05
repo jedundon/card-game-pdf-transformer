@@ -301,11 +301,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                 }, 0);
               }
               
-              // Reset custom drag state but keep the page index for reference
+              // Keep drag active but disable visual feedback (no hoverIndex)
+              // This maintains the event chain for drop detection
               return {
                 ...currentDragState,
-                isDragging: false,
-                hoverIndex: null
+                hoverIndex: null  // Remove drop line, but keep isDragging: true
               };
             }
             
@@ -411,13 +411,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle end of drag operation for reordering within group
   const handleDragEndForTable = useCallback(() => {
-    // Reset boundary detection state
-    setHasExitedTableBounds(false);
-    
     setDragState(currentDragState => {
       const result = handleDragEnd(currentDragState);
       
-      if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
+      // Only perform reorder if we haven't exited table bounds (intra-group reordering)
+      // If we exited bounds, the PageGroupsManager handles the inter-group transfer
+      if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null && !hasExitedTableBounds) {
         // Use a ref to access current pages to avoid dependency issues
         const currentPages = pages;
         const reorderedPages = reorderPages(currentPages, result.fromIndex, result.toIndex);
@@ -430,7 +429,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       
       return result.newState;
     });
-  }, []); // Remove dependencies to prevent infinite recreation
+    
+    // Reset boundary detection state after processing
+    setHasExitedTableBounds(false);
+  }, [hasExitedTableBounds]); // Add hasExitedTableBounds dependency
 
   // Set up global mouse/touch event listeners during drag
   useEffect(() => {
