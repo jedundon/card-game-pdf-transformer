@@ -400,15 +400,22 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
   
   // Handle drag end for inter-group operations
   const handleInterGroupDragEnd = useCallback(() => {
-    if (draggedPageInfo && dragOverGroupId && dragOverGroupId !== draggedPageInfo.sourceGroupId) {
-      // Move the page to the target group
-      handlePageGroupChange(draggedPageInfo.localIndex, dragOverGroupId, draggedPageInfo.sourceGroupId);
-    }
+    // CRITICAL FIX: Save drag info before clearing state to prevent race condition
+    // When page is successfully moved, clearing drag state after handlePageGroupChange
+    // causes the re-render to show wrong page as grayed out
+    const currentDraggedPageInfo = draggedPageInfo;
+    const currentDragOverGroupId = dragOverGroupId;
     
-    // Reset drag state
+    // Clear drag state FIRST to prevent stale state during re-renders
     setDraggedPageInfo(null);
     setIsDraggingBetweenGroups(false);
     setDragOverGroupId(null);
+    
+    // Then perform the page move operation with saved values
+    if (currentDraggedPageInfo && currentDragOverGroupId && currentDragOverGroupId !== currentDraggedPageInfo.sourceGroupId) {
+      // Move the page to the target group
+      handlePageGroupChange(currentDraggedPageInfo.localIndex, currentDragOverGroupId, currentDraggedPageInfo.sourceGroupId);
+    }
   }, [draggedPageInfo, dragOverGroupId, handlePageGroupChange]);
   
   // Handle drag over group
