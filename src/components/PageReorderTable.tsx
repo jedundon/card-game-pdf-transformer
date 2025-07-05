@@ -281,13 +281,18 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   );
 
   // Handle start of drag operation for reordering within group
-  const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent) => {
-    event.preventDefault();
+  const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent, forceStart = false) => {
+    // Only prevent default if we're definitely starting custom drag
+    // This allows HTML5 drag to work when forceStart is false
+    if (forceStart || !onInterGroupDragStart) {
+      event.preventDefault();
+    }
+    
     setDragState(currentDragState => {
       const newState = handleDragStart(event.nativeEvent, pageIndex, currentDragState);
       return newState;
     });
-  }, []); // No dependencies - use functional state update
+  }, [onInterGroupDragStart]);
   
   // Handle HTML5 drag start for inter-group operations
   const handleHTML5DragStart = useCallback((pageIndex: number, event: React.DragEvent) => {
@@ -718,13 +723,45 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       `}
                       draggable={!!onInterGroupDragStart}
                       onMouseDown={(e) => {
-                        // Always enable mouse drag for intra-group reordering
-                        // This works alongside HTML5 drag for inter-group movement
-                        handleDragStartForPage(index, e);
+                        if (onInterGroupDragStart) {
+                          // In inter-group mode, use a mouse movement threshold to detect intent
+                          const startX = e.clientX;
+                          const startY = e.clientY;
+                          const startTime = Date.now();
+                          let hasMoved = false;
+                          
+                          const handleMouseMove = (moveEvent: MouseEvent) => {
+                            const deltaX = Math.abs(moveEvent.clientX - startX);
+                            const deltaY = Math.abs(moveEvent.clientY - startY);
+                            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                            
+                            // If mouse moved more than 5 pixels, start custom drag
+                            if (distance > 5 && !hasMoved && !isDraggingBetweenGroups) {
+                              hasMoved = true;
+                              cleanup();
+                              handleDragStartForPage(index, e, true);
+                            }
+                          };
+                          
+                          const handleMouseUp = () => {
+                            cleanup();
+                          };
+                          
+                          const cleanup = () => {
+                            document.removeEventListener('mousemove', handleMouseMove);
+                            document.removeEventListener('mouseup', handleMouseUp);
+                          };
+                          
+                          document.addEventListener('mousemove', handleMouseMove);
+                          document.addEventListener('mouseup', handleMouseUp);
+                        } else {
+                          // No inter-group drag available, safe to start custom drag immediately
+                          handleDragStartForPage(index, e, true);
+                        }
                       }}
                       onTouchStart={(e) => {
                         // Touch events always work for intra-group reordering
-                        handleDragStartForPage(index, e);
+                        handleDragStartForPage(index, e, true);
                       }}
                       onDragStart={(e) => {
                         // HTML5 drag only works when inter-group drag is enabled
