@@ -792,8 +792,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               const isValidDraggedPage = draggedPageInfo && 
                 draggedPageInfo.localIndex === index &&
                 draggedPageInfo.localIndex < pages.length &&
-                isDraggingBetweenGroups && // Only show gray when actually dragging between groups
-                dragState.isDragging; // AND only when local drag state is also active
+                isDraggingBetweenGroups; // Only show gray when actually dragging between groups
               
               
               return (
