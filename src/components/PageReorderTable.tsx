@@ -6,8 +6,8 @@
  * page settings table in the ImportStep for multi-file workflows.
  * 
  * **Key Features:**
- * - Drag-and-drop page reordering with visual feedback
- * - Real-time card numbering updates during reordering
+ * - Dual drag-and-drop system: mouse drag for intra-group reordering, HTML5 drag for inter-group movement
+ * - Real-time visual feedback with drop lines and group highlighting
  * - File source tracking and display
  * - Enhanced thumbnails with hover previews
  * - Keyboard accessibility for reordering operations
@@ -718,10 +718,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       `}
                       draggable={!!onInterGroupDragStart}
                       onMouseDown={(e) => {
-                        // Only handle mouse events for intra-group reordering if HTML5 drag is not enabled
-                        if (!onInterGroupDragStart) {
-                          handleDragStartForPage(index, e);
-                        }
+                        // Always enable mouse drag for intra-group reordering
+                        // This works alongside HTML5 drag for inter-group movement
+                        handleDragStartForPage(index, e);
                       }}
                       onTouchStart={(e) => {
                         // Touch events always work for intra-group reordering
@@ -730,6 +729,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       onDragStart={(e) => {
                         // HTML5 drag only works when inter-group drag is enabled
                         if (onInterGroupDragStart) {
+                          // Prevent mouse drag events from interfering with HTML5 drag
+                          e.stopPropagation();
                           handleHTML5DragStart(index, e);
                         } else {
                           e.preventDefault(); // Prevent default HTML5 drag when not needed
@@ -739,7 +740,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       tabIndex={0}
                       onKeyDown={(e) => keyboardHandlers.handleKeyDown(e.nativeEvent)}
                       title={onInterGroupDragStart 
-                        ? "Hold and drag to move between groups, or use mouse drag for reordering within group"
+                        ? "Mouse drag: reorder within group • HTML5 drag: move between groups • Arrow keys: reorder"
                         : "Drag to reorder pages, or use arrow keys"
                       }
                     >
@@ -888,7 +889,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         </p>
         <p className="text-xs text-gray-500 mt-1">
           {onInterGroupDragStart 
-            ? "Mouse drag to reorder within group. HTML5 drag (drag handle) to move between groups."
+            ? "Mouse drag: reorder pages within this group. HTML5 drag: hold and drag to move pages between groups. Use arrow buttons or keyboard for precise positioning."
             : "Drag pages to reorder them. Card numbering will be calculated during extraction."
           }
         </p>
