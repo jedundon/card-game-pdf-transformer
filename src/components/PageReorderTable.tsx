@@ -430,9 +430,15 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       return result.newState;
     });
     
+    // CRITICAL FIX: Always call inter-group drag end when we had exited table bounds
+    // This ensures the parent PageGroupsManager cleans up its drag state even for canceled drags
+    if (hasExitedTableBounds && onInterGroupDragEnd) {
+      onInterGroupDragEnd();
+    }
+    
     // Reset boundary detection state after processing
     setHasExitedTableBounds(false);
-  }, [hasExitedTableBounds]); // Add hasExitedTableBounds dependency
+  }, [hasExitedTableBounds, onInterGroupDragEnd, pages, onPagesReorder]); // Add missing dependencies
 
   // Set up global mouse/touch event listeners during drag
   useEffect(() => {
@@ -454,18 +460,41 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       handleDragEndForTable();
     };
 
+    // Handle escape key to cancel drag operations
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleDragEndForTable();
+      }
+    };
+
+    // Handle mouse leaving the viewport to cancel inter-group drags
+    const handleMouseLeave = (event: MouseEvent) => {
+      // Only trigger on document/viewport leave, not individual element leave
+      if (event.target === document.documentElement || event.target === document.body) {
+        if (hasExitedTableBounds) {
+          // If we were in inter-group drag mode and mouse left viewport, cancel the drag
+          handleDragEndForTable();
+        }
+      }
+    };
+
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('touchmove', handleTouchMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mouseleave', handleMouseLeave);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [dragState.isDragging, throttledDragOver, handleDragEndForTable]);
+  }, [dragState.isDragging, throttledDragOver, handleDragEndForTable, hasExitedTableBounds]);
 
   // Keyboard handlers for accessibility
   const createKeyboardHandlersForPage = useCallback((pageIndex: number) => {
@@ -797,8 +826,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       tabIndex={0}
                       onKeyDown={(e) => keyboardHandlers.handleKeyDown(e.nativeEvent)}
                       title={onInterGroupDragStart 
-                        ? "Drag within table: reorder pages • Drag outside table: move to other groups • Arrow keys: precise positioning"
-                        : "Drag to reorder pages, or use arrow keys"
+                        ? "Drag within table: reorder pages • Drag outside table: move to other groups • Arrow keys: precise positioning • Escape: cancel drag"
+                        : "Drag to reorder pages, or use arrow keys • Escape: cancel drag"
                       }
                     >
                       <GripVertical size={16} />
@@ -946,8 +975,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         </p>
         <p className="text-xs text-gray-500 mt-1">
           {onInterGroupDragStart 
-            ? "Drag within table: reorder pages in this group. Drag outside table boundaries: move pages to other groups. Use arrow buttons for precise positioning."
-            : "Drag pages to reorder them. Card numbering will be calculated during extraction."
+            ? "Drag within table: reorder pages in this group. Drag outside table boundaries: move pages to other groups. Use arrow buttons for precise positioning. Press Escape to cancel drags."
+            : "Drag pages to reorder them. Card numbering will be calculated during extraction. Press Escape to cancel drags."
           }
         </p>
       </div>
