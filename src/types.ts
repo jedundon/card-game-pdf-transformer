@@ -531,6 +531,10 @@ export interface PageGroup {
   pageIndices: number[];
   /** Group type: 'auto' for system-created, 'manual' for user-created */
   type: 'auto' | 'manual';
+  /** Display order of the group (lower numbers appear first) */
+  order: number;
+  /** Processing mode specific to this group */
+  processingMode: PdfMode;
   /** Group-specific settings that override defaults */
   settings?: {
     /** Extraction settings for this group */
@@ -663,6 +667,12 @@ export interface MultiFileImportHook {
   
   /** Check if pages have been reordered */
   isPagesReordered: () => boolean;
+  
+  /** Update page groups */
+  updatePageGroups: (groups: PageGroup[]) => void;
+  
+  /** Update page type settings */
+  updatePageTypeSettings: (settings: Record<string, PageTypeSettings>) => void;
 }
 
 /**

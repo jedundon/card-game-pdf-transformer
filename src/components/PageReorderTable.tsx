@@ -86,6 +86,17 @@ interface PageReorderTableProps {
   onPagesUpdate: (updatedPages: (PageSettings & PageSource)[]) => void;
   /** Whether the component is disabled */
   disabled?: boolean;
+  
+  /** Current group ID (for group-specific tables) */
+  currentGroupId?: string;
+  /** Callback when a page should be moved to a different group */
+  onPageGroupChange?: (pageIndex: number, targetGroupId: string | null) => void;
+  
+  /** Inter-group drag and drop props */
+  onInterGroupDragStart?: (localIndex: number) => void;
+  onInterGroupDragEnd?: () => void;
+  isDraggingBetweenGroups?: boolean;
+  draggedPageInfo?: { localIndex: number; globalIndex: number; sourceGroupId: string } | null;
 }
 
 /**
@@ -110,15 +121,21 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   pageGroups,
   onPageGroupsChange,
   onPagesUpdate,
-  disabled = false
+  disabled = false,
+  currentGroupId,
+  onPageGroupChange,
+  onInterGroupDragStart,
+  onInterGroupDragEnd,
+  isDraggingBetweenGroups = false,
+  draggedPageInfo
 }) => {
   // Drag and drop state
-  const [dragState, setDragState] = useState<PageReorderState>({
+  const [dragState, setDragState] = useState<PageReorderState>(() => ({
     dragIndex: null,
     hoverIndex: null,
     isDragging: false,
     pageOrder: createInitialPageOrder(pages.length)
-  });
+  }));
 
   // Thumbnail popup state
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
@@ -194,18 +211,35 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle group assignment
   const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
-    if (groupId) {
-      pageGrouping.addPagesToGroup(groupId, [pageIndex]);
+    // Use the new callback if available (group-specific tables)
+    if (onPageGroupChange) {
+      onPageGroupChange(pageIndex, groupId);
     } else {
-      // Remove page from all groups
-      pageGrouping.groups.forEach(group => {
-        if (group.pageIndices.includes(pageIndex)) {
-          pageGrouping.removePagesFromGroup(group.id, [pageIndex]);
+      // Fallback: manage group assignments directly with props
+      let updatedGroups = [...pageGroups];
+      
+      // Remove page from all current groups
+      updatedGroups = updatedGroups.map(group => ({
+        ...group,
+        pageIndices: group.pageIndices.filter(idx => idx !== pageIndex),
+        modifiedAt: Date.now()
+      }));
+      
+      // Add page to target group (if not default/null)
+      if (groupId && groupId !== 'default') {
+        const targetGroupIndex = updatedGroups.findIndex(g => g.id === groupId);
+        if (targetGroupIndex !== -1) {
+          updatedGroups[targetGroupIndex] = {
+            ...updatedGroups[targetGroupIndex],
+            pageIndices: [...updatedGroups[targetGroupIndex].pageIndices, pageIndex],
+            modifiedAt: Date.now()
+          };
         }
-      });
+      }
+      
+      onPageGroupsChange(updatedGroups);
     }
-    onPageGroupsChange(pageGrouping.groups);
-  }, [pageGrouping, onPageGroupsChange]);
+  }, [pageGroups, onPageGroupsChange, onPageGroupChange]);
 
   // Card numbers not available until extraction settings are configured
   // const cardsPerPage = gridSettings.rows * gridSettings.columns;
@@ -217,10 +251,16 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Update drag state when pages array changes
   useEffect(() => {
-    setDragState(prev => ({
-      ...prev,
-      pageOrder: createInitialPageOrder(pages.length)
-    }));
+    setDragState(prev => {
+      // Only update if the length actually changed
+      if (prev.pageOrder.length !== pages.length) {
+        return {
+          ...prev,
+          pageOrder: createInitialPageOrder(pages.length)
+        };
+      }
+      return prev;
+    });
   }, [pages.length]);
 
   // Drag state tracking is working correctly - debug logs removed
@@ -240,7 +280,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     [pages.length] // pages.length dependency is correctly included; throttleDragEvents dependencies are handled internally
   );
 
-  // Handle start of drag operation
+  // Handle start of drag operation for reordering within group
   const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent) => {
     event.preventDefault();
     setDragState(currentDragState => {
@@ -248,20 +288,93 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       return newState;
     });
   }, []); // No dependencies - use functional state update
+  
+  // Handle HTML5 drag start for inter-group operations
+  const handleHTML5DragStart = useCallback((pageIndex: number, event: React.DragEvent) => {
+    if (onInterGroupDragStart) {
+      // Prevent mouse drag events from interfering
+      event.stopPropagation();
+      
+      // Set comprehensive drag data for HTML5 drag and drop
+      const page = pages[pageIndex];
+      const dragData = {
+        localIndex: pageIndex,
+        page: page,
+        sourceGroupId: currentGroupId || 'default',
+        timestamp: Date.now()
+      };
+      
+      // Set multiple data formats for compatibility
+      event.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+      event.dataTransfer.setData('application/json', JSON.stringify(dragData));
+      event.dataTransfer.setData('text/x-page-index', pageIndex.toString());
+      event.dataTransfer.effectAllowed = 'move';
+      
+      // Create a custom drag image with page info
+      if (page) {
+        const dragPreview = document.createElement('div');
+        dragPreview.className = 'bg-blue-100 border border-blue-300 rounded-md p-3 text-sm text-blue-800 shadow-lg max-w-xs';
+        dragPreview.innerHTML = `
+          <div class="flex items-center space-x-2">
+            <div class="w-4 h-4 bg-blue-500 rounded-full flex-shrink-0"></div>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium truncate">${page.fileName}</div>
+              <div class="text-xs text-blue-600">Page ${page.originalPageIndex + 1} • ${page.fileType.toUpperCase()}</div>
+            </div>
+          </div>
+        `;
+        dragPreview.style.position = 'absolute';
+        dragPreview.style.top = '-1000px';
+        dragPreview.style.left = '-1000px';
+        dragPreview.style.zIndex = '1000';
+        dragPreview.style.pointerEvents = 'none';
+        document.body.appendChild(dragPreview);
+        
+        try {
+          event.dataTransfer.setDragImage(dragPreview, 80, 30);
+        } catch (e) {
+          console.warn('Failed to set drag image:', e);
+        }
+        
+        // Clean up the drag preview after a short delay
+        setTimeout(() => {
+          if (document.body.contains(dragPreview)) {
+            document.body.removeChild(dragPreview);
+          }
+        }, 150);
+      }
+      
+      // Start inter-group drag tracking
+      onInterGroupDragStart(pageIndex);
+    }
+  }, [onInterGroupDragStart, pages, currentGroupId]);
+  
+  // Handle HTML5 drag end for inter-group operations
+  const handleHTML5DragEnd = useCallback(() => {
+    if (onInterGroupDragEnd) {
+      onInterGroupDragEnd();
+    }
+  }, [onInterGroupDragEnd]);
 
-  // Handle end of drag operation
+  // Handle end of drag operation for reordering within group
   const handleDragEndForTable = useCallback(() => {
     setDragState(currentDragState => {
       const result = handleDragEnd(currentDragState);
       
       if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null) {
-        const reorderedPages = reorderPages(pages, result.fromIndex, result.toIndex);
-        onPagesReorder(reorderedPages);
+        // Use a ref to access current pages to avoid dependency issues
+        const currentPages = pages;
+        const reorderedPages = reorderPages(currentPages, result.fromIndex, result.toIndex);
+        
+        // Schedule the reorder callback to run after state update is complete
+        setTimeout(() => {
+          onPagesReorder(reorderedPages);
+        }, 0);
       }
       
       return result.newState;
     });
-  }, [pages, onPagesReorder]); // Keep pages and onPagesReorder as dependencies
+  }, []); // Remove dependencies to prevent infinite recreation
 
   // Set up global mouse/touch event listeners during drag
   useEffect(() => {
@@ -302,22 +415,28 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       () => {
         // Move up
         if (pageIndex > 0) {
-          const reorderedPages = reorderPages(pages, pageIndex, pageIndex - 1);
-          onPagesReorder(reorderedPages);
+          const currentPages = pages;
+          const reorderedPages = reorderPages(currentPages, pageIndex, pageIndex - 1);
+          setTimeout(() => {
+            onPagesReorder(reorderedPages);
+          }, 0);
         }
       },
       () => {
         // Move down
-        if (pageIndex < pages.length - 1) {
-          const reorderedPages = reorderPages(pages, pageIndex, pageIndex + 1);
-          onPagesReorder(reorderedPages);
+        const currentPages = pages;
+        if (pageIndex < currentPages.length - 1) {
+          const reorderedPages = reorderPages(currentPages, pageIndex, pageIndex + 1);
+          setTimeout(() => {
+            onPagesReorder(reorderedPages);
+          }, 0);
         }
       },
       () => {
         // Confirm position (no action needed for this implementation)
       }
     );
-  }, [pages, onPagesReorder]);
+  }, []); // Remove dependencies to prevent infinite recreation
 
   // Handle card type change (front/back)
   const handleCardTypeChange = useCallback((pageIndex: number, type: string) => {
@@ -486,22 +605,25 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   }
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-medium text-gray-800">
-          Page Management & Reordering
-        </h3>
-        {onResetToImportOrder && pages.length > 1 && isPagesReordered && (
-          <button
-            onClick={onResetToImportOrder}
-            className="inline-flex items-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 border border-gray-300 transition-colors"
-            title="Reset page order to original import order"
-          >
-            <RotateCcwIcon size={12} className="mr-1" />
-            Reset to Import Order
-          </button>
-        )}
-      </div>
+    <div className={currentGroupId ? "" : "mt-6"}>
+      {/* Only show header when not in group-specific mode */}
+      {!currentGroupId && (
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-medium text-gray-800">
+            Page Management & Reordering
+          </h3>
+          {onResetToImportOrder && pages.length > 1 && isPagesReordered && (
+            <button
+              onClick={onResetToImportOrder}
+              className="inline-flex items-center px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 border border-gray-300 transition-colors"
+              title="Reset page order to original import order"
+            >
+              <RotateCcwIcon size={12} className="mr-1" />
+              Reset to Import Order
+            </button>
+          )}
+        </div>
+      )}
       
       {/* Batch Operations Toolbar */}
       {pageSelection.selectionState.hasSelection && (
@@ -554,13 +676,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                 Source
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Page Type
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Group
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Type
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Skip
@@ -581,19 +697,51 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                   key={`${page.fileName}-${page.originalPageIndex}-${index}`}
                   className={`
                     transition-opacity duration-200
-                    ${isDraggedItem ? 'opacity-50' : 'opacity-100'}
+                    ${
+                      isDraggedItem || (draggedPageInfo && draggedPageInfo.localIndex === index)
+                        ? 'opacity-50' 
+                        : 'opacity-100'
+                    }
                     ${dragState.hoverIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'}
                   `}
                 >
                   {/* Drag handle */}
                   <td className="px-3 py-4 whitespace-nowrap">
                     <div
-                      className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 transition-colors"
-                      onMouseDown={(e) => handleDragStartForPage(index, e)}
-                      onTouchStart={(e) => handleDragStartForPage(index, e)}
+                      className={`
+                        cursor-grab active:cursor-grabbing transition-colors select-none
+                        ${
+                          onInterGroupDragStart
+                            ? 'text-blue-500 hover:text-blue-700'
+                            : 'text-gray-400 hover:text-gray-600'
+                        }
+                      `}
+                      draggable={!!onInterGroupDragStart}
+                      onMouseDown={(e) => {
+                        // Only handle mouse events for intra-group reordering if HTML5 drag is not enabled
+                        if (!onInterGroupDragStart) {
+                          handleDragStartForPage(index, e);
+                        }
+                      }}
+                      onTouchStart={(e) => {
+                        // Touch events always work for intra-group reordering
+                        handleDragStartForPage(index, e);
+                      }}
+                      onDragStart={(e) => {
+                        // HTML5 drag only works when inter-group drag is enabled
+                        if (onInterGroupDragStart) {
+                          handleHTML5DragStart(index, e);
+                        } else {
+                          e.preventDefault(); // Prevent default HTML5 drag when not needed
+                        }
+                      }}
+                      onDragEnd={handleHTML5DragEnd}
                       tabIndex={0}
                       onKeyDown={(e) => keyboardHandlers.handleKeyDown(e.nativeEvent)}
-                      title="Drag to reorder pages, or use arrow keys"
+                      title={onInterGroupDragStart 
+                        ? "Hold and drag to move between groups, or use mouse drag for reordering within group"
+                        : "Drag to reorder pages, or use arrow keys"
+                      }
                     >
                       <GripVertical size={16} />
                     </div>
@@ -647,39 +795,23 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Page Type dropdown (card/rule/skip) */}
-                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                    <select
-                      value={page.pageType || 'card'}
-                      onChange={(e) => handlePageTypeChange(index, e.target.value)}
-                      className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      disabled={disabled}
-                    >
-                      {Object.entries(pageTypeSettings).map(([type, settings]) => (
-                        <option key={type} value={type}>
-                          {settings.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
-
                   {/* Group assignment */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center space-x-2">
                       <select
-                        value={pageGrouping.getPageGroup(index)?.id || ''}
-                        onChange={(e) => handleGroupAssignment(index, e.target.value || null)}
+                        value={currentGroupId || pageGroups.find(g => g.pageIndices.includes(index))?.id || 'default'}
+                        onChange={(e) => handleGroupAssignment(index, e.target.value === 'default' ? null : e.target.value)}
                         className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         disabled={disabled}
                       >
-                        <option value="">No Group</option>
-                        {pageGrouping.groups.map((group) => (
+                        <option value="default">Default Group</option>
+                        {pageGroups.filter(g => g.id !== 'default').map((group) => (
                           <option key={group.id} value={group.id}>
                             {group.name}
                           </option>
                         ))}
                       </select>
-                      {pageGrouping.groups.length === 0 && (
+                      {pageGroups.length === 0 && (
                         <button
                           onClick={() => setShowGroupModal(true)}
                           className="p-1 text-gray-400 hover:text-indigo-600"
@@ -690,26 +822,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                         </button>
                       )}
                     </div>
-                  </td>
-
-                  {/* Page type (front/back) */}
-                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                    {pdfMode.type === 'duplex' && !page?.skip ? (
-                      <select 
-                        value={page?.type || 'front'} 
-                        onChange={e => handleCardTypeChange(index, e.target.value)} 
-                        className="border border-gray-300 rounded px-2 py-1 text-sm"
-                      >
-                        <option value="front">Front</option>
-                        <option value="back">Back</option>
-                      </select>
-                    ) : pdfMode.type === 'gutter-fold' && !page?.skip ? (
-                      <span className="text-gray-600">Front & Back</span>
-                    ) : page?.skip ? (
-                      <span className="text-gray-400 italic">Skipped</span>
-                    ) : (
-                      <span className="text-gray-600">Front</span>
-                    )}
                   </td>
 
                   {/* Skip checkbox */}
@@ -775,7 +887,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
           {' '}{pages.filter(p => p.skip).length} skipped
         </p>
         <p className="text-xs text-gray-500 mt-1">
-          Drag pages to reorder them. Card numbering will be calculated during extraction.
+          {onInterGroupDragStart 
+            ? "Mouse drag to reorder within group. HTML5 drag (drag handle) to move between groups."
+            : "Drag pages to reorder them. Card numbering will be calculated during extraction."
+          }
         </p>
       </div>
 

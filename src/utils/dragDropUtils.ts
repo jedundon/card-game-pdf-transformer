@@ -71,8 +71,8 @@ export function calculateDropPosition(
       }
     }
     
-    // If cursor is below all rows, drop at the end
-    return rows.length;
+    // If cursor is below all rows, drop at the end (insert after last item)
+    return Math.min(rows.length, maxItems);
   } else {
     // Fallback to calculation using item height
     const dropIndex = Math.floor(relativeY / itemHeight);

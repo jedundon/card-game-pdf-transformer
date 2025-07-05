@@ -176,6 +176,8 @@ export const usePageGrouping = (
       name: name.trim(),
       pageIndices: [...pageIndices],
       type,
+      order: groups.length, // Add to end of current groups
+      processingMode: { type: 'simplex' }, // Default processing mode
       color: color || getNextColor(),
       createdAt: Date.now(),
       modifiedAt: Date.now()
@@ -252,14 +254,25 @@ export const usePageGrouping = (
     });
 
     let colorIndex = 0;
+    let orderIndex = groups.length;
     fileGroups.forEach((pageIndices, fileName) => {
       if (pageIndices.length > 1) {
-        createGroup(
+        const groupId = createGroup(
           `File: ${fileName}`,
           pageIndices,
           DEFAULT_GROUP_COLORS[colorIndex % DEFAULT_GROUP_COLORS.length],
           'auto'
         );
+        
+        // Update the order for auto-created groups
+        if (groupId) {
+          setGroups(prev => prev.map(group => 
+            group.id === groupId 
+              ? { ...group, order: orderIndex }
+              : group
+          ));
+          orderIndex++;
+        }
         colorIndex++;
       }
     });
@@ -282,15 +295,26 @@ export const usePageGrouping = (
       typeGroups.get(pageType)!.push(index);
     });
 
+    let orderIndex = groups.length;
     typeGroups.forEach((pageIndices, pageType) => {
       if (pageIndices.length > 1) {
         const typeSettings = pageTypeSettings[pageType];
-        createGroup(
+        const groupId = createGroup(
           `${typeSettings?.displayName || pageType} Pages`,
           pageIndices,
           typeSettings?.colorScheme.primary || DEFAULT_GROUP_COLORS[0],
           'auto'
         );
+        
+        // Update the order for auto-created groups
+        if (groupId) {
+          setGroups(prev => prev.map(group => 
+            group.id === groupId 
+              ? { ...group, order: orderIndex }
+              : group
+          ));
+          orderIndex++;
+        }
       }
     });
   }, [createGroup]);
@@ -310,12 +334,29 @@ export const usePageGrouping = (
       }
     });
 
+    let orderIndex = groups.length;
+    
     if (frontPages.length > 1) {
-      createGroup('Front Pages', frontPages, '#3b82f6', 'auto');
+      const frontGroupId = createGroup('Front Pages', frontPages, '#3b82f6', 'auto');
+      if (frontGroupId) {
+        setGroups(prev => prev.map(group => 
+          group.id === frontGroupId 
+            ? { ...group, order: orderIndex }
+            : group
+        ));
+        orderIndex++;
+      }
     }
     
     if (backPages.length > 1) {
-      createGroup('Back Pages', backPages, '#10b981', 'auto');
+      const backGroupId = createGroup('Back Pages', backPages, '#10b981', 'auto');
+      if (backGroupId) {
+        setGroups(prev => prev.map(group => 
+          group.id === backGroupId 
+            ? { ...group, order: orderIndex }
+            : group
+        ));
+      }
     }
   }, [createGroup]);
 

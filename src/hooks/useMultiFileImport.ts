@@ -31,7 +31,9 @@ import {
   PageSettings, 
   PageSource, 
   PdfData,
-  ImageFileData
+  ImageFileData,
+  PageGroup,
+  PageTypeSettings
 } from '../types';
 import { 
   isValidImageFile, 
@@ -98,6 +100,10 @@ interface UseMultiFileImportReturn {
   getPdfData: (fileName: string) => PdfData | null;
   /** Get all PDF data */
   getAllPdfData: () => Map<string, PdfData>;
+  /** Update page groups */
+  updatePageGroups: (groups: PageGroup[]) => void;
+  /** Update page type settings */
+  updatePageTypeSettings: (settings: Record<string, PageTypeSettings>) => void;
 }
 
 /**
@@ -831,6 +837,26 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     return new Map(pdfDataStore);
   }, [pdfDataStore]);
 
+  /**
+   * Update page groups
+   */
+  const updatePageGroups = useCallback((groups: PageGroup[]) => {
+    setMultiFileState(prev => ({
+      ...prev,
+      pageGroups: groups
+    }));
+  }, []);
+
+  /**
+   * Update page type settings
+   */
+  const updatePageTypeSettings = useCallback((settings: Record<string, PageTypeSettings>) => {
+    setMultiFileState(prev => ({
+      ...prev,
+      pageTypeSettings: settings
+    }));
+  }, []);
+
 
   return {
     multiFileState,
@@ -851,6 +877,8 @@ export const useMultiFileImport = (): UseMultiFileImportReturn => {
     getImageData,
     getAllImageData,
     getPdfData,
-    getAllPdfData
+    getAllPdfData,
+    updatePageGroups,
+    updatePageTypeSettings
   };
 };

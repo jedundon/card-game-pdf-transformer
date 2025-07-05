@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // import { getDefaultGrid } from '../defaults';
 // import { LastImportedFileInfo } from '../utils/localStorageUtils';
 import { renderPageThumbnail } from '../utils/cardUtils';
-import { PageReorderTable } from './PageReorderTable';
+import { PageGroupsManager } from './PageGroupsManager';
 import { FileManagerPanel } from './FileManagerPanel';
 import { /* isValidImageFile, */ createImageThumbnail } from '../utils/imageUtils';
 import { TIMEOUT_CONSTANTS, PERFORMANCE_CONSTANTS } from '../constants';
@@ -13,7 +13,6 @@ import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationD
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
 import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
-import { ProcessingModeSelector } from './ImportStep/ProcessingModeSelector';
 import { FileUploadDropZone } from './ImportStep/FileUploadDropZone';
 
 // Configure PDF.js worker for Vite
@@ -161,9 +160,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         
       const immediateLoadCount = Math.min(maxConcurrent, totalPages);
       
-      // Load first batch immediately
+      // Load first batch immediately (async to prevent blocking render)
       for (let i = 0; i < immediateLoadCount; i++) {
-        loadThumbnail(i);
+        setTimeout(() => loadThumbnail(i), 0);
       }
       
       // Load remaining thumbnails in controlled batches for large PDFs
@@ -258,13 +257,13 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         
       const immediateLoadCount = Math.min(maxConcurrent, totalPages);
       
-      // Load first batch immediately
+      // Load first batch immediately (async to prevent blocking render)
       for (let i = 0; i < immediateLoadCount; i++) {
         const page = pages[i];
         if (page.fileType === 'image') {
-          loadImageThumbnail(i, page.fileName);
+          setTimeout(() => loadImageThumbnail(i, page.fileName), 0);
         } else if (page.fileType === 'pdf') {
-          loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName);
+          setTimeout(() => loadPdfThumbnailForPage(i, page.originalPageIndex + 1, page.fileName), 0);
         }
       }
       
@@ -451,17 +450,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         onResetToDefaults={onResetToDefaults}
         onTriggerImportSettings={onTriggerImportSettings}
       />
-      {/* PDF Mode Configuration - Show for any imported files */}
-      <ProcessingModeSelector
-        pdfMode={pdfMode}
-        onModeSelect={onModeSelect}
-        hasFiles={pdfData !== null || multiFileImport.multiFileState.pages.length > 0}
-      />
-
-      
-      {/* Page Reordering Table - Show for any imported content */}
+      {/* Page Groups Manager - Show for any imported content */}
       {((pdfData && pageSettings.length > 0) || multiFileImport.multiFileState.pages.length > 0) && (
-              <PageReorderTable
+              <PageGroupsManager
                 pages={multiFileImport.multiFileState.pages.length > 0
                   ? multiFileImport.multiFileState.pages.map((page: any, index: number) => ({
                       ...page,
@@ -647,6 +638,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                     onPageSettingsChange(corePageSettings);
                   }
                 }}
+                onGlobalPdfModeChange={onModeSelect}
               />
           )}
 

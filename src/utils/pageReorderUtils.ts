@@ -48,7 +48,9 @@ export function reorderPages<T extends PageSettings & PageSource>(
   toIndex: number
 ): T[] {
   // Validate indices
-  if (fromIndex < 0 || fromIndex >= pages.length || toIndex < 0 || toIndex >= pages.length) {
+  // fromIndex must be within array bounds
+  // toIndex can be equal to pages.length for "insert at end" operations
+  if (fromIndex < 0 || fromIndex >= pages.length || toIndex < 0 || toIndex > pages.length) {
     throw new Error(`Invalid reorder indices: ${fromIndex} to ${toIndex} (pages length: ${pages.length})`);
   }
   
