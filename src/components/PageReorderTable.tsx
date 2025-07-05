@@ -301,11 +301,14 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                 }, 0);
               }
               
-              // Keep drag active but disable visual feedback (no hoverIndex)
-              // This maintains the event chain for drop detection
+              // CRITICAL FIX: Clear dragIndex to prevent wrong row from being gray
+              // When entering inter-group mode, we must clear local visual state
+              // to prevent stale dragIndex from affecting pages after array updates
               return {
                 ...currentDragState,
-                hoverIndex: null  // Remove drop line, but keep isDragging: true
+                dragIndex: null,   // Clear local drag index to prevent gray row issues
+                hoverIndex: null,  // Remove drop line
+                isDragging: false  // Clear local dragging state since inter-group takes over
               };
             }
             
@@ -792,21 +795,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                 isDraggingBetweenGroups && // Only show gray when actually dragging between groups
                 dragState.isDragging; // AND only when local drag state is also active
               
-              // DEBUGGING: Log when a page is grayed out to understand the issue
-              if (isDraggedItem || isValidDraggedPage) {
-                console.log(`🔍 Gray row debug - Page ${index + 1}:`, {
-                  isDraggedItem,
-                  isValidDraggedPage,
-                  dragState: {
-                    dragIndex: dragState.dragIndex,
-                    isDragging: dragState.isDragging
-                  },
-                  draggedPageInfo,
-                  isDraggingBetweenGroups,
-                  pageFileName: page.fileName,
-                  pageOriginalIndex: page.originalPageIndex
-                });
-              }
               
               return (
                 <tr 

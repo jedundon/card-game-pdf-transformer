@@ -409,19 +409,11 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     // Force immediate synchronous clearing of drag state to prevent stale state
     // flushSync ensures this state update happens in its own render cycle
     // BEFORE handlePageGroupChange triggers page array updates
-    console.log(`🧹 BEFORE clearing drag state:`, {
-      draggedPageInfo: currentDraggedPageInfo,
-      isDraggingBetweenGroups,
-      dragOverGroupId: currentDragOverGroupId
-    });
-    
     flushSync(() => {
       setDraggedPageInfo(null);
       setIsDraggingBetweenGroups(false);
       setDragOverGroupId(null);
     });
-    
-    console.log(`✅ AFTER clearing drag state - about to call handlePageGroupChange`);
     
     // Then perform the page move operation with saved values
     // At this point, all PageReorderTable components have received draggedPageInfo: null
