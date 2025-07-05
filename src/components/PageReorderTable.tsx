@@ -294,9 +294,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
             if (isOutsideBounds && !hasExitedTableBounds) {
               setHasExitedTableBounds(true);
               
-              // Cancel current custom drag and trigger inter-group mode
+              // Schedule inter-group mode trigger after render completes
               if (onInterGroupDragStart && currentDragState.dragIndex !== null) {
-                onInterGroupDragStart(currentDragState.dragIndex);
+                setTimeout(() => {
+                  onInterGroupDragStart(currentDragState.dragIndex);
+                }, 0);
               }
               
               // Reset custom drag state but keep the page index for reference
