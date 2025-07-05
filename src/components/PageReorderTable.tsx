@@ -6,7 +6,7 @@
  * page settings table in the ImportStep for multi-file workflows.
  * 
  * **Key Features:**
- * - Dual drag-and-drop system: mouse drag for intra-group reordering, HTML5 drag for inter-group movement
+ * - Boundary-based drag detection: drag within table for reordering, drag outside for inter-group movement
  * - Real-time visual feedback with drop lines and group highlighting
  * - File source tracking and display
  * - Enhanced thumbnails with hover previews
@@ -143,6 +143,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   // Ref for the table container
   const tableRef = useRef<HTMLTableSectionElement>(null);
   
+  // Track when drag has exited table boundaries (for inter-group detection)
+  const [hasExitedTableBounds, setHasExitedTableBounds] = useState<boolean>(false);
+  
   // Row height for drop position calculations
   const ROW_HEIGHT = 64; // Approximate height of table rows in pixels
 
@@ -265,34 +268,77 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Drag state tracking is working correctly - debug logs removed
 
-  // Throttled drag over handler for performance
+  // Throttled drag over handler with boundary detection
   const throttledDragOver = useCallback(
     throttleDragEvents((event: MouseEvent | TouchEvent) => {
       setDragState(currentDragState => {
         if (!tableRef.current || !currentDragState.isDragging) return currentDragState;
         
-        const newState = handleDragOver(event, tableRef.current, ROW_HEIGHT, currentDragState, pages.length);
-        // Drag over tracking is working correctly
-        return newState;
+        // Check if mouse has moved outside table boundaries
+        if (onInterGroupDragStart) {
+          const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+          const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+          
+          // Get the table container bounds (use the table element, not just tbody)
+          const table = tableRef.current.closest('table');
+          if (table) {
+            const tableBounds = table.getBoundingClientRect();
+            const isOutsideBounds = (
+              clientX < tableBounds.left ||
+              clientX > tableBounds.right ||
+              clientY < tableBounds.top ||
+              clientY > tableBounds.bottom
+            );
+            
+            // If mouse moved outside table and we haven't detected this yet
+            if (isOutsideBounds && !hasExitedTableBounds) {
+              setHasExitedTableBounds(true);
+              
+              // Cancel current custom drag and trigger inter-group mode
+              if (onInterGroupDragStart && currentDragState.dragIndex !== null) {
+                onInterGroupDragStart(currentDragState.dragIndex);
+              }
+              
+              // Reset custom drag state but keep the page index for reference
+              return {
+                ...currentDragState,
+                isDragging: false,
+                hoverIndex: null
+              };
+            }
+            
+            // If back inside bounds, ensure we're in intra-group mode
+            if (!isOutsideBounds && hasExitedTableBounds) {
+              setHasExitedTableBounds(false);
+            }
+          }
+        }
+        
+        // Continue with normal intra-group drag if we haven't exited bounds
+        if (!hasExitedTableBounds) {
+          const newState = handleDragOver(event, tableRef.current, ROW_HEIGHT, currentDragState, pages.length);
+          return newState;
+        }
+        
+        return currentDragState;
       });
     }, 16),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pages.length] // pages.length dependency is correctly included; throttleDragEvents dependencies are handled internally
+    [pages.length, onInterGroupDragStart, hasExitedTableBounds] // Added dependencies for boundary detection
   );
 
   // Handle start of drag operation for reordering within group
-  const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent, forceStart = false) => {
-    // Only prevent default if we're definitely starting custom drag
-    // This allows HTML5 drag to work when forceStart is false
-    if (forceStart || !onInterGroupDragStart) {
-      event.preventDefault();
-    }
+  const handleDragStartForPage = useCallback((pageIndex: number, event: React.MouseEvent | React.TouchEvent) => {
+    event.preventDefault();
+    
+    // Reset boundary detection state for new drag
+    setHasExitedTableBounds(false);
     
     setDragState(currentDragState => {
       const newState = handleDragStart(event.nativeEvent, pageIndex, currentDragState);
       return newState;
     });
-  }, [onInterGroupDragStart]);
+  }, []);
   
   // Handle HTML5 drag start for inter-group operations
   const handleHTML5DragStart = useCallback((pageIndex: number, event: React.DragEvent) => {
@@ -363,6 +409,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle end of drag operation for reordering within group
   const handleDragEndForTable = useCallback(() => {
+    // Reset boundary detection state
+    setHasExitedTableBounds(false);
+    
     setDragState(currentDragState => {
       const result = handleDragEnd(currentDragState);
       
@@ -723,45 +772,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       `}
                       draggable={!!onInterGroupDragStart}
                       onMouseDown={(e) => {
-                        if (onInterGroupDragStart) {
-                          // In inter-group mode, use a mouse movement threshold to detect intent
-                          const startX = e.clientX;
-                          const startY = e.clientY;
-                          const startTime = Date.now();
-                          let hasMoved = false;
-                          
-                          const handleMouseMove = (moveEvent: MouseEvent) => {
-                            const deltaX = Math.abs(moveEvent.clientX - startX);
-                            const deltaY = Math.abs(moveEvent.clientY - startY);
-                            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-                            
-                            // If mouse moved more than 5 pixels, start custom drag
-                            if (distance > 5 && !hasMoved && !isDraggingBetweenGroups) {
-                              hasMoved = true;
-                              cleanup();
-                              handleDragStartForPage(index, e, true);
-                            }
-                          };
-                          
-                          const handleMouseUp = () => {
-                            cleanup();
-                          };
-                          
-                          const cleanup = () => {
-                            document.removeEventListener('mousemove', handleMouseMove);
-                            document.removeEventListener('mouseup', handleMouseUp);
-                          };
-                          
-                          document.addEventListener('mousemove', handleMouseMove);
-                          document.addEventListener('mouseup', handleMouseUp);
-                        } else {
-                          // No inter-group drag available, safe to start custom drag immediately
-                          handleDragStartForPage(index, e, true);
-                        }
+                        // Always start with intra-group drag, boundary detection will handle switching
+                        handleDragStartForPage(index, e);
                       }}
                       onTouchStart={(e) => {
                         // Touch events always work for intra-group reordering
-                        handleDragStartForPage(index, e, true);
+                        handleDragStartForPage(index, e);
                       }}
                       onDragStart={(e) => {
                         // HTML5 drag only works when inter-group drag is enabled
@@ -777,7 +793,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       tabIndex={0}
                       onKeyDown={(e) => keyboardHandlers.handleKeyDown(e.nativeEvent)}
                       title={onInterGroupDragStart 
-                        ? "Mouse drag: reorder within group • HTML5 drag: move between groups • Arrow keys: reorder"
+                        ? "Drag within table: reorder pages • Drag outside table: move to other groups • Arrow keys: precise positioning"
                         : "Drag to reorder pages, or use arrow keys"
                       }
                     >
@@ -926,7 +942,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
         </p>
         <p className="text-xs text-gray-500 mt-1">
           {onInterGroupDragStart 
-            ? "Mouse drag: reorder pages within this group. HTML5 drag: hold and drag to move pages between groups. Use arrow buttons or keyboard for precise positioning."
+            ? "Drag within table: reorder pages in this group. Drag outside table boundaries: move pages to other groups. Use arrow buttons for precise positioning."
             : "Drag pages to reorder them. Card numbering will be calculated during extraction."
           }
         </p>
