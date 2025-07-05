@@ -379,7 +379,7 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
   }, []);
 
   // Utility function to refresh thumbnails after a group change
-  const refreshThumbnailsAfterGroupChange = useCallback((movedPageIndex: number) => {
+  const refreshThumbnailsAfterGroupChange = useCallback((movedPageIndex: number, sourceGroupId: string, targetGroupId: string | null) => {
     // Only proceed if component is mounted and we have thumbnail update callbacks
     if (!isMountedRef.current || !onThumbnailsUpdate || !onThumbnailLoadingUpdate || !onThumbnailErrorsUpdate) {
       return;
@@ -399,38 +399,31 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
         return;
       }
 
-      // Get current thumbnail state at time of execution to avoid stale closures
-      const currentThumbnails = thumbnails;
-      const currentThumbnailLoading = thumbnailLoading;
-      const currentThumbnailErrors = thumbnailErrors;
+      // SIMPLIFIED FIX: Clear all thumbnails and trigger a complete refresh
+      // The core issue is that when pages move between groups, array indices change and thumbnails become misaligned
+      // Rather than trying to preserve old thumbnails (which may be wrong), it's safer to reload all thumbnails
+      
+      console.log(`Refreshing thumbnails after page move - globalPageIndex: ${movedPageIndex}, sourceGroup: ${sourceGroupId}, targetGroup: ${targetGroupId}`);
+      
+      // Clear all thumbnail states to force a complete refresh
+      onThumbnailsUpdate({});
+      onThumbnailLoadingUpdate({});
+      onThumbnailErrorsUpdate({});
 
-      // Create copies of current thumbnail states
-      const newThumbnails = { ...currentThumbnails };
-      const newThumbnailLoading = { ...currentThumbnailLoading };
-      const newThumbnailErrors = { ...currentThumbnailErrors };
-
-      // Clear thumbnail state for the moved page to force a reload
-      // This ensures the correct thumbnail appears in the new group
-      delete newThumbnails[movedPageIndex];
-      delete newThumbnailLoading[movedPageIndex];
-      delete newThumbnailErrors[movedPageIndex];
-
-      // Update thumbnail states
-      onThumbnailsUpdate(newThumbnails);
-      onThumbnailLoadingUpdate(newThumbnailLoading);
-      onThumbnailErrorsUpdate(newThumbnailErrors);
-
-      // Trigger thumbnail reload for the moved page after state updates complete
+      // Trigger reload for all pages after clearing thumbnails
       setTimeout(() => {
-        if (isMountedRef.current) { // Final check before thumbnail load
-          onThumbnailLoad(movedPageIndex);
+        if (isMountedRef.current) {
+          pages.forEach((page, pageIndex) => {
+            // Since we cleared all thumbnails, reload all pages
+            onThumbnailLoad(pageIndex);
+          });
         }
       }, 10);
       
       // Clear the timeout ref
       thumbnailRefreshTimeoutRef.current = null;
     }, 100); // Debounce to 100ms to handle rapid operations
-  }, [onThumbnailsUpdate, onThumbnailLoadingUpdate, onThumbnailErrorsUpdate, onThumbnailLoad]); // Remove problematic state dependencies
+  }, [pages, onThumbnailsUpdate, onThumbnailLoadingUpdate, onThumbnailErrorsUpdate, onThumbnailLoad]); // Include pages for rebuild logic
 
   // Update group processing mode
   const handleGroupProcessingModeChange = useCallback((groupId: string, processingMode: PdfMode) => {
@@ -479,8 +472,8 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
 
     onPageGroupsChange(updatedGroups);
     
-    // Refresh thumbnail for the moved page to ensure it displays correctly
-    refreshThumbnailsAfterGroupChange(globalPageIndex);
+    // Refresh thumbnail mappings for all affected pages to ensure they display correctly
+    refreshThumbnailsAfterGroupChange(globalPageIndex, sourceGroupId, targetGroupId);
   }, [pageGroups, onPageGroupsChange, sortedGroupsWithDefault, getPagesForGroup, refreshThumbnailsAfterGroupChange]);
 
   // Handle page reordering within a group (with proper index mapping)
