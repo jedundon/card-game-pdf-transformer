@@ -203,15 +203,12 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     const newGroupName = generateUniqueGroupName();
     
     // Insert new groups at the top for immediate user feedback (GitHub Issue #77)
-    // Find the minimum order among non-default groups to place new group at top
-    const nonDefaultGroups = sortedGroupsWithDefault.filter(g => g.id !== DEFAULT_GROUP_ID);
-    const minNonDefaultOrder = nonDefaultGroups.length > 0 
-      ? Math.min(...nonDefaultGroups.map(g => g.order))
-      : 1; // If no non-default groups exist, start at order 1 (after default group at 0)
+    // Find the minimum order among ALL groups (including Default) to place new group at very top
+    const minOrder = sortedGroupsWithDefault.length > 0
+      ? Math.min(...sortedGroupsWithDefault.map(g => g.order))
+      : 0; // If no groups exist, start at order 0
     
-    const newGroupOrder = nonDefaultGroups.length > 0 
-      ? minNonDefaultOrder - 1  // Place before the current first non-default group
-      : 1; // First non-default group gets order 1
+    const newGroupOrder = minOrder - 1; // Place before the current first group (including Default)
     
     // Create new group object directly
     const newGroup: PageGroup = {
