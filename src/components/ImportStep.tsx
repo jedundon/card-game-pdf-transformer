@@ -592,6 +592,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                 thumbnails={thumbnails}
                 thumbnailLoading={thumbnailLoading}
                 thumbnailErrors={thumbnailErrors}
+                onThumbnailsUpdate={setThumbnails}
+                onThumbnailLoadingUpdate={setThumbnailLoading}
+                onThumbnailErrorsUpdate={setThumbnailErrors}
                 onThumbnailLoad={(pageIndex) => {
                   // Load thumbnail based on file type
                   if (multiFileImport.multiFileState.pages.length > 0) {

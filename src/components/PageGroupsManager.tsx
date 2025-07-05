@@ -53,6 +53,10 @@ interface PageGroupsManagerProps {
   thumbnailErrors: Record<number, boolean>;
   /** Callback to load a thumbnail for a specific page */
   onThumbnailLoad: (pageIndex: number) => void;
+  /** Thumbnail state setters for handling group changes */
+  onThumbnailsUpdate?: (thumbnails: Record<number, string>) => void;
+  onThumbnailLoadingUpdate?: (loading: Record<number, boolean>) => void;
+  onThumbnailErrorsUpdate?: (errors: Record<number, boolean>) => void;
   /** Page type settings for dropdowns and auto-detection */
   pageTypeSettings: Record<string, PageTypeSettings>;
   /** Page groups for group assignment */
@@ -86,6 +90,9 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
   thumbnailLoading,
   thumbnailErrors,
   onThumbnailLoad,
+  onThumbnailsUpdate,
+  onThumbnailLoadingUpdate,
+  onThumbnailErrorsUpdate,
   pageTypeSettings,
   pageGroups,
   onPageGroupsChange,
@@ -238,7 +245,29 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
       const currentGroup = currentGroups[groupIndex];
       const previousGroup = currentGroups[groupIndex - 1];
       
-      const updatedGroups = pageGroups.map(group => {
+      // Start with existing pageGroups
+      let updatedGroups = [...pageGroups];
+      
+      // Handle the case where we need to add the default group to pageGroups
+      if (previousGroup.id === DEFAULT_GROUP_ID) {
+        // Add default group to pageGroups if it's not already there
+        const hasDefaultInPageGroups = pageGroups.some(g => g.id === DEFAULT_GROUP_ID);
+        if (!hasDefaultInPageGroups) {
+          updatedGroups.push(previousGroup);
+        }
+      }
+      
+      // Handle the case where we need to add the current group to pageGroups
+      if (currentGroup.id === DEFAULT_GROUP_ID) {
+        // Add default group to pageGroups if it's not already there
+        const hasDefaultInPageGroups = pageGroups.some(g => g.id === DEFAULT_GROUP_ID);
+        if (!hasDefaultInPageGroups) {
+          updatedGroups.push(currentGroup);
+        }
+      }
+      
+      // Now update the order values
+      updatedGroups = updatedGroups.map(group => {
         if (group.id === currentGroup.id) {
           return { ...group, order: previousGroup.order };
         } else if (group.id === previousGroup.id) {
@@ -261,7 +290,29 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
       const currentGroup = currentGroups[groupIndex];
       const nextGroup = currentGroups[groupIndex + 1];
       
-      const updatedGroups = pageGroups.map(group => {
+      // Start with existing pageGroups
+      let updatedGroups = [...pageGroups];
+      
+      // Handle the case where we need to add the default group to pageGroups
+      if (nextGroup.id === DEFAULT_GROUP_ID) {
+        // Add default group to pageGroups if it's not already there
+        const hasDefaultInPageGroups = pageGroups.some(g => g.id === DEFAULT_GROUP_ID);
+        if (!hasDefaultInPageGroups) {
+          updatedGroups.push(nextGroup);
+        }
+      }
+      
+      // Handle the case where we need to add the current group to pageGroups
+      if (currentGroup.id === DEFAULT_GROUP_ID) {
+        // Add default group to pageGroups if it's not already there
+        const hasDefaultInPageGroups = pageGroups.some(g => g.id === DEFAULT_GROUP_ID);
+        if (!hasDefaultInPageGroups) {
+          updatedGroups.push(currentGroup);
+        }
+      }
+      
+      // Now update the order values
+      updatedGroups = updatedGroups.map(group => {
         if (group.id === currentGroup.id) {
           return { ...group, order: nextGroup.order };
         } else if (group.id === nextGroup.id) {
@@ -311,6 +362,76 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     onPageGroupsChange(updatedGroups);
   }, [pageGroups, onPageGroupsChange]);
 
+  // Track timeout for thumbnail refresh to prevent accumulation
+  const thumbnailRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  // Cleanup timeout on unmount to prevent memory leaks
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (thumbnailRefreshTimeoutRef.current) {
+        clearTimeout(thumbnailRefreshTimeoutRef.current);
+        thumbnailRefreshTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // Utility function to refresh thumbnails after a group change
+  const refreshThumbnailsAfterGroupChange = useCallback((movedPageIndex: number) => {
+    // Only proceed if component is mounted and we have thumbnail update callbacks
+    if (!isMountedRef.current || !onThumbnailsUpdate || !onThumbnailLoadingUpdate || !onThumbnailErrorsUpdate) {
+      return;
+    }
+
+    // Clear any existing timeout to prevent accumulation
+    if (thumbnailRefreshTimeoutRef.current) {
+      clearTimeout(thumbnailRefreshTimeoutRef.current);
+      thumbnailRefreshTimeoutRef.current = null;
+    }
+
+    // Use a debounced approach to avoid race conditions during rapid operations
+    thumbnailRefreshTimeoutRef.current = setTimeout(() => {
+      // Double-check component is still mounted before proceeding
+      if (!isMountedRef.current) {
+        thumbnailRefreshTimeoutRef.current = null;
+        return;
+      }
+
+      // Get current thumbnail state at time of execution to avoid stale closures
+      const currentThumbnails = thumbnails;
+      const currentThumbnailLoading = thumbnailLoading;
+      const currentThumbnailErrors = thumbnailErrors;
+
+      // Create copies of current thumbnail states
+      const newThumbnails = { ...currentThumbnails };
+      const newThumbnailLoading = { ...currentThumbnailLoading };
+      const newThumbnailErrors = { ...currentThumbnailErrors };
+
+      // Clear thumbnail state for the moved page to force a reload
+      // This ensures the correct thumbnail appears in the new group
+      delete newThumbnails[movedPageIndex];
+      delete newThumbnailLoading[movedPageIndex];
+      delete newThumbnailErrors[movedPageIndex];
+
+      // Update thumbnail states
+      onThumbnailsUpdate(newThumbnails);
+      onThumbnailLoadingUpdate(newThumbnailLoading);
+      onThumbnailErrorsUpdate(newThumbnailErrors);
+
+      // Trigger thumbnail reload for the moved page after state updates complete
+      setTimeout(() => {
+        if (isMountedRef.current) { // Final check before thumbnail load
+          onThumbnailLoad(movedPageIndex);
+        }
+      }, 10);
+      
+      // Clear the timeout ref
+      thumbnailRefreshTimeoutRef.current = null;
+    }, 100); // Debounce to 100ms to handle rapid operations
+  }, [onThumbnailsUpdate, onThumbnailLoadingUpdate, onThumbnailErrorsUpdate, onThumbnailLoad]); // Remove problematic state dependencies
+
   // Update group processing mode
   const handleGroupProcessingModeChange = useCallback((groupId: string, processingMode: PdfMode) => {
     // If this is the Default group, also update the global PDF mode
@@ -357,7 +478,10 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     }
 
     onPageGroupsChange(updatedGroups);
-  }, [pageGroups, onPageGroupsChange, sortedGroupsWithDefault, getPagesForGroup]);
+    
+    // Refresh thumbnail for the moved page to ensure it displays correctly
+    refreshThumbnailsAfterGroupChange(globalPageIndex);
+  }, [pageGroups, onPageGroupsChange, sortedGroupsWithDefault, getPagesForGroup, refreshThumbnailsAfterGroupChange]);
 
   // Handle page reordering within a group (with proper index mapping)
   const handleGroupPageReorder = useCallback((reorderedGroupPages: (PageSettings & PageSource)[], groupId: string) => {
