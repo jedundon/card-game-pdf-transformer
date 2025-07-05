@@ -63,9 +63,17 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
   const totalCards = React.useMemo(() => {
     try {
       // Get unified page data using same logic as ExtractStep
-      const activePages = multiFileImport.multiFileState.pages.length > 0 
-        ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
-        : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+      const unifiedPages = multiFileImport.multiFileState.pages.length > 0
+        ? multiFileImport.multiFileState.pages
+        : pageSettings.map((page: any, index: number) => ({
+            ...page,
+            fileName: 'current.pdf',
+            fileType: 'pdf' as const,
+            originalPageIndex: index,
+            displayOrder: index
+          }));
+      
+      const activePages = getActivePagesWithSource(unifiedPages);
       
       const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
       return calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
@@ -78,9 +86,17 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
   // Generate base filename for the zip
   const generateBaseFilename = useCallback(() => {
     // Get unified page data using same logic as ExtractStep
-    const activePages = multiFileImport.multiFileState.pages.length > 0 
-      ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
-      : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+    const unifiedPages = multiFileImport.multiFileState.pages.length > 0
+      ? multiFileImport.multiFileState.pages
+      : pageSettings.map((page: any, index: number) => ({
+          ...page,
+          fileName: 'current.pdf',
+          fileType: 'pdf' as const,
+          originalPageIndex: index,
+          displayOrder: index
+        }));
+    
+    const activePages = getActivePagesWithSource(unifiedPages);
     
     if (activePages.length === 1) {
       // Single file - use its name

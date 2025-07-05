@@ -77,9 +77,17 @@ async function extractCardImageData(
   const { pdfData, pdfMode, extractionSettings, pageSettings, multiFileImport } = options;
   
   // Get unified page data using same logic as ExtractStep
-  const activePages = multiFileImport.multiFileState.pages.length > 0 
-    ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
-    : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+  const unifiedPages = multiFileImport.multiFileState.pages.length > 0
+    ? multiFileImport.multiFileState.pages
+    : pageSettings.map((page: any, index: number) => ({
+        ...page,
+        fileName: 'current.pdf',
+        fileType: 'pdf' as const,
+        originalPageIndex: index,
+        displayOrder: index
+      }));
+  
+  const activePages = getActivePagesWithSource(unifiedPages);
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   
@@ -242,9 +250,17 @@ export async function exportCardImagesAsZip(
   const zip = new JSZip();
   
   // Get unified page data using same logic as ExtractStep
-  const activePages = multiFileImport.multiFileState.pages.length > 0 
-    ? multiFileImport.multiFileState.pages  // Multi-file mode: use pages with source information
-    : getActivePagesWithSource(pageSettings, multiFileImport);  // Single PDF mode
+  const unifiedPages = multiFileImport.multiFileState.pages.length > 0
+    ? multiFileImport.multiFileState.pages
+    : pageSettings.map((page: any, index: number) => ({
+        ...page,
+        fileName: 'current.pdf',
+        fileType: 'pdf' as const,
+        originalPageIndex: index,
+        displayOrder: index
+      }));
+  
+  const activePages = getActivePagesWithSource(unifiedPages);
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   const totalCards = calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
@@ -267,7 +283,12 @@ export async function exportCardImagesAsZip(
         batchPromises.push(async function processCard() {
           try {
             // Check if card is skipped
-            if (isCardSkipped(cardIndex, extractionSettings.skippedCards || [])) {
+            const pageIndex = Math.floor(cardIndex / cardsPerPage);
+            const cardOnPage = cardIndex % cardsPerPage;
+            const gridRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+            const gridCol = cardOnPage % extractionSettings.grid.columns;
+            
+            if (isCardSkipped(pageIndex, gridRow, gridCol, extractionSettings.skippedCards || [])) {
               processedCards++;
               onProgress?.(
                 (processedCards / totalCards) * 100,
