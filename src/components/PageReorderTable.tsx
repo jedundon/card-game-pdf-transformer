@@ -23,7 +23,7 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, flushSync } from 'react';
 import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon, Plus, Users, Tag } from 'lucide-react';
 import { 
   PageSettings, 
@@ -411,27 +411,32 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle end of drag operation for reordering within group
   const handleDragEndForTable = useCallback(() => {
-    setDragState(currentDragState => {
-      const result = handleDragEnd(currentDragState);
-      
-      // Only perform reorder if we haven't exited table bounds (intra-group reordering)
-      // If we exited bounds, the PageGroupsManager handles the inter-group transfer
-      if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null && !hasExitedTableBounds) {
-        // Use a ref to access current pages to avoid dependency issues
-        const currentPages = pages;
-        const reorderedPages = reorderPages(currentPages, result.fromIndex, result.toIndex);
+    // ENHANCED FIX: Use flushSync to ensure local drag state is cleared immediately
+    // This prevents any visual artifacts from stale local drag state
+    flushSync(() => {
+      setDragState(currentDragState => {
+        const result = handleDragEnd(currentDragState);
         
-        // Schedule the reorder callback to run after state update is complete
-        setTimeout(() => {
-          onPagesReorder(reorderedPages);
-        }, 0);
-      }
-      
-      return result.newState;
+        // Only perform reorder if we haven't exited table bounds (intra-group reordering)
+        // If we exited bounds, the PageGroupsManager handles the inter-group transfer
+        if (result.shouldReorder && result.fromIndex !== null && result.toIndex !== null && !hasExitedTableBounds) {
+          // Use a ref to access current pages to avoid dependency issues
+          const currentPages = pages;
+          const reorderedPages = reorderPages(currentPages, result.fromIndex, result.toIndex);
+          
+          // Schedule the reorder callback to run after state update is complete
+          setTimeout(() => {
+            onPagesReorder(reorderedPages);
+          }, 0);
+        }
+        
+        return result.newState;
+      });
     });
     
     // CRITICAL FIX: Always call inter-group drag end when we had exited table bounds
     // This ensures the parent PageGroupsManager cleans up its drag state even for canceled drags
+    // At this point, local drag state is guaranteed to be cleared
     if (hasExitedTableBounds && onInterGroupDragEnd) {
       onInterGroupDragEnd();
     }
@@ -784,7 +789,24 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               const isValidDraggedPage = draggedPageInfo && 
                 draggedPageInfo.localIndex === index &&
                 draggedPageInfo.localIndex < pages.length &&
-                isDraggingBetweenGroups; // Only show gray when actually dragging between groups
+                isDraggingBetweenGroups && // Only show gray when actually dragging between groups
+                dragState.isDragging; // AND only when local drag state is also active
+              
+              // DEBUGGING: Log when a page is grayed out to understand the issue
+              if (isDraggedItem || isValidDraggedPage) {
+                console.log(`🔍 Gray row debug - Page ${index + 1}:`, {
+                  isDraggedItem,
+                  isValidDraggedPage,
+                  dragState: {
+                    dragIndex: dragState.dragIndex,
+                    isDragging: dragState.isDragging
+                  },
+                  draggedPageInfo,
+                  isDraggingBetweenGroups,
+                  pageFileName: page.fileName,
+                  pageOriginalIndex: page.originalPageIndex
+                });
+              }
               
               return (
                 <tr 
