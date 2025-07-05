@@ -91,6 +91,8 @@ interface PageReorderTableProps {
   currentGroupId?: string;
   /** Callback when a page should be moved to a different group */
   onPageGroupChange?: (pageIndex: number, targetGroupId: string | null) => void;
+  /** Global indices mapping for local pages (maps local index to global index) */
+  globalIndices?: number[];
   
   /** Inter-group drag and drop props */
   onInterGroupDragStart?: (localIndex: number) => void;
@@ -124,6 +126,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   disabled = false,
   currentGroupId,
   onPageGroupChange,
+  globalIndices,
   onInterGroupDragStart,
   onInterGroupDragEnd,
   isDraggingBetweenGroups = false,
@@ -583,8 +586,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   // };
 
   // Render thumbnail cell
-  const renderThumbnail = (pageIndex: number) => {
-    if (thumbnailLoading[pageIndex]) {
+  const renderThumbnail = (localPageIndex: number) => {
+    // Use global index if available (for group-specific tables), otherwise use local index
+    const thumbnailIndex = globalIndices ? globalIndices[localPageIndex] : localPageIndex;
+    
+    if (thumbnailLoading[thumbnailIndex]) {
       return (
         <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
           <div className="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
@@ -592,7 +598,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       );
     }
     
-    if (thumbnailErrors[pageIndex]) {
+    if (thumbnailErrors[thumbnailIndex]) {
       return (
         <div className="w-12 h-16 bg-gray-100 border border-gray-200 rounded flex items-center justify-center">
           <span className="text-xs text-gray-400">Error</span>
@@ -600,14 +606,14 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       );
     }
     
-    if (thumbnails[pageIndex]) {
+    if (thumbnails[thumbnailIndex]) {
       return (
         <img
-          src={thumbnails[pageIndex]}
-          alt={`Page ${pageIndex + 1} preview`}
+          src={thumbnails[thumbnailIndex]}
+          alt={`Page ${localPageIndex + 1} preview`}
           className="w-12 h-16 border border-gray-200 rounded cursor-pointer hover:border-blue-300 transition-colors"
-          onClick={() => setHoveredThumbnail(pageIndex)}
-          title={`Click to view larger preview of page ${pageIndex + 1}`}
+          onClick={() => setHoveredThumbnail(thumbnailIndex)}
+          title={`Click to view larger preview of page ${localPageIndex + 1}`}
         />
       );
     }
