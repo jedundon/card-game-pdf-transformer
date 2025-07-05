@@ -16,7 +16,7 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, flushSync } from 'react';
 import { Plus, ArrowUp, ArrowDown, Edit2, Trash2 } from 'lucide-react';
 import { PageReorderTable } from './PageReorderTable';
 import { ProcessingModeSelector } from './shared/ProcessingModeSelector';
@@ -406,12 +406,17 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     const currentDraggedPageInfo = draggedPageInfo;
     const currentDragOverGroupId = dragOverGroupId;
     
-    // Clear drag state FIRST to prevent stale state during re-renders
-    setDraggedPageInfo(null);
-    setIsDraggingBetweenGroups(false);
-    setDragOverGroupId(null);
+    // Force immediate synchronous clearing of drag state to prevent stale state
+    // flushSync ensures this state update happens in its own render cycle
+    // BEFORE handlePageGroupChange triggers page array updates
+    flushSync(() => {
+      setDraggedPageInfo(null);
+      setIsDraggingBetweenGroups(false);
+      setDragOverGroupId(null);
+    });
     
     // Then perform the page move operation with saved values
+    // At this point, all PageReorderTable components have received draggedPageInfo: null
     if (currentDraggedPageInfo && currentDragOverGroupId && currentDragOverGroupId !== currentDraggedPageInfo.sourceGroupId) {
       // Move the page to the target group
       handlePageGroupChange(currentDraggedPageInfo.localIndex, currentDragOverGroupId, currentDraggedPageInfo.sourceGroupId);

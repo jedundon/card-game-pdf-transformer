@@ -779,13 +779,20 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               const keyboardHandlers = createKeyboardHandlersForPage(index);
               const isDraggedItem = dragState.dragIndex === index;
               
+              // DEFENSIVE: Ensure draggedPageInfo is valid for current pages array
+              // This prevents stale drag info from affecting pages after successful moves
+              const isValidDraggedPage = draggedPageInfo && 
+                draggedPageInfo.localIndex === index &&
+                draggedPageInfo.localIndex < pages.length &&
+                isDraggingBetweenGroups; // Only show gray when actually dragging between groups
+              
               return (
                 <tr 
                   key={`${page.fileName}-${page.originalPageIndex}-${index}`}
                   className={`
                     transition-opacity duration-200
                     ${
-                      isDraggedItem || (draggedPageInfo && draggedPageInfo.localIndex === index)
+                      isDraggedItem || isValidDraggedPage
                         ? 'opacity-50' 
                         : 'opacity-100'
                     }
