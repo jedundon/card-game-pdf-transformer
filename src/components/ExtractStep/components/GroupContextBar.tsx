@@ -49,8 +49,7 @@ interface GroupStatusInfo {
   name: string;
   pageCount: number;
   color?: string;
-  isConfigured: boolean;
-  hasSettings: boolean;
+  hasCustomSettings: boolean;
   processingMode: PdfMode;
 }
 
@@ -61,7 +60,7 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
   pages,
   groups,
   activeGroupId,
-  extractionSettings,
+  extractionSettings, // eslint-disable-line @typescript-eslint/no-unused-vars -- kept for interface compatibility
   globalPdfMode,
   onActiveGroupChange,
   disabled = false
@@ -122,8 +121,7 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
         name: DEFAULT_GROUP_NAME,
         pageCount: ungroupedActivePages.length,
         color: '#6b7280',
-        isConfigured: true, // Default group uses global settings
-        hasSettings: Boolean(extractionSettings),
+        hasCustomSettings: false, // Default group always uses global settings
         processingMode: globalPdfMode
       });
     }
@@ -145,14 +143,13 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
           name: group.name,
           pageCount: activeGroupPages.length,
           color: group.color,
-          isConfigured: Boolean(group.settings?.extraction),
-          hasSettings: Boolean(group.settings?.extraction),
+          hasCustomSettings: Boolean(group.settings?.extraction),
           processingMode: group.processingMode || globalPdfMode
         });
       });
 
     return statusList;
-  }, [activePages, pages, groups, extractionSettings, globalPdfMode]);
+  }, [activePages, pages, groups, globalPdfMode]);
 
   /**
    * Get current group status
@@ -163,6 +160,27 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     return groupStatusInfo.find(status => status.id === targetGroupId) || groupStatusInfo[0];
   }, [groupStatusInfo, activeGroupId]);
 
+
+  /**
+   * Format processing mode for display
+   */
+  const formatProcessingMode = useCallback((mode: PdfMode) => {
+    const typeMap = {
+      'simplex': 'Simplex',
+      'duplex': 'Duplex',
+      'gutter-fold': 'Gutter-fold'
+    };
+    
+    let displayName = typeMap[mode.type] || mode.type;
+    
+    if (mode.type === 'duplex' && mode.flipEdge) {
+      displayName += ` (${mode.flipEdge} edge)`;
+    } else if (mode.type === 'gutter-fold' && mode.orientation) {
+      displayName += ` (${mode.orientation})`;
+    }
+    
+    return displayName;
+  }, []);
 
   /**
    * Handle group selection
@@ -183,20 +201,39 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
       {/* Main group selection area */}
       <div className="flex items-center justify-between">
-        {/* Left side: Context label */}
-        <div className="flex items-center space-x-2">
+        {/* Left side: Current group info */}
+        <div className="flex items-center space-x-3">
           <span className="text-sm font-medium text-gray-700">Configuring Group:</span>
+          
+          {/* Current group details */}
+          <div className="flex items-center space-x-2">
+            {currentGroupStatus.color && (
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: currentGroupStatus.color }}
+              />
+            )}
+            <span className="font-semibold text-gray-900">
+              {currentGroupStatus.name}
+            </span>
+            <span className="text-sm text-gray-500">•</span>
+            <span className="text-sm font-medium text-indigo-600">
+              {formatProcessingMode(currentGroupStatus.processingMode)}
+            </span>
+            <span className="text-sm text-gray-500">•</span>
+            <span className="text-sm text-gray-600">
+              {currentGroupStatus.pageCount} pages
+            </span>
+          </div>
         </div>
 
-        {/* Right side: Group selector dropdown */}
+        {/* Right side: Group selector dropdown - simplified for changing only */}
         <GroupSelector
           groups={groups}
           activeGroupId={activeGroupId}
           groupOptions={groupStatusInfo}
-          globalPdfMode={globalPdfMode}
           onGroupSelect={handleGroupSelect}
           disabled={disabled}
-          className="min-w-[250px]"
         />
       </div>
 

@@ -17,13 +17,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ChevronDown,
-  CheckCircle,
-  AlertCircle,
-  Circle,
-  Users,
-  Settings
+  CheckCircle
 } from 'lucide-react';
-import { PageGroup, PdfMode } from '../../../types';
+import { PageGroup } from '../../../types';
 
 // Constants for default group
 const DEFAULT_GROUP_ID = 'default';
@@ -33,9 +29,7 @@ interface GroupOption {
   name: string;
   pageCount: number;
   color?: string;
-  isConfigured: boolean;
-  hasSettings: boolean;
-  processingMode: PdfMode;
+  hasCustomSettings: boolean;
 }
 
 interface GroupSelectorProps {
@@ -54,36 +48,13 @@ interface GroupSelectorProps {
 }
 
 /**
- * Format processing mode for display
- */
-function formatProcessingMode(mode: PdfMode): string {
-  const typeMap = {
-    'simplex': 'Simplex',
-    'duplex': 'Duplex',
-    'gutter-fold': 'Gutter-fold'
-  };
-  
-  let displayName = typeMap[mode.type] || mode.type;
-  
-  if (mode.type === 'duplex' && mode.flipEdge) {
-    displayName += ` (${mode.flipEdge} edge)`;
-  } else if (mode.type === 'gutter-fold' && mode.orientation) {
-    displayName += ` (${mode.orientation})`;
-  }
-  
-  return displayName;
-}
-
-/**
  * Get status icon for a group
  */
 function getStatusIcon(option: GroupOption) {
-  if (option.isConfigured) {
+  if (option.hasCustomSettings) {
     return <CheckCircle className="w-4 h-4 text-green-500" />;
-  } else if (option.hasSettings) {
-    return <AlertCircle className="w-4 h-4 text-yellow-500" />;
   } else {
-    return <Circle className="w-4 h-4 text-gray-400" />;
+    return null; // No icon for groups using global settings
   }
 }
 
@@ -102,11 +73,6 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  // Find current group
-  const currentGroup = groupOptions.find(option => 
-    (activeGroupId === null && option.id === DEFAULT_GROUP_ID) || 
-    option.id === activeGroupId
-  ) || groupOptions[0];
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -205,7 +171,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         onClick={handleToggle}
         disabled={disabled}
         className={`
-          flex items-center justify-between w-full min-w-[200px] px-3 py-2 
+          flex items-center justify-between px-3 py-2 
           border border-gray-300 rounded-md text-sm bg-white hover:bg-gray-50 
           focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500
           transition-colors
@@ -216,20 +182,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
         aria-expanded={isOpen}
       >
         <div className="flex items-center space-x-2 min-w-0 flex-1">
-          {/* Current group indicator */}
-          {currentGroup.color && (
-            <div
-              className="w-3 h-3 rounded-full flex-shrink-0"
-              style={{ backgroundColor: currentGroup.color }}
-            />
-          )}
-          <Users className="w-4 h-4 text-gray-500 flex-shrink-0" />
-          <span className="font-medium text-gray-900 truncate">
-            {currentGroup.name}
-          </span>
-          <span className="text-gray-500 flex-shrink-0">
-            ({currentGroup.pageCount})
-          </span>
+          <span className="text-sm text-gray-600 flex-shrink-0">Change Group</span>
         </div>
         <ChevronDown 
           className={`w-4 h-4 text-gray-400 transition-transform ${
@@ -240,7 +193,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+        <div className="absolute z-50 w-80 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
           <div className="py-1 max-h-64 overflow-y-auto">
             {groupOptions.map((option) => {
               const isSelected = (activeGroupId === null && option.id === DEFAULT_GROUP_ID) || 
@@ -258,20 +211,22 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
                   `}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
                       {/* Status icon */}
-                      {getStatusIcon(option)}
+                      <div className="w-4 h-4 flex-shrink-0">
+                        {getStatusIcon(option)}
+                      </div>
                       
                       {/* Group color indicator */}
                       {option.color && (
                         <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: option.color }}
                         />
                       )}
                       
                       {/* Group name */}
-                      <span className={`text-sm truncate ${
+                      <span className={`text-sm ${
                         isSelected ? 'font-medium text-indigo-900' : 'text-gray-900'
                       }`}>
                         {option.name}
@@ -284,12 +239,7 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
                     <div className="flex items-center space-x-2 flex-shrink-0">
                       {/* Page count */}
                       <span className="text-xs text-gray-500">
-                        {option.pageCount} pages
-                      </span>
-                      
-                      {/* Processing mode indicator */}
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                        {formatProcessingMode(option.processingMode)}
+                        {option.pageCount} page{option.pageCount !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </div>
@@ -298,16 +248,18 @@ export const GroupSelector: React.FC<GroupSelectorProps> = ({
             })}
           </div>
           
-          {/* Separator and actions */}
+          {/* Footer with explanations */}
           {groups.length > 0 && (
             <div className="border-t border-gray-100 py-1">
               <div className="px-3 py-2 text-xs text-gray-500 space-y-1">
-                <div>
-                  <Settings className="w-3 h-3 inline mr-1" />
-                  Settings apply to selected group only
-                </div>
-                <div className="text-gray-400">
-                  Tip: Use Ctrl+1, Ctrl+2, etc. for quick switching
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CheckCircle className="w-3 h-3 inline mr-1 text-green-500" />
+                    = Has custom settings
+                  </div>
+                  <div className="text-gray-400">
+                    Ctrl+1, Ctrl+2... to switch
+                  </div>
                 </div>
               </div>
             </div>
