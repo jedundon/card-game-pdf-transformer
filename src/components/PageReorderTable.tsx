@@ -226,11 +226,18 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   }, [pageGroups, pdfMode]);
 
   // Get the effective processing mode for a specific page
-  const getPageProcessingMode = useCallback((pageIndex: number): PdfMode => {
-    // Find which group this page belongs to
-    const pageGroup = pageGroups.find(group => group.pageIndices.includes(pageIndex));
+  const getPageProcessingMode = useCallback((localPageIndex: number): PdfMode => {
+    // If we're in a group-specific table, use the current group's processing mode
+    if (currentGroupId) {
+      const currentGroup = pageGroups.find(group => group.id === currentGroupId);
+      return currentGroup?.processingMode || pdfMode;
+    }
+    
+    // For non-group tables, convert local index to global index and find the group
+    const globalPageIndex = globalIndices ? globalIndices[localPageIndex] : localPageIndex;
+    const pageGroup = pageGroups.find(group => group.pageIndices.includes(globalPageIndex));
     return pageGroup?.processingMode || pdfMode;
-  }, [pageGroups, pdfMode]);
+  }, [pageGroups, pdfMode, currentGroupId, globalIndices]);
 
 
   // Handle group assignment
@@ -560,16 +567,16 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   }, [onPageSettingsChange]);
 
   // Get page type display for a specific page
-  const getPageTypeDisplay = useCallback((pageIndex: number, page: PageSettings & PageSource) => {
-    const processingMode = getPageProcessingMode(pageIndex);
+  const getPageTypeDisplay = useCallback((localPageIndex: number, page: PageSettings & PageSource) => {
+    const processingMode = getPageProcessingMode(localPageIndex);
     
     switch (processingMode.type) {
       case 'duplex':
-        // Show dropdown for duplex mode
+        // Show dropdown for duplex mode - use the original index passed to this function
         return (
           <select
             value={page.type || 'front'}
-            onChange={(e) => handleCardTypeChange(pageIndex, e.target.value)}
+            onChange={(e) => handleCardTypeChange(localPageIndex, e.target.value)}
             className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             disabled={disabled}
           >
