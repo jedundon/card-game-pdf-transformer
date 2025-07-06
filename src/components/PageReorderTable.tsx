@@ -232,41 +232,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     return pageGroup?.processingMode || pdfMode;
   }, [pageGroups, pdfMode]);
 
-  // Get page type display for a specific page
-  const getPageTypeDisplay = useCallback((pageIndex: number, page: PageSettings & PageSource) => {
-    const processingMode = getPageProcessingMode(pageIndex);
-    
-    switch (processingMode.type) {
-      case 'duplex':
-        // Show dropdown for duplex mode
-        return (
-          <select
-            value={page.type || 'front'}
-            onChange={(e) => handleCardTypeChange(pageIndex, e.target.value)}
-            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            disabled={disabled}
-          >
-            <option value="front">Front</option>
-            <option value="back">Back</option>
-          </select>
-        );
-      case 'gutter-fold':
-        // Show label for gutter-fold mode
-        return (
-          <span className="text-sm text-gray-600 font-medium">
-            front&back
-          </span>
-        );
-      case 'simplex':
-      default:
-        // Show label for simplex mode
-        return (
-          <span className="text-sm text-gray-600 font-medium">
-            single
-          </span>
-        );
-    }
-  }, [getPageProcessingMode, handleCardTypeChange, disabled]);
 
   // Handle group assignment
   const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
@@ -593,6 +558,42 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   const handleCardTypeChange = useCallback((pageIndex: number, type: string) => {
     onPageSettingsChange(pageIndex, { type: type as 'front' | 'back' });
   }, [onPageSettingsChange]);
+
+  // Get page type display for a specific page
+  const getPageTypeDisplay = useCallback((pageIndex: number, page: PageSettings & PageSource) => {
+    const processingMode = getPageProcessingMode(pageIndex);
+    
+    switch (processingMode.type) {
+      case 'duplex':
+        // Show dropdown for duplex mode
+        return (
+          <select
+            value={page.type || 'front'}
+            onChange={(e) => handleCardTypeChange(pageIndex, e.target.value)}
+            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={disabled}
+          >
+            <option value="front">Front</option>
+            <option value="back">Back</option>
+          </select>
+        );
+      case 'gutter-fold':
+        // Show label for gutter-fold mode
+        return (
+          <span className="text-sm text-gray-600 font-medium">
+            front&back
+          </span>
+        );
+      case 'simplex':
+      default:
+        // Show label for simplex mode
+        return (
+          <span className="text-sm text-gray-600 font-medium">
+            single
+          </span>
+        );
+    }
+  }, [getPageProcessingMode, handleCardTypeChange, disabled]);
 
   // Handle page removal toggle (soft removal)
   const handlePageRemovalToggle = useCallback((pageIndex: number) => {
