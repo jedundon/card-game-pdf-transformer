@@ -17,16 +17,11 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { 
-  ChevronDown, 
-  Users, 
-  CheckCircle, 
-  AlertCircle, 
-  Circle,
-  FileText,
-  Settings
+  Info
 } from 'lucide-react';
 import { PageSettings, PageSource, PageGroup, ExtractionSettings, PdfMode } from '../../../types';
 import { getActivePagesWithSource } from '../../../utils/cardUtils';
+import { GroupSelector } from './GroupSelector';
 
 // Constants for default group (matching PageGroupsManager)
 const DEFAULT_GROUP_ID = 'default';
@@ -56,6 +51,7 @@ interface GroupStatusInfo {
   color?: string;
   isConfigured: boolean;
   hasSettings: boolean;
+  processingMode: PdfMode;
 }
 
 /**
@@ -77,12 +73,6 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     return getActivePagesWithSource(pages);
   }, [pages]);
 
-  /**
-   * Get the currently active group
-   */
-  const activeGroup = useMemo(() => {
-    return activeGroupId ? groups.find(g => g.id === activeGroupId) : null;
-  }, [activeGroupId, groups]);
 
 
   /**
@@ -133,7 +123,8 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
         pageCount: ungroupedActivePages.length,
         color: '#6b7280',
         isConfigured: true, // Default group uses global settings
-        hasSettings: Boolean(extractionSettings)
+        hasSettings: Boolean(extractionSettings),
+        processingMode: globalPdfMode
       });
     }
 
@@ -155,12 +146,13 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
           pageCount: activeGroupPages.length,
           color: group.color,
           isConfigured: Boolean(group.settings?.extraction),
-          hasSettings: Boolean(group.settings?.extraction)
+          hasSettings: Boolean(group.settings?.extraction),
+          processingMode: group.processingMode || globalPdfMode
         });
       });
 
     return statusList;
-  }, [activePages, pages, groups, extractionSettings]);
+  }, [activePages, pages, groups, extractionSettings, globalPdfMode]);
 
   /**
    * Get current group status
@@ -171,40 +163,6 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     return groupStatusInfo.find(status => status.id === targetGroupId) || groupStatusInfo[0];
   }, [groupStatusInfo, activeGroupId]);
 
-  /**
-   * Get the processing mode for the current group
-   */
-  const currentProcessingMode = useMemo(() => {
-    if (!activeGroupId) {
-      // Default group uses global PDF mode
-      return globalPdfMode;
-    }
-
-    // Find the active group and return its processing mode
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.processingMode || globalPdfMode;
-  }, [activeGroupId, groups, globalPdfMode]);
-
-  /**
-   * Format processing mode for display
-   */
-  const formatProcessingMode = useCallback((mode: PdfMode) => {
-    const typeMap = {
-      'simplex': 'Simplex',
-      'duplex': 'Duplex',
-      'gutter-fold': 'Gutter-fold'
-    };
-    
-    let displayName = typeMap[mode.type] || mode.type;
-    
-    if (mode.type === 'duplex' && mode.flipEdge) {
-      displayName += ` (${mode.flipEdge} edge)`;
-    } else if (mode.type === 'gutter-fold' && mode.orientation) {
-      displayName += ` (${mode.orientation})`;
-    }
-    
-    return displayName;
-  }, []);
 
   /**
    * Handle group selection
@@ -215,19 +173,6 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     }
   }, [disabled, onActiveGroupChange]);
 
-  /**
-   * Get status icon for a group
-   */
-  const getStatusIcon = useCallback((status: GroupStatusInfo) => {
-    if (status.isConfigured) {
-      return <CheckCircle className="w-4 h-4 text-green-500" />;
-    } else if (status.hasSettings) {
-      return <AlertCircle className="w-4 h-4 text-yellow-500" />;
-    } else {
-      return <Circle className="w-4 h-4 text-gray-400" />;
-    }
-  }, []);
-
 
   if (groups.length === 0 && !activeGroupId) {
     // No groups exist, don't show the component
@@ -236,97 +181,49 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+      {/* Main group selection area */}
       <div className="flex items-center justify-between">
-        {/* Left side: Current group info */}
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <Users className="w-5 h-5 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Configuring Group:</span>
-          </div>
-          
-          {/* Current group indicator */}
-          <div className="flex items-center space-x-2">
-            {currentGroupStatus.color && (
-              <div 
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: currentGroupStatus.color }}
-              />
-            )}
-            <span className="font-semibold text-gray-900">
-              {currentGroupStatus.name}
-            </span>
-            <span className="text-sm text-gray-500">
-              ({currentGroupStatus.pageCount} pages)
-            </span>
-            <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
-              {formatProcessingMode(currentProcessingMode)}
-            </span>
-          </div>
-
+        {/* Left side: Context label */}
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-medium text-gray-700">Configuring Group:</span>
         </div>
 
-        {/* Right side: Group selector */}
-        <div className="relative">
-          <button
-            onClick={() => {
-              // Simple click handler - cycle through groups
-              const currentIndex = groupStatusInfo.findIndex(g => g.id === (activeGroupId || DEFAULT_GROUP_ID));
-              const nextIndex = (currentIndex + 1) % groupStatusInfo.length;
-              const nextGroup = groupStatusInfo[nextIndex];
-              handleGroupSelect(nextGroup.id === DEFAULT_GROUP_ID ? null : nextGroup.id);
-            }}
-            disabled={disabled}
-            className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Settings className="w-4 h-4" />
-            <span>Switch Group</span>
-            <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
+        {/* Right side: Group selector dropdown */}
+        <GroupSelector
+          groups={groups}
+          activeGroupId={activeGroupId}
+          groupOptions={groupStatusInfo}
+          globalPdfMode={globalPdfMode}
+          onGroupSelect={handleGroupSelect}
+          disabled={disabled}
+          className="min-w-[250px]"
+        />
       </div>
 
       {/* Settings context message */}
-      <div className="mt-3 pt-3 border-t border-gray-100">
-        <div className="flex items-center space-x-2 text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-md">
-          <FileText className="w-4 h-4" />
-          <span>
-            Extraction settings on this page apply to <strong>{currentGroupStatus.name}</strong> only.
-            {currentGroupStatus.pageCount > 1 && ` Changes will affect all ${currentGroupStatus.pageCount} pages in this group.`}
-          </span>
+      <div className="mt-4 pt-3 border-t border-gray-100">
+        <div className="flex items-start space-x-2 text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-md">
+          <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Group-Specific Settings</p>
+            <p className="mt-1 text-blue-600">
+              Extraction settings on this page apply to <strong>{currentGroupStatus.name}</strong> only.
+              {currentGroupStatus.pageCount > 1 && ` Changes will affect all ${currentGroupStatus.pageCount} pages in this group.`}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Group status overview */}
+      {/* Quick group overview for multi-group workflows */}
       {groupStatusInfo.length > 1 && (
         <div className="mt-3 pt-3 border-t border-gray-100">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm font-medium text-gray-700">All Groups:</span>
-            <div className="flex items-center space-x-3">
-              {groupStatusInfo.map(status => (
-                <button
-                  key={status.id}
-                  onClick={() => handleGroupSelect(status.id === DEFAULT_GROUP_ID ? null : status.id)}
-                  disabled={disabled}
-                  className={`
-                    flex items-center space-x-2 px-2 py-1 rounded-md text-xs transition-colors
-                    ${(activeGroupId === null && status.id === DEFAULT_GROUP_ID) || status.id === activeGroupId 
-                      ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' 
-                      : 'hover:bg-gray-100 text-gray-600'
-                    }
-                  `}
-                >
-                  {getStatusIcon(status)}
-                  {status.color && (
-                    <div 
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: status.color }}
-                    />
-                  )}
-                  <span>{status.name}</span>
-                  <span className="text-gray-500">({status.pageCount})</span>
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">
+              {groupStatusInfo.length} groups total • {groupStatusInfo.reduce((sum, g) => sum + g.pageCount, 0)} pages
+            </span>
+            <span className="text-gray-500">
+              Use dropdown above to switch between groups
+            </span>
           </div>
         </div>
       )}
