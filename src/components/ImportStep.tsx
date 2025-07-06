@@ -14,6 +14,7 @@ import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
 import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
 import { FileUploadDropZone } from './ImportStep/FileUploadDropZone';
+import { RemovedPagesSection } from './ImportStep/RemovedPagesSection';
 
 // Configure PDF.js worker for Vite
 pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.min.js';
@@ -645,6 +646,69 @@ export const ImportStep: React.FC<ImportStepProps> = ({
               />
           )}
 
+      {/* Removed Pages Section */}
+      {((pdfData && pageSettings.length > 0) || multiFileImport.multiFileState.pages.length > 0) && (
+        <RemovedPagesSection
+          pages={multiFileImport.multiFileState.pages.length > 0
+            ? multiFileImport.multiFileState.pages.map((page: any, index: number) => ({
+                ...page,
+                displayOrder: index
+              }))
+            : pageSettings.map((page: any, index: number) => ({
+                ...page,
+                fileName: fileName || 'Unknown',
+                fileType: 'pdf' as const,
+                originalPageIndex: page.originalPageIndex ?? index,
+                displayOrder: index
+              }))
+          }
+          thumbnails={thumbnails}
+          thumbnailLoading={thumbnailLoading}
+          thumbnailErrors={thumbnailErrors}
+          onPageSettingsChange={(pageIndex, settings) => {
+            if (multiFileImport.multiFileState.pages.length > 0) {
+              // Update specific page in multi-file state
+              const currentPages = multiFileImport.multiFileState.pages;
+              const updatedPages = currentPages.map((page: any, index: number) => 
+                index === pageIndex ? { ...page, ...settings } : page
+              );
+              multiFileImport.updateAllPageSettings(updatedPages);
+            } else {
+              // Single-file mode
+              const updatedSettings = [...pageSettings];
+              updatedSettings[pageIndex] = { ...updatedSettings[pageIndex], ...settings };
+              onPageSettingsChange(updatedSettings);
+            }
+          }}
+          onThumbnailLoad={(pageIndex) => {
+            // Load thumbnail based on file type
+            if (multiFileImport.multiFileState.pages.length > 0) {
+              const page = multiFileImport.multiFileState.pages[pageIndex];
+              
+              if (page && page.fileType === 'image') {
+                // Validate image data availability
+                const imageDataStore = multiFileImport.getAllImageData();
+                if (imageDataStore.has(page.fileName)) {
+                  loadImageThumbnail(pageIndex, page.fileName);
+                } else {
+                  console.warn(`Image data not available for ${page.fileName}, cannot load thumbnail`);
+                }
+              } else if (page && page.fileType === 'pdf') {
+                // Validate PDF data availability
+                const pdfDataStore = multiFileImport.getAllPdfData();
+                if (pdfDataStore.has(page.fileName)) {
+                  loadPdfThumbnailForPage(pageIndex, page.originalPageIndex + 1, page.fileName);
+                } else {
+                  console.warn(`PDF data not available for ${page.fileName}, cannot load thumbnail`);
+                }
+              }
+            } else if (pdfData) {
+              // Single PDF mode
+              loadThumbnail(pageIndex);
+            }
+          }}
+        />
+      )}
 
       {/* Thumbnail Popup */}
       <ThumbnailPopup

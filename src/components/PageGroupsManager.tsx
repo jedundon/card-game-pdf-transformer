@@ -953,8 +953,9 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
       <div className="mt-4 text-sm text-gray-600">
         <p>
           {pages.length} pages total • 
-          {' '}{pages.filter(p => !p.skip).length} active • 
+          {' '}{pages.filter(p => !p.skip && !p.removed).length} active • 
           {' '}{pages.filter(p => p.skip).length} skipped •
+          {' '}{pages.filter(p => p.removed).length} removed •
           {' '}{sortedGroupsWithDefault.length} groups
         </p>
         <p className="text-xs text-gray-500 mt-1">

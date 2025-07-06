@@ -44,6 +44,8 @@ export type PdfPage = PDFPageProxy;
 export interface PageSettings {
   /** Whether to skip this page during processing (default: false) */
   skip?: boolean;
+  /** Whether this page has been soft-removed (can be restored) */
+  removed?: boolean;
   /** Card type designation for duplex/gutter-fold modes ('front' or 'back') */
   type?: 'front' | 'back';
   /** Page type for specialized processing ('card', 'rule', 'skip') */

@@ -541,10 +541,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     onPageSettingsChange(pageIndex, { type: type as 'front' | 'back' });
   }, [onPageSettingsChange]);
 
-  // Handle page skip change
-  const handlePageSkipChange = useCallback((pageIndex: number, skip: boolean) => {
-    onPageSettingsChange(pageIndex, { skip });
-  }, [onPageSettingsChange]);
+  // Handle page removal toggle (soft removal)
+  const handlePageRemovalToggle = useCallback((pageIndex: number) => {
+    const currentPage = pages[pageIndex];
+    const isCurrentlyRemoved = currentPage?.removed || false;
+    onPageSettingsChange(pageIndex, { removed: !isCurrentlyRemoved });
+  }, [onPageSettingsChange, pages]);
 
   // Load thumbnail on row render
   const handleThumbnailRequest = useCallback((pageIndex: number) => {
@@ -779,9 +781,6 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Group
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Skip
-              </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">
                 Actions
               </th>
@@ -789,21 +788,23 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
           </thead>
           <tbody ref={tableRef} className="bg-white divide-y divide-gray-200 relative">
             
-            {pages.map((page, index) => {
-              const keyboardHandlers = createKeyboardHandlersForPage(index);
-              const isDraggedItem = dragState.dragIndex === index;
+            {pages.filter(page => !page.removed).map((page, filteredIndex) => {
+              // Find the original index in the full pages array
+              const originalIndex = pages.findIndex(p => p === page);
+              const keyboardHandlers = createKeyboardHandlersForPage(originalIndex);
+              const isDraggedItem = dragState.dragIndex === originalIndex;
               
               // DEFENSIVE: Ensure draggedPageInfo is valid for current pages array
               // This prevents stale drag info from affecting pages after successful moves
               const isValidDraggedPage = draggedPageInfo && 
-                draggedPageInfo.localIndex === index &&
+                draggedPageInfo.localIndex === originalIndex &&
                 draggedPageInfo.localIndex < pages.length &&
                 isDraggingBetweenGroups; // Only show gray when actually dragging between groups
               
               
               return (
                 <tr 
-                  key={`${page.fileName}-${page.originalPageIndex}-${index}`}
+                  key={`${page.fileName}-${page.originalPageIndex}-${originalIndex}`}
                   className={`
                     transition-opacity duration-200
                     ${
@@ -811,7 +812,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                         ? 'opacity-50' 
                         : 'opacity-100'
                     }
-                    ${dragState.hoverIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                    ${dragState.hoverIndex === originalIndex ? 'bg-blue-50' : 'hover:bg-gray-50'}
                   `}
                 >
                   {/* Drag handle */}
@@ -828,18 +829,18 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       draggable={!!onInterGroupDragStart}
                       onMouseDown={(e) => {
                         // Always start with intra-group drag, boundary detection will handle switching
-                        handleDragStartForPage(index, e);
+                        handleDragStartForPage(originalIndex, e);
                       }}
                       onTouchStart={(e) => {
                         // Touch events always work for intra-group reordering
-                        handleDragStartForPage(index, e);
+                        handleDragStartForPage(originalIndex, e);
                       }}
                       onDragStart={(e) => {
                         // HTML5 drag only works when inter-group drag is enabled
                         if (onInterGroupDragStart) {
                           // Prevent mouse drag events from interfering with HTML5 drag
                           e.stopPropagation();
-                          handleHTML5DragStart(index, e);
+                          handleHTML5DragStart(originalIndex, e);
                         } else {
                           e.preventDefault(); // Prevent default HTML5 drag when not needed
                         }
@@ -861,12 +862,12 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     <input
                       type="checkbox"
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      checked={pageSelection.selectionState.selectedPages.has(index)}
+                      checked={pageSelection.selectionState.selectedPages.has(originalIndex)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          pageSelection.togglePageSelection(index, true);
+                          pageSelection.togglePageSelection(originalIndex, true);
                         } else {
-                          pageSelection.togglePageSelection(index, false);
+                          pageSelection.togglePageSelection(originalIndex, false);
                         }
                       }}
                       disabled={disabled}
@@ -875,13 +876,13 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
                   {/* Page number */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {index + 1}
+                    {originalIndex + 1}
                   </td>
 
                   {/* Preview thumbnail */}
                   <td className="px-2 py-2 whitespace-nowrap">
                     <div className="relative inline-block">
-                      {renderThumbnail(index)}
+                      {renderThumbnail(originalIndex)}
                     </div>
                   </td>
 
@@ -908,8 +909,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center space-x-2">
                       <select
-                        value={currentGroupId || pageGroups.find(g => g.pageIndices.includes(index))?.id || 'default'}
-                        onChange={(e) => handleGroupAssignment(index, e.target.value === 'default' ? null : e.target.value)}
+                        value={currentGroupId || pageGroups.find(g => g.pageIndices.includes(originalIndex))?.id || 'default'}
+                        onChange={(e) => handleGroupAssignment(originalIndex, e.target.value === 'default' ? null : e.target.value)}
                         className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         disabled={disabled}
                       >
@@ -933,27 +934,18 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Skip checkbox */}
-                  <td className="px-4 py-4 whitespace-nowrap text-sm">
-                    <input 
-                      type="checkbox" 
-                      checked={page?.skip || false} 
-                      onChange={e => handlePageSkipChange(index, e.target.checked)} 
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
-                    />
-                  </td>
 
                   {/* Actions */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center space-x-1">
                       <button
                         onClick={() => {
-                          if (index > 0) {
-                            const reorderedPages = reorderPages(pages, index, index - 1);
+                          if (originalIndex > 0) {
+                            const reorderedPages = reorderPages(pages, originalIndex, originalIndex - 1);
                             onPagesReorder(reorderedPages);
                           }
                         }}
-                        disabled={index === 0}
+                        disabled={originalIndex === 0}
                         className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
                         title="Move up"
                       >
@@ -961,23 +953,31 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          if (index < pages.length - 1) {
-                            const reorderedPages = reorderPages(pages, index, index + 1);
+                          if (originalIndex < pages.length - 1) {
+                            const reorderedPages = reorderPages(pages, originalIndex, originalIndex + 1);
                             onPagesReorder(reorderedPages);
                           }
                         }}
-                        disabled={index === pages.length - 1}
+                        disabled={originalIndex === pages.length - 1}
                         className="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-50"
                         title="Move down"
                       >
                         <ChevronDownIcon size={14} />
                       </button>
                       <button
-                        onClick={() => onPageRemove(index)}
-                        className="p-1 text-red-400 hover:text-red-600"
-                        title="Remove page"
+                        onClick={() => handlePageRemovalToggle(originalIndex)}
+                        className={`p-1 ${
+                          page?.removed 
+                            ? 'text-green-400 hover:text-green-600' 
+                            : 'text-red-400 hover:text-red-600'
+                        }`}
+                        title={page?.removed ? "Restore page" : "Remove page"}
                       >
-                        <XIcon size={14} />
+                        {page?.removed ? (
+                          <Plus size={14} />
+                        ) : (
+                          <XIcon size={14} />
+                        )}
                       </button>
                     </div>
                   </td>
@@ -992,8 +992,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
       <div className="mt-4 text-sm text-gray-600">
         <p>
           {pages.length} pages total • 
-          {' '}{pages.filter(p => !p.skip).length} active • 
-          {' '}{pages.filter(p => p.skip).length} skipped
+          {' '}{pages.filter(p => !p.skip && !p.removed).length} active • 
+          {' '}{pages.filter(p => p.skip).length} skipped •
+          {' '}{pages.filter(p => p.removed).length} removed
         </p>
         <p className="text-xs text-gray-500 mt-1">
           {onInterGroupDragStart 

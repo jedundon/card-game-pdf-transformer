@@ -9,19 +9,19 @@
 import { PageSettings, SkippedCard } from '../../types';
 
 /**
- * Calculate active pages (non-skipped pages)
+ * Calculate active pages (non-skipped and non-removed pages)
  * 
- * @param pageSettings - Array of page settings with optional skip flags
- * @returns Array of pages that are not marked as skipped
+ * @param pageSettings - Array of page settings with optional skip and removed flags
+ * @returns Array of pages that are not marked as skipped or removed
  * 
  * @example
  * ```typescript
- * const allPages = [{ skip: false }, { skip: true }, { skip: false }];
+ * const allPages = [{ skip: false }, { skip: true }, { removed: true }, { skip: false }];
  * const activePages = getActivePages(allPages); // Returns [{ skip: false }, { skip: false }]
  * ```
  */
 export function getActivePages(pageSettings: PageSettings[]): PageSettings[] {
-  return pageSettings.filter((page: PageSettings) => !page?.skip);
+  return pageSettings.filter((page: PageSettings) => !page?.skip && !page?.removed);
 }
 
 /**
