@@ -50,6 +50,31 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
   }, [activeGroupId]);
 
   /**
+   * Get the effective PDF mode for the current context
+   * If a group is active, use group-specific processing mode
+   * Otherwise, use global PDF mode
+   */
+  const effectivePdfMode = useMemo(() => {
+    if (!activeGroupId) {
+      // No group active, use global PDF mode
+      return pdfMode;
+    }
+
+    // Find the active group
+    const activeGroup = multiFileImport.multiFileState.pageGroups.find(
+      group => group.id === activeGroupId
+    );
+
+    if (!activeGroup || !activeGroup.processingMode) {
+      // Group not found or no group-specific processing mode, use global PDF mode
+      return pdfMode;
+    }
+
+    // Use group-specific processing mode
+    return activeGroup.processingMode;
+  }, [activeGroupId, pdfMode, multiFileImport.multiFileState.pageGroups]);
+
+  /**
    * Get the effective extraction settings for the current context
    * If a group is active, use group-specific settings merged with global settings
    * Otherwise, use global extraction settings
@@ -189,7 +214,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     globalCardIndex, 
     activePages, 
     effectiveExtractionSettings, 
-    pdfMode, 
+    effectivePdfMode, 
     cardsPerPage,
     pageDimensions?.width,
     pageDimensions?.height
@@ -201,7 +226,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
     activePages,
     renderedPageData,
     extractionSettings: effectiveExtractionSettings,
-    pdfMode,
+    pdfMode: effectivePdfMode,
     globalCardIndex,
     cardsPerPage,
     pageDimensions
@@ -300,7 +325,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           effectiveExtractionSettings,
           cardIndex, // globalCardIndex
           activePages, 
-          pdfMode
+          effectivePdfMode
         );
       } catch (error) {
         console.error(`Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
@@ -313,12 +338,12 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         console.error(`No image data found for file: ${currentPageInfo.fileName}`);
         return null;
       }
-      return await extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, effectiveExtractionSettings);
+      return await extractCardImageFromCanvas(cardIndex, imageData, effectivePdfMode, activePages, effectiveExtractionSettings);
     }
     
     console.warn(`ExtractStep: Unknown file type ${currentPageInfo.fileType} for page ${pageIndex}`);
     return null;
-  }, [effectiveExtractionSettings, pdfMode, activePages, getPdfData, getImageData]);
+  }, [effectiveExtractionSettings, effectivePdfMode, activePages, getPdfData, getImageData]);
 
   const handleCropChange = (edge: string, value: number) => {
     const newSettings = {
@@ -385,6 +410,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           groups={multiFileImport.multiFileState.pageGroups}
           activeGroupId={activeGroupId}
           extractionSettings={effectiveExtractionSettings}
+          globalPdfMode={pdfMode}
           onActiveGroupChange={setActiveGroupId}
         />
       )}
@@ -393,7 +419,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         <div className="space-y-4">
           <PageCropSettings
             crop={effectiveExtractionSettings.crop}
-            pdfMode={pdfMode}
+            pdfMode={effectivePdfMode}
             gutterWidth={effectiveExtractionSettings.gutterWidth}
             onCropChange={handleCropChange}
           />
@@ -404,13 +430,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           />
 
           <GutterSettings
-            pdfMode={pdfMode}
+            pdfMode={effectivePdfMode}
             gutterWidth={effectiveExtractionSettings.gutterWidth || 0}
             onGutterWidthChange={handleGutterWidthChange}
           />
 
           <CardSkipControls
-            pdfMode={pdfMode}
+            pdfMode={effectivePdfMode}
             activePages={activePages}
             extractionSettings={effectiveExtractionSettings}
             currentPage={currentPage}
@@ -422,7 +448,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
           />
 
           <CardTypeOverrideControls
-            pdfMode={pdfMode}
+            pdfMode={effectivePdfMode}
             extractionSettings={effectiveExtractionSettings}
             currentPage={currentPage}
             currentCard={currentCard}
@@ -440,7 +466,7 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
             currentCard={currentCard}
             zoom={zoom}
             extractionSettings={effectiveExtractionSettings}
-            pdfMode={pdfMode}
+            pdfMode={effectivePdfMode}
             cardType={cardType}
             cardId={cardId}
             cardsPerPage={cardsPerPage}
@@ -481,10 +507,13 @@ export const ExtractStep: React.FC<ExtractStepProps> = ({
         </p>
         <CardImageExportButton
           pdfData={pdfData}
-          pdfMode={pdfMode}
+          pdfMode={effectivePdfMode}
           extractionSettings={effectiveExtractionSettings}
           pageSettings={pageSettings}
           multiFileImport={multiFileImport}
+          activeGroupId={activeGroupId}
+          pageGroups={multiFileImport.multiFileState.pageGroups}
+          exportMode="current-group"
         />
       </div>
       

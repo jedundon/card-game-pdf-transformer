@@ -25,7 +25,7 @@ import {
   FileText,
   Settings
 } from 'lucide-react';
-import { PageSettings, PageSource, PageGroup, ExtractionSettings } from '../../../types';
+import { PageSettings, PageSource, PageGroup, ExtractionSettings, PdfMode } from '../../../types';
 import { getActivePagesWithSource } from '../../../utils/cardUtils';
 
 // Constants for default group (matching PageGroupsManager)
@@ -41,6 +41,8 @@ interface GroupContextBarProps {
   activeGroupId: string | null;
   /** Current extraction settings */
   extractionSettings: ExtractionSettings;
+  /** Global PDF mode (used for default group) */
+  globalPdfMode: PdfMode;
   /** Callback when active group changes */
   onActiveGroupChange: (groupId: string | null) => void;
   /** Whether the component is disabled */
@@ -64,6 +66,7 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
   groups,
   activeGroupId,
   extractionSettings,
+  globalPdfMode,
   onActiveGroupChange,
   disabled = false
 }) => {
@@ -81,33 +84,6 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
     return activeGroupId ? groups.find(g => g.id === activeGroupId) : null;
   }, [activeGroupId, groups]);
 
-  /**
-   * Get pages for the current group
-   */
-  const currentGroupPages = useMemo(() => {
-    if (!activeGroup) {
-      // No active group, show default group (ungrouped active pages)
-      const groupedPageIndices = new Set(
-        groups
-          .filter(g => g.id !== DEFAULT_GROUP_ID)
-          .flatMap(g => g.pageIndices)
-      );
-      
-      // Filter active pages to exclude those in custom groups
-      return activePages.filter((page, originalIndex) => {
-        // Find the original index in the pages array
-        const pageOriginalIndex = pages.findIndex(p => p === page);
-        return !groupedPageIndices.has(pageOriginalIndex);
-      });
-    }
-    
-    // For custom groups, get the active pages that belong to this group
-    const groupPages = activeGroup.pageIndices
-      .map(index => pages[index])
-      .filter(Boolean);
-    
-    return getActivePagesWithSource(groupPages);
-  }, [activeGroup, activePages, pages, groups]);
 
   /**
    * Calculate group status information
@@ -196,6 +172,41 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
   }, [groupStatusInfo, activeGroupId]);
 
   /**
+   * Get the processing mode for the current group
+   */
+  const currentProcessingMode = useMemo(() => {
+    if (!activeGroupId) {
+      // Default group uses global PDF mode
+      return globalPdfMode;
+    }
+
+    // Find the active group and return its processing mode
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.processingMode || globalPdfMode;
+  }, [activeGroupId, groups, globalPdfMode]);
+
+  /**
+   * Format processing mode for display
+   */
+  const formatProcessingMode = useCallback((mode: PdfMode) => {
+    const typeMap = {
+      'simplex': 'Simplex',
+      'duplex': 'Duplex',
+      'gutter-fold': 'Gutter-fold'
+    };
+    
+    let displayName = typeMap[mode.type] || mode.type;
+    
+    if (mode.type === 'duplex' && mode.flipEdge) {
+      displayName += ` (${mode.flipEdge} edge)`;
+    } else if (mode.type === 'gutter-fold' && mode.orientation) {
+      displayName += ` (${mode.orientation})`;
+    }
+    
+    return displayName;
+  }, []);
+
+  /**
    * Handle group selection
    */
   const handleGroupSelect = useCallback((groupId: string | null) => {
@@ -246,6 +257,9 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
             </span>
             <span className="text-sm text-gray-500">
               ({currentGroupStatus.pageCount} pages)
+            </span>
+            <span className="text-sm font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">
+              {formatProcessingMode(currentProcessingMode)}
             </span>
           </div>
 

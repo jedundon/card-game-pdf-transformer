@@ -18,7 +18,8 @@ import type {
   PdfMode, 
   ExtractionSettings, 
   PageSettings, 
-  MultiFileImportHook 
+  MultiFileImportHook,
+  PageGroup
 } from '../../types';
 
 export interface CardImageExportButtonProps {
@@ -27,6 +28,12 @@ export interface CardImageExportButtonProps {
   extractionSettings: ExtractionSettings;
   pageSettings: PageSettings[];
   multiFileImport: MultiFileImportHook;
+  /** Current active group ID (null for default group) */
+  activeGroupId?: string | null;
+  /** All page groups for group-aware export */
+  pageGroups?: PageGroup[];
+  /** Export mode - current group only or all groups */
+  exportMode?: 'current-group' | 'all-groups';
   disabled?: boolean;
   className?: string;
   children?: React.ReactNode;
@@ -48,6 +55,9 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
   extractionSettings,
   pageSettings,
   multiFileImport,
+  activeGroupId,
+  pageGroups = [],
+  exportMode = 'current-group',
   disabled = false,
   className = '',
   children
@@ -59,7 +69,7 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
     error: null
   });
 
-  // Calculate total cards for display
+  // Calculate total cards for display (group-aware)
   const totalCards = React.useMemo(() => {
     try {
       // Get unified page data using same logic as ExtractStep
@@ -73,44 +83,75 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
             displayOrder: index
           }));
       
-      const activePages = getActivePagesWithSource(unifiedPages);
+      let targetPages = getActivePagesWithSource(unifiedPages);
+      
+      // Filter by active group if in current-group mode
+      if (exportMode === 'current-group' && activeGroupId) {
+        const activeGroup = pageGroups.find(g => g.id === activeGroupId);
+        if (activeGroup) {
+          // Get only pages that belong to this group
+          const groupPages = activeGroup.pageIndices
+            .map(index => unifiedPages[index])
+            .filter(Boolean);
+          targetPages = getActivePagesWithSource(groupPages);
+        }
+      } else if (exportMode === 'current-group' && !activeGroupId && pageGroups.length > 0) {
+        // Default group - exclude pages that are in custom groups
+        const DEFAULT_GROUP_ID = 'default';
+        const groupedPageIndices = new Set(
+          pageGroups
+            .filter(g => g.id !== DEFAULT_GROUP_ID)
+            .flatMap(g => g.pageIndices)
+        );
+        
+        targetPages = targetPages.filter(page => {
+          const pageOriginalIndex = unifiedPages.findIndex(p => p === page);
+          return !groupedPageIndices.has(pageOriginalIndex);
+        });
+      }
       
       const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-      return calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
+      return calculateTotalCardsForMixedContent(targetPages, pdfMode, cardsPerPage);
     } catch (error) {
       console.error('Error calculating total cards:', error);
       return 0;
     }
-  }, [pageSettings, multiFileImport, extractionSettings, pdfMode]);
+  }, [pageSettings, multiFileImport, extractionSettings, pdfMode, exportMode, activeGroupId, pageGroups]);
 
-  // Generate base filename for the zip
+  // Generate base filename for the zip (group-aware)
   const generateBaseFilename = useCallback(() => {
-    // Get unified page data using same logic as ExtractStep
-    const unifiedPages = multiFileImport.multiFileState.pages.length > 0
-      ? multiFileImport.multiFileState.pages
-      : pageSettings.map((page: any, index: number) => ({
-          ...page,
-          fileName: 'current.pdf',
-          fileType: 'pdf' as const,
-          originalPageIndex: index,
-          displayOrder: index
-        }));
+    let baseName = 'card-images';
     
-    const activePages = getActivePagesWithSource(unifiedPages);
-    
-    if (activePages.length === 1) {
-      // Single file - use its name
-      const page = activePages[0];
-      const filename = page.fileName || 'cards';
-      return filename.replace(/\.[^/.]+$/, ''); // Remove extension
-    } else if (activePages.length > 1) {
-      // Multiple files - use generic name with count
-      return `card-images-${activePages.length}-files`;
-    } else {
-      // Fallback
-      return 'card-images';
+    // Add group context to filename
+    if (exportMode === 'current-group' && activeGroupId) {
+      const activeGroup = pageGroups.find(g => g.id === activeGroupId);
+      if (activeGroup) {
+        const cleanGroupName = activeGroup.name
+          .replace(/[^a-zA-Z0-9-_]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        baseName = `card-images-${cleanGroupName}`;
+      }
+    } else if (exportMode === 'current-group' && !activeGroupId) {
+      baseName = 'card-images-default-group';
+    } else if (exportMode === 'all-groups') {
+      baseName = 'card-images-all-groups';
     }
-  }, [pageSettings, multiFileImport]);
+    
+    return baseName;
+  }, [exportMode, activeGroupId, pageGroups]);
+
+  // Get current group name for display
+  const currentGroupName = React.useMemo(() => {
+    if (exportMode === 'all-groups') {
+      return 'All Groups';
+    } else if (activeGroupId) {
+      const activeGroup = pageGroups.find(g => g.id === activeGroupId);
+      return activeGroup?.name || 'Unknown Group';
+    } else {
+      return 'Default Group';
+    }
+  }, [exportMode, activeGroupId, pageGroups]);
 
   const handleExport = useCallback(async () => {
     if (disabled || exportState.isExporting || totalCards === 0) {
@@ -131,6 +172,9 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
         extractionSettings,
         pageSettings,
         multiFileImport,
+        pageGroups,
+        activeGroupId,
+        exportMode,
         onProgress: (progress: number, message: string) => {
           setExportState(prev => ({
             ...prev,
@@ -221,7 +265,7 @@ export const CardImageExportButton: React.FC<CardImageExportButtonProps> = ({
           {children || (
             exportState.isExporting 
               ? 'Exporting...'
-              : `Export ${totalCards} Card${totalCards !== 1 ? 's' : ''}`
+              : `Export ${totalCards} Card${totalCards !== 1 ? 's' : ''} from ${currentGroupName}`
           )}
         </span>
       </button>

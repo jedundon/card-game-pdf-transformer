@@ -22,7 +22,8 @@ import type {
   PdfMode, 
   ExtractionSettings, 
   PageSettings,
-  MultiFileImportHook
+  MultiFileImportHook,
+  PageGroup
 } from '../types';
 
 export interface CardImageExportOptions {
@@ -31,6 +32,12 @@ export interface CardImageExportOptions {
   extractionSettings: ExtractionSettings;
   pageSettings: PageSettings[];
   multiFileImport: MultiFileImportHook;
+  /** All page groups for group-aware export */
+  pageGroups?: PageGroup[];
+  /** Current active group ID (null for default group) */
+  activeGroupId?: string | null;
+  /** Export mode - current group only or all groups */
+  exportMode?: 'current-group' | 'all-groups';
   onProgress?: (progress: number, message: string) => void;
   onError?: (error: Error) => void;
 }
@@ -45,12 +52,13 @@ export interface ExportedCard {
 
 /**
  * Generate filename for exported card following the convention:
- * {front/back}_{cardID}_{originalFilename}.{extension}
+ * {front/back}_{cardID}_{groupName}_{originalFilename}.{extension}
  */
 function generateCardFilename(
   cardId: number,
   cardType: 'front' | 'back',
   originalFilename: string,
+  groupName: string = 'default',
   extension = 'png'
 ): string {
   // Clean the original filename by removing extension and invalid characters
@@ -60,10 +68,17 @@ function generateCardFilename(
     .replace(/-+/g, '-') // Replace multiple hyphens with single
     .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
   
+  // Clean the group name for filesystem compatibility
+  const cleanGroupName = groupName
+    .replace(/[^a-zA-Z0-9-_]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  
   // Format card ID with leading zeros (e.g., "01", "02", "123")
   const formattedCardId = String(cardId).padStart(2, '0');
   
-  return `${cardType}_${formattedCardId}_${cleanFilename}.${extension}`;
+  return `${cardType}_${formattedCardId}_${cleanGroupName}_${cleanFilename}.${extension}`;
 }
 
 /**
@@ -72,22 +87,10 @@ function generateCardFilename(
  */
 async function extractCardImageData(
   cardIndex: number,
+  activePages: any[],
   options: CardImageExportOptions
 ): Promise<string | null> {
   const { pdfData, pdfMode, extractionSettings, pageSettings, multiFileImport } = options;
-  
-  // Get unified page data using same logic as ExtractStep
-  const unifiedPages = multiFileImport.multiFileState.pages.length > 0
-    ? multiFileImport.multiFileState.pages
-    : pageSettings.map((page: any, index: number) => ({
-        ...page,
-        fileName: 'current.pdf',
-        fileType: 'pdf' as const,
-        originalPageIndex: index,
-        displayOrder: index
-      }));
-  
-  const activePages = getActivePagesWithSource(unifiedPages);
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
   
@@ -170,6 +173,7 @@ async function extractCardImageData(
       
     } else if (pdfData) {
       // Single PDF file mode (legacy support)
+      // Note: activePages is already the filtered target pages passed to this function
       return await extractCardImage(
         cardIndex,
         pdfData,
@@ -197,8 +201,6 @@ async function extractCardImageData(
 function getSourceFilename(
   cardIndex: number,
   activePages: any[],
-  extractionSettings: ExtractionSettings,
-  pdfMode: PdfMode,
   cardsPerPage: number
 ): string {
   try {
@@ -233,6 +235,44 @@ function getSourceFilename(
 }
 
 /**
+ * Get group-specific settings for a card based on the currently active group
+ */
+function getGroupSettingsForCard(
+  activeGroupId: string | null,
+  pageGroups: PageGroup[],
+  globalPdfMode: PdfMode,
+  globalExtractionSettings: ExtractionSettings
+): { pdfMode: PdfMode; extractionSettings: ExtractionSettings; groupName: string } {
+  
+  if (!activeGroupId) {
+    return { 
+      pdfMode: globalPdfMode, 
+      extractionSettings: globalExtractionSettings,
+      groupName: 'default'
+    };
+  }
+  
+  // Find the active group
+  const group = pageGroups.find(g => g.id === activeGroupId);
+  
+  if (!group) {
+    return { 
+      pdfMode: globalPdfMode, 
+      extractionSettings: globalExtractionSettings,
+      groupName: 'default'
+    };
+  }
+  
+  // Use group-specific settings if available, otherwise fall back to global
+  const pdfMode = group.processingMode || globalPdfMode;
+  const extractionSettings = group.settings?.extraction 
+    ? { ...globalExtractionSettings, ...group.settings.extraction }
+    : globalExtractionSettings;
+    
+  return { pdfMode, extractionSettings, groupName: group.name };
+}
+
+/**
  * Export all extracted cards as individual PNG images in a zip file
  */
 export async function exportCardImagesAsZip(
@@ -243,6 +283,9 @@ export async function exportCardImagesAsZip(
     extractionSettings, 
     pageSettings, 
     multiFileImport,
+    pageGroups = [],
+    activeGroupId,
+    exportMode = 'current-group',
     onProgress,
     onError
   } = options;
@@ -260,10 +303,35 @@ export async function exportCardImagesAsZip(
         displayOrder: index
       }));
   
-  const activePages = getActivePagesWithSource(unifiedPages);
+  let targetPages = getActivePagesWithSource(unifiedPages);
+  
+  // Filter by active group if in current-group mode
+  if (exportMode === 'current-group' && activeGroupId) {
+    const activeGroup = pageGroups.find(g => g.id === activeGroupId);
+    if (activeGroup) {
+      // Get only pages that belong to this group
+      const groupPages = activeGroup.pageIndices
+        .map(index => unifiedPages[index])
+        .filter(Boolean);
+      targetPages = getActivePagesWithSource(groupPages);
+    }
+  } else if (exportMode === 'current-group' && !activeGroupId && pageGroups.length > 0) {
+    // Default group - exclude pages that are in custom groups
+    const DEFAULT_GROUP_ID = 'default';
+    const groupedPageIndices = new Set(
+      pageGroups
+        .filter(g => g.id !== DEFAULT_GROUP_ID)
+        .flatMap(g => g.pageIndices)
+    );
+    
+    targetPages = targetPages.filter(page => {
+      const pageOriginalIndex = unifiedPages.findIndex(p => p === page);
+      return !groupedPageIndices.has(pageOriginalIndex);
+    });
+  }
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-  const totalCards = calculateTotalCardsForMixedContent(activePages, pdfMode, cardsPerPage);
+  const totalCards = calculateTotalCardsForMixedContent(targetPages, pdfMode, cardsPerPage);
   
   let processedCards = 0;
   let successfulExports = 0;
@@ -297,12 +365,20 @@ export async function exportCardImagesAsZip(
               return;
             }
             
-            // Get card information
+            // Get group-specific settings for the current active group
+            const groupSettings = getGroupSettingsForCard(
+              activeGroupId,
+              pageGroups,
+              pdfMode,
+              extractionSettings
+            );
+            
+            // Get card information using group-specific settings
             const cardInfo = getCardInfo(
               cardIndex,
-              activePages,
-              extractionSettings,
-              pdfMode,
+              targetPages,
+              groupSettings.extractionSettings,
+              groupSettings.pdfMode,
               cardsPerPage
             );
             
@@ -320,23 +396,27 @@ export async function exportCardImagesAsZip(
               `Processing ${cardType} card ${cardInfo.id}/${totalCards}...`
             );
             
-            // Extract card image
-            const imageData = await extractCardImageData(cardIndex, options);
+            // Extract card image using group-specific settings
+            const groupAwareOptions = {
+              ...options,
+              pdfMode: groupSettings.pdfMode,
+              extractionSettings: groupSettings.extractionSettings
+            };
+            const imageData = await extractCardImageData(cardIndex, targetPages, groupAwareOptions);
             
             if (imageData) {
-              // Generate filename
+              // Generate filename with group name
               const sourceFilename = getSourceFilename(
                 cardIndex, 
-                activePages, 
-                extractionSettings, 
-                pdfMode, 
+                targetPages, 
                 cardsPerPage
               );
               
               const filename = generateCardFilename(
                 cardInfo.id,
                 cardType,
-                sourceFilename
+                sourceFilename,
+                groupSettings.groupName
               );
               
               // Convert data URL to blob and add to zip
