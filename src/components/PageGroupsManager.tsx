@@ -864,7 +864,7 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
               {groupPages.length > 0 ? (
                 <PageReorderTable
                   pages={groupPages}
-                  pdfMode={pdfMode}
+                  pdfMode={group.processingMode || pdfMode}
                   onPagesReorder={(reorderedPages) => handleGroupPageReorder(reorderedPages, group.id)}
                   onPageSettingsChange={(localIndex, settings) => {
                     // Map local index to global index

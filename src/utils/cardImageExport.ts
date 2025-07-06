@@ -331,7 +331,10 @@ export async function exportCardImagesAsZip(
   }
   
   const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-  const totalCards = calculateTotalCardsForMixedContent(targetPages, pdfMode, cardsPerPage);
+  // For export, we need to iterate through ALL card positions (including duplicates for duplex backs)
+  // rather than just unique cards. This ensures both fronts and backs are exported.
+  const totalCardPositions = targetPages.length * cardsPerPage;
+  const uniqueCards = calculateTotalCardsForMixedContent(targetPages, pdfMode, cardsPerPage);
   
   let processedCards = 0;
   let successfulExports = 0;
@@ -343,8 +346,8 @@ export async function exportCardImagesAsZip(
     // Process cards in batches to manage memory usage
     const batchSize = 5; // Process 5 cards at a time
     
-    for (let batchStart = 0; batchStart < totalCards; batchStart += batchSize) {
-      const batchEnd = Math.min(batchStart + batchSize, totalCards);
+    for (let batchStart = 0; batchStart < totalCardPositions; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize, totalCardPositions);
       const batchPromises: Promise<void>[] = [];
       
       for (let cardIndex = batchStart; cardIndex < batchEnd; cardIndex++) {
@@ -359,15 +362,15 @@ export async function exportCardImagesAsZip(
             if (isCardSkipped(pageIndex, gridRow, gridCol, extractionSettings.skippedCards || [])) {
               processedCards++;
               onProgress?.(
-                (processedCards / totalCards) * 100,
-                `Skipping card ${cardIndex + 1}/${totalCards} (marked as skipped)`
+                (processedCards / totalCardPositions) * 100,
+                `Skipping card position ${cardIndex + 1}/${totalCardPositions} (marked as skipped)`
               );
               return;
             }
             
             // Get group-specific settings for the current active group
             const groupSettings = getGroupSettingsForCard(
-              activeGroupId,
+              activeGroupId || null,
               pageGroups,
               pdfMode,
               extractionSettings
@@ -392,8 +395,8 @@ export async function exportCardImagesAsZip(
             const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
             
             onProgress?.(
-              (processedCards / totalCards) * 100,
-              `Processing ${cardType} card ${cardInfo.id}/${totalCards}...`
+              (processedCards / totalCardPositions) * 100,
+              `Processing ${cardType} card ${cardInfo.id} (position ${cardIndex + 1}/${totalCardPositions})...`
             );
             
             // Extract card image using group-specific settings
@@ -430,8 +433,8 @@ export async function exportCardImagesAsZip(
             
             processedCards++;
             onProgress?.(
-              (processedCards / totalCards) * 100,
-              `Processed ${processedCards}/${totalCards} cards`
+              (processedCards / totalCardPositions) * 100,
+              `Processed ${processedCards}/${totalCardPositions} card positions`
             );
             
           } catch (error) {
@@ -455,7 +458,8 @@ export async function exportCardImagesAsZip(
         'Card Image Export Summary',
         '=' .repeat(30),
         '',
-        `Total cards processed: ${totalCards}`,
+        `Total card positions processed: ${totalCardPositions}`,
+        `Unique cards expected: ${uniqueCards}`,
         `Successful exports: ${successfulExports}`,
         `Failed exports: ${failedCards.length}`,
         '',

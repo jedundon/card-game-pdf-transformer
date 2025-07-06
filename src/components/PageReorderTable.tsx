@@ -23,7 +23,7 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useCallback, useRef, useEffect, flushSync } from 'react';
+import React, { useState, useCallback, useRef, useEffect, flushSync, useMemo } from 'react';
 import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon, Plus, Users, Tag } from 'lucide-react';
 import { 
   PageSettings, 
@@ -214,6 +214,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     );
     handlePagesUpdate(updatedPages);
   }, [pages, handlePagesUpdate]);
+
+  // Check if any group uses duplex mode to show page type column
+  const hasAnyDuplexGroup = useMemo(() => {
+    return pageGroups.some(group => group.processingMode?.type === 'duplex') || pdfMode.type === 'duplex';
+  }, [pageGroups, pdfMode]);
 
   // Handle group assignment
   const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
@@ -778,6 +783,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Source
               </th>
+              {hasAnyDuplexGroup && (
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Page Type
+                </th>
+              )}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Group
               </th>
@@ -904,6 +914,21 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                       </div>
                     </div>
                   </td>
+
+                  {/* Page Type (Front/Back) - only show when any group uses duplex */}
+                  {hasAnyDuplexGroup && (
+                    <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      <select
+                        value={page.type || 'front'}
+                        onChange={(e) => handleCardTypeChange(originalIndex, e.target.value)}
+                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={disabled}
+                      >
+                        <option value="front">Front</option>
+                        <option value="back">Back</option>
+                      </select>
+                    </td>
+                  )}
 
                   {/* Group assignment */}
                   <td className="px-4 py-4 whitespace-nowrap text-sm">
