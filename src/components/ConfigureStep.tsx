@@ -6,6 +6,7 @@ import { PageSizeSettings } from './ConfigureStep/components/PageSizeSettings';
 import { CardPositionSettings } from './ConfigureStep/components/CardPositionSettings';
 import { CardSizeSettings } from './ConfigureStep/components/CardSizeSettings';
 import { CalibrationSection } from './ConfigureStep/components/CalibrationSection';
+import { GroupContextBar } from './ExtractStep/components/GroupContextBar';
 // import { CardPreviewPanel } from './ConfigureStep/components/CardPreviewPanel';
 // import { CalibrationWizardModal } from './ConfigureStep/components/CalibrationWizardModal';
 import { 
@@ -43,6 +44,23 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   onNext
 }) => {
   const [currentCardId, setCurrentCardId] = useState(1); // Track logical card ID (1-based)
+  
+  // Group management state - start with null (default group)
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+
+  // Reset card navigation and preview when switching groups
+  useEffect(() => {
+    console.log('ConfigureStep: Active group changed to:', activeGroupId);
+    setCurrentCardId(1); // Reset to first card in new group context
+    
+    // Clear preview state to force fresh loading for new group
+    setCardPreviewUrl(null);
+    setProcessedPreviewUrl(null);
+    setCardRenderData(null);
+    setPreviewError('');
+    setPreviewLoading(false);
+    setProgressMessage('');
+  }, [activeGroupId]);
   const [cardPreviewUrl, setCardPreviewUrl] = useState<string | null>(null);
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState<boolean>(false);
@@ -55,6 +73,118 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   
+  /**
+   * Get the effective PDF mode for the current context
+   * If a group is active, use group-specific processing mode
+   * Otherwise, use global PDF mode
+   */
+  const effectivePdfMode = useMemo(() => {
+    if (!activeGroupId) {
+      // No group active, use global PDF mode
+      return pdfMode;
+    }
+
+    // Find the active group
+    const activeGroup = multiFileImport.multiFileState.pageGroups.find(
+      group => group.id === activeGroupId
+    );
+
+    if (!activeGroup || !activeGroup.processingMode) {
+      // Group not found or no group-specific processing mode, use global PDF mode
+      return pdfMode;
+    }
+
+    // Use group-specific processing mode
+    return activeGroup.processingMode;
+  }, [activeGroupId, pdfMode, multiFileImport.multiFileState.pageGroups]);
+
+  /**
+   * Get the effective extraction settings for the current context
+   * If a group is active, use group-specific settings merged with global settings
+   * Otherwise, use global extraction settings
+   */
+  const effectiveExtractionSettings = useMemo(() => {
+    if (!activeGroupId) {
+      // No group active, use global settings
+      return extractionSettings;
+    }
+
+    // Find the active group
+    const activeGroup = multiFileImport.multiFileState.pageGroups.find(
+      group => group.id === activeGroupId
+    );
+
+    if (!activeGroup || !activeGroup.settings?.extraction) {
+      // Group not found or no group-specific settings, use global settings
+      return extractionSettings;
+    }
+
+    // Merge group settings with global settings (group settings take precedence)
+    return {
+      ...extractionSettings,
+      ...activeGroup.settings.extraction
+    };
+  }, [activeGroupId, extractionSettings, multiFileImport.multiFileState.pageGroups]);
+
+  /**
+   * Get the effective output settings for the current context
+   * If a group is active, use group-specific settings merged with global settings
+   * Otherwise, use global output settings
+   */
+  const effectiveOutputSettings = useMemo(() => {
+    if (!activeGroupId) {
+      // No group active, use global settings
+      return outputSettings;
+    }
+
+    // Find the active group
+    const activeGroup = multiFileImport.multiFileState.pageGroups.find(
+      group => group.id === activeGroupId
+    );
+
+    if (!activeGroup || !activeGroup.settings?.output) {
+      // Group not found or no group-specific settings, use global settings
+      return outputSettings;
+    }
+
+    // Merge group settings with global settings (group settings take precedence)
+    return {
+      ...outputSettings,
+      ...activeGroup.settings.output
+    };
+  }, [activeGroupId, outputSettings, multiFileImport.multiFileState.pageGroups]);
+
+  /**
+   * Handle group-aware settings changes
+   * If a group is active, save settings to the group
+   * Otherwise, save to global settings
+   */
+  const handleGroupAwareSettingsChange = useCallback((newSettings: any) => {
+    if (!activeGroupId) {
+      // No group active, save to global settings
+      onSettingsChange(newSettings);
+      return;
+    }
+
+    // Update the group's settings
+    const updatedGroups = multiFileImport.multiFileState.pageGroups.map(group => {
+      if (group.id === activeGroupId) {
+        return {
+          ...group,
+          settings: {
+            ...group.settings,
+            output: newSettings
+          },
+          modifiedAt: Date.now()
+        };
+      }
+      return group;
+    });
+
+    // Update groups in multiFileImport state
+    multiFileImport.updatePageGroups(updatedGroups);
+  }, [activeGroupId, multiFileImport, onSettingsChange]);
+
   // Create a stable reference to image data map to prevent dependency issues
   const imageDataMap = useMemo(() => {
     const map = new Map();
@@ -134,29 +264,74 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
   
-  // Calculate total cards from extraction settings and active pages
-  const activePages = useMemo(() => 
-    getActivePagesWithSource(unifiedPages), 
-    [unifiedPages]
-  );
-  
-  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  // Constants for default group (matching PageGroupsManager and GroupContextBar)
+  const DEFAULT_GROUP_ID = 'default';
+
+  // Get pages filtered by active group
+  const filteredPages = useMemo(() => {
+    // First get only active pages (exclude removed/skipped)
+    const activeUnifiedPages = getActivePagesWithSource(unifiedPages);
+    
+    if (!activeGroupId) {
+      // No group selected, show default group (ungrouped active pages)
+      const groupedPageIndices = new Set(
+        multiFileImport.multiFileState.pageGroups
+          .filter(g => g.id !== DEFAULT_GROUP_ID)
+          .flatMap(g => g.pageIndices)
+      );
+      
+      // Filter active pages to exclude those in custom groups
+      return activeUnifiedPages.filter(page => {
+        const pageOriginalIndex = unifiedPages.findIndex(p => p === page);
+        return !groupedPageIndices.has(pageOriginalIndex);
+      });
+    }
+    
+    // Find the active group
+    const activeGroup = multiFileImport.multiFileState.pageGroups.find(
+      group => group.id === activeGroupId
+    );
+    
+    if (!activeGroup) {
+      // Group not found, fallback to default group (ungrouped active pages)
+      const groupedPageIndices = new Set(
+        multiFileImport.multiFileState.pageGroups
+          .filter(g => g.id !== DEFAULT_GROUP_ID)
+          .flatMap(g => g.pageIndices)
+      );
+      
+      return activeUnifiedPages.filter(page => {
+        const pageOriginalIndex = unifiedPages.findIndex(p => p === page);
+        return !groupedPageIndices.has(pageOriginalIndex);
+      });
+    }
+    
+    // Return only active pages that belong to this group
+    const groupPages = activeGroup.pageIndices
+      .map(index => unifiedPages[index])
+      .filter(Boolean);
+    
+    return getActivePagesWithSource(groupPages);
+  }, [unifiedPages, activeGroupId, multiFileImport.multiFileState.pageGroups]);
+
+  const activePages = filteredPages;
+  const cardsPerPage = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
 
   // Calculate total unique cards based on PDF mode and card type
   const totalCards = useMemo(() => 
-    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
-    [pdfMode, activePages, cardsPerPage]
+    calculateTotalCards(effectivePdfMode, activePages, cardsPerPage), 
+    [effectivePdfMode, activePages, cardsPerPage]
   );
 
   // Calculate card front/back identification based on PDF mode (using utility function)
   const getCardInfoCallback = useCallback((cardIndex: number) => 
-    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height), 
-    [activePages, extractionSettings, pdfMode, cardsPerPage]
+    getCardInfo(cardIndex, activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage), 
+    [activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage]
   );
   // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode
   const availableCardIds = useMemo(() => 
-    getAvailableCardIds(viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings), 
-    [viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]
+    getAvailableCardIds(viewMode, totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings), 
+    [viewMode, totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings]
   );
 
   const totalFilteredCards = availableCardIds.length;
@@ -176,7 +351,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     if (!currentCardExists) return null;
     
     // Find the first card index that matches the current card ID and view mode
-    const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+    const maxIndex = effectivePdfMode.type === 'duplex' || effectivePdfMode.type === 'gutter-fold' 
       ? activePages.length * cardsPerPage 
       : totalCards;
     
@@ -188,12 +363,12 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     }
     
     return null;
-  }, [currentCardExists, currentCardId, viewMode, pdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
+  }, [currentCardExists, currentCardId, viewMode, effectivePdfMode.type, activePages.length, cardsPerPage, totalCards, getCardInfoCallback]);
 
   // Extract card image for preview using source-aware logic
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     // Calculate which page this card belongs to
-    const cardsPerPageLocal = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const cardsPerPageLocal = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
     const pageIndex = Math.floor(cardIndex / cardsPerPageLocal);
     
     if (pageIndex >= activePages.length || pageIndex < 0) {
@@ -228,10 +403,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           filePdfData, 
           actualPageNumber, 
           cardOnPage, 
-          extractionSettings,
+          effectiveExtractionSettings,
           cardIndex, // globalCardIndex
           activePages, 
-          pdfMode
+          effectivePdfMode
         );
       } catch (error) {
         console.error(`ConfigureStep: Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
@@ -244,11 +419,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         console.error(`ConfigureStep: No image data found for file: ${currentPageInfo.fileName}`);
         return null;
       }
-      return await extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
+      return await extractCardImageFromCanvas(cardIndex, imageData, effectivePdfMode, activePages, effectiveExtractionSettings);
     }
     
     return null;
-  }, [extractionSettings, pdfMode, activePages, getPdfData, getImageData]);
+  }, [effectiveExtractionSettings, effectivePdfMode, activePages, getPdfData, getImageData]);
 
   // Cache management (available but not used in current implementation)
   // const clearCache = useCallback(() => {
@@ -256,15 +431,20 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   // }, []);
 
   const getCacheKey = useCallback((cardId: number, mode: 'front' | 'back', settings: any) => {
-    return JSON.stringify({ cardId, mode, settings: {
-      cardSize: settings.cardSize,
-      cardScalePercent: settings.cardScalePercent,
-      rotation: settings.rotation,
-      offset: settings.offset,
-      cardImageSizingMode: settings.cardImageSizingMode,
-      bleedMarginInches: settings.bleedMarginInches
-    }});
-  }, []);
+    return JSON.stringify({ 
+      cardId, 
+      mode, 
+      activeGroupId, // Include group ID so different groups have separate cache entries
+      settings: {
+        cardSize: settings.cardSize,
+        cardScalePercent: settings.cardScalePercent,
+        rotation: settings.rotation,
+        offset: settings.offset,
+        cardImageSizingMode: settings.cardImageSizingMode,
+        bleedMarginInches: settings.bleedMarginInches
+      }
+    });
+  }, [activeGroupId]);
 
   // Debounced settings change handler
   const debouncedSettingsChange = useCallback((newSettings: any) => {
@@ -276,11 +456,11 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     
     settingsChangeTimeoutRef.current = setTimeout(() => {
       if (pendingSettingsRef.current) {
-        onSettingsChange(pendingSettingsRef.current);
+        handleGroupAwareSettingsChange(pendingSettingsRef.current);
         pendingSettingsRef.current = null;
       }
     }, TIMEOUT_CONSTANTS.SETTINGS_DEBOUNCE_DELAY);
-  }, [onSettingsChange]);
+  }, [handleGroupAwareSettingsChange]);
 
   // Update card preview when current card changes
   useEffect(() => {
@@ -298,7 +478,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       }
 
       // Check cache first
-      const cacheKey = getCacheKey(currentCardId, viewMode, outputSettings);
+      const cacheKey = getCacheKey(currentCardId, viewMode, effectiveOutputSettings);
       const cached = previewCacheRef.current.get(cacheKey);
       const cacheAge = cached ? Date.now() - cached.timestamp : Infinity;
       
@@ -337,7 +517,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
         // Calculate render dimensions with timeout
         setProgressMessage('Calculating render dimensions...');
-        const renderPromise = calculateFinalCardRenderDimensions(cardUrl, outputSettings);
+        const renderPromise = calculateFinalCardRenderDimensions(cardUrl, effectiveOutputSettings);
         const renderTimeoutPromise = new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error('Render calculation timed out')), TIMEOUT_CONSTANTS.RENDER_CALCULATION_TIMEOUT)
         );
@@ -348,12 +528,12 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         
         // Calculate positioning
         setProgressMessage('Calculating card positioning...');
-        const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+        const positioning = calculateCardPositioning(renderDimensions, effectiveOutputSettings, viewMode);
         const previewScaling = calculatePreviewScaling(
           renderDimensions,
           positioning,
-          outputSettings.pageSize.width,
-          outputSettings.pageSize.height,
+          effectiveOutputSettings.pageSize.width,
+          effectiveOutputSettings.pageSize.height,
           PREVIEW_CONSTRAINTS.MAX_WIDTH,
           PREVIEW_CONSTRAINTS.MAX_HEIGHT
         );
@@ -446,22 +626,24 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     totalFilteredCards,
     currentCardExists,
     currentCardIndex,
-    outputSettings, // Add outputSettings as dependency so preview updates when settings change
-    getCacheKey
+    effectiveOutputSettings, // Add effectiveOutputSettings as dependency so preview updates when settings change
+    getCacheKey,
+    activeGroupId, // Add activeGroupId so preview updates when group changes
+    activePages // Add activePages so preview updates when filtered pages change
   ]);
 
   const handlePageSizeChange = (dimension: string, value: number | { width: number; height: number }) => {
     if (dimension === 'preset' && typeof value === 'object') {
       const newSettings = {
-        ...outputSettings,
+        ...effectiveOutputSettings,
         pageSize: value
       };
       debouncedSettingsChange(newSettings);
     } else if (typeof value === 'number') {
       const newSettings = {
-        ...outputSettings,
+        ...effectiveOutputSettings,
         pageSize: {
-          ...outputSettings.pageSize,
+          ...effectiveOutputSettings.pageSize,
           [dimension]: value
         }
       };
@@ -470,9 +652,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   };
   const handleOffsetChange = (direction: string, value: number) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       offset: {
-        ...outputSettings.offset,
+        ...effectiveOutputSettings.offset,
         [direction]: value
       }
     };
@@ -480,9 +662,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   };
   const handleCardSizeChange = (dimension: 'widthInches' | 'heightInches', value: number) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       cardSize: {
-        ...(outputSettings.cardSize || DEFAULT_SETTINGS.outputSettings.cardSize),
+        ...(effectiveOutputSettings.cardSize || DEFAULT_SETTINGS.outputSettings.cardSize),
         [dimension]: value
       }
     };
@@ -491,7 +673,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   const handleCardScalePercentChange = (value: number) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       cardScalePercent: value
     };
     debouncedSettingsChange(newSettings);
@@ -499,7 +681,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   const handleBleedMarginChange = (value: number) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       bleedMarginInches: value
     };
     debouncedSettingsChange(newSettings);
@@ -507,9 +689,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   const handleRotationChange = (cardType: 'front' | 'back', value: number) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       rotation: {
-        ...(outputSettings.rotation || { front: 0, back: 0 }),
+        ...(effectiveOutputSettings.rotation || { front: 0, back: 0 }),
         [cardType]: value
       }
     };
@@ -534,10 +716,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     ].filter(id => id !== null) as number[];
 
     for (const adjacentCardId of adjacentCards) {
-      const cacheKey = getCacheKey(adjacentCardId, viewMode, outputSettings);
+      const cacheKey = getCacheKey(adjacentCardId, viewMode, effectiveOutputSettings);
       if (!previewCacheRef.current.has(cacheKey)) {
         // Find the card index for the adjacent card ID
-        const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
+        const maxIndex = effectivePdfMode.type === 'duplex' || effectivePdfMode.type === 'gutter-fold' 
           ? activePages.length * cardsPerPage 
           : totalCards;
         
@@ -554,8 +736,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           // Start preloading in background (don't await to avoid blocking)
           extractCardImage(cardIndex).then(async (cardUrl) => {
             if (cardUrl) {
-              const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, outputSettings);
-              const positioning = calculateCardPositioning(renderDimensions, outputSettings, viewMode);
+              const renderDimensions = await calculateFinalCardRenderDimensions(cardUrl, effectiveOutputSettings);
+              const positioning = calculateCardPositioning(renderDimensions, effectiveOutputSettings, viewMode);
               const processedImage = await processCardImageForRendering(cardUrl, renderDimensions, positioning.rotation);
               
               // Cache the preloaded result
@@ -568,8 +750,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   previewScaling: calculatePreviewScaling(
                     renderDimensions,
                     positioning,
-                    outputSettings.pageSize.width,
-                    outputSettings.pageSize.height,
+                    effectiveOutputSettings.pageSize.width,
+                    effectiveOutputSettings.pageSize.height,
                     PREVIEW_CONSTRAINTS.MAX_WIDTH,
                     PREVIEW_CONSTRAINTS.MAX_HEIGHT
                   )
@@ -583,7 +765,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
         }
       }
     }
-  }, [availableCardIds, viewMode, outputSettings, getCacheKey, getCardInfoCallback, extractCardImage, pdfMode.type, activePages.length, cardsPerPage, totalCards]);
+  }, [availableCardIds, viewMode, effectiveOutputSettings, getCacheKey, getCardInfoCallback, extractCardImage, effectivePdfMode.type, activePages.length, cardsPerPage, totalCards]);
   
   const handleNextCard = () => {
     const currentIndex = availableCardIds.indexOf(currentCardId);
@@ -636,28 +818,28 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
   // Handle calibration PDF generation
   const handlePrintCalibration = useCallback(() => {
     // Use new card size settings for calibration
-    const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
-    const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
+    const cardWidthInches = effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+    const cardHeightInches = effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
     
     // Apply scale percentage
-    const scalePercent = outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent;
+    const scalePercent = effectiveOutputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent;
     const scaledWidth = cardWidthInches * (scalePercent / 100);
     const scaledHeight = cardHeightInches * (scalePercent / 100);
     
     // Get current offset settings
-    const horizontalOffset = outputSettings.offset.horizontal || 0;
-    const verticalOffset = outputSettings.offset.vertical || 0;
+    const horizontalOffset = effectiveOutputSettings.offset.horizontal || 0;
+    const verticalOffset = effectiveOutputSettings.offset.vertical || 0;
     
     // Get current rotation for the view mode being tested
-    const rotation = getRotationForCardType(outputSettings, viewMode);
+    const rotation = getRotationForCardType(effectiveOutputSettings, viewMode);
     
-    console.log(`Calibration card: ${scaledWidth.toFixed(2)}" × ${scaledHeight}" with offset ${horizontalOffset.toFixed(3)}", ${verticalOffset.toFixed(3)}" and ${rotation}° rotation on ${outputSettings.pageSize.width}" × ${outputSettings.pageSize.height}" media`);
+    console.log(`Calibration card: ${scaledWidth.toFixed(2)}" × ${scaledHeight}" with offset ${horizontalOffset.toFixed(3)}", ${verticalOffset.toFixed(3)}" and ${rotation}° rotation on ${effectiveOutputSettings.pageSize.width}" × ${effectiveOutputSettings.pageSize.height}" media`);
     
     const pdfBlob = generateCalibrationPDF(
       scaledWidth,
       scaledHeight,
-      outputSettings.pageSize.width,
-      outputSettings.pageSize.height,
+      effectiveOutputSettings.pageSize.width,
+      effectiveOutputSettings.pageSize.height,
       horizontalOffset,
       verticalOffset,
       rotation,
@@ -673,7 +855,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [outputSettings, viewMode]);
+  }, [effectiveOutputSettings, viewMode]);
 
   // Handle calibration measurements and apply settings
   const handleApplyCalibration = useCallback(() => {
@@ -695,8 +877,8 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
     }
 
     // Get current card dimensions for calculation
-    const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
-    const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
+    const cardWidthInches = effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+    const cardHeightInches = effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
 
     const settings = calculateCalibrationSettings(
       rightDistance,
@@ -704,14 +886,14 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       crosshairLength,
       cardWidthInches,
       cardHeightInches,
-      outputSettings.offset.horizontal || 0,
-      outputSettings.offset.vertical || 0,
-      outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent
+      effectiveOutputSettings.offset.horizontal || 0,
+      effectiveOutputSettings.offset.vertical || 0,
+      effectiveOutputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent
     );
 
     // Apply the new calculated settings (batch offset changes to avoid state timing issues)
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       offset: {
         horizontal: settings.newHorizontalOffset,
         vertical: settings.newVerticalOffset
@@ -719,7 +901,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       cardScalePercent: settings.newScalePercent
     };
     
-    onSettingsChange(newSettings);
+    handleGroupAwareSettingsChange(newSettings);
     
     // Show feedback about what was changed with diagnostics
     const adjustments = settings.adjustments;
@@ -759,7 +941,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       topDistance: '',
       crosshairLength: ''
     });
-  }, [calibrationMeasurements, outputSettings, onSettingsChange]);
+  }, [calibrationMeasurements, effectiveOutputSettings, handleGroupAwareSettingsChange]);
 
   const handleCalibrationMeasurementChange = useCallback((field: string, value: string) => {
     setCalibrationMeasurements(prev => ({
@@ -770,7 +952,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   const handleCardSizePreset = (size: { widthInches: number; heightInches: number }) => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       cardSize: size
     };
     debouncedSettingsChange(newSettings);
@@ -778,7 +960,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
   const handleCardImageSizingModeChange = (mode: 'actual-size' | 'fit-to-card' | 'fill-card') => {
     const newSettings = {
-      ...outputSettings,
+      ...effectiveOutputSettings,
       cardImageSizingMode: mode
     };
     debouncedSettingsChange(newSettings);
@@ -795,7 +977,18 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
           size="sm"
         />
       </div>
-      
+
+      {/* Group Context Bar - only show if groups exist */}
+      {multiFileImport.multiFileState.pageGroups.length > 0 && (
+        <GroupContextBar
+          pages={unifiedPages}
+          groups={multiFileImport.multiFileState.pageGroups}
+          activeGroupId={activeGroupId}
+          extractionSettings={effectiveExtractionSettings}
+          globalPdfMode={pdfMode}
+          onActiveGroupChange={setActiveGroupId}
+        />
+      )}
       
       {!pdfData && multiFileImport.multiFileState.pages.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -816,16 +1009,16 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
           <PageSizeSettings
-            outputSettings={outputSettings}
+            outputSettings={effectiveOutputSettings}
             onPageSizeChange={handlePageSizeChange}
           />
           <CardPositionSettings
-            outputSettings={outputSettings}
+            outputSettings={effectiveOutputSettings}
             onOffsetChange={handleOffsetChange}
           />
 
           <CardSizeSettings
-            outputSettings={outputSettings}
+            outputSettings={effectiveOutputSettings}
             onCardImageSizingModeChange={handleCardImageSizingModeChange}
             onCardSizeChange={handleCardSizeChange}
             onBleedMarginChange={handleBleedMarginChange}
@@ -838,7 +1031,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
 
           {/* Printer Calibration Section */}
           <CalibrationSection
-            outputSettings={outputSettings}
+            outputSettings={effectiveOutputSettings}
             viewMode={viewMode}
             onPrintCalibration={handlePrintCalibration}
             onShowCalibrationWizard={() => setShowCalibrationWizard(true)}
@@ -899,9 +1092,9 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                       cardId={currentCardId}
                       cardType={viewMode}
                       pdfData={pdfData}
-                      pdfMode={pdfMode}
-                      extractionSettings={extractionSettings}
-                      outputSettings={outputSettings}
+                      pdfMode={effectivePdfMode}
+                      extractionSettings={effectiveExtractionSettings}
+                      outputSettings={effectiveOutputSettings}
                       multiFileImport={multiFileImport}
                       activePages={activePages}
                       cardsPerPage={cardsPerPage}
@@ -958,7 +1151,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                           onClick={() => {
                             setPreviewError('');
                             // Clear cache for current card to force fresh render
-                            const cacheKey = getCacheKey(currentCardId, viewMode, outputSettings);
+                            const cacheKey = getCacheKey(currentCardId, viewMode, effectiveOutputSettings);
                             previewCacheRef.current.delete(cacheKey);
                             // Force re-render by updating a dependency
                             setCurrentCardId(prev => prev);
@@ -1019,31 +1212,31 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                 )}
                 <p>
                   <span className="font-medium">Total cards:</span>{' '}
-                  {totalCards} ({activePages.length} pages × {extractionSettings.grid.rows}×{extractionSettings.grid.columns})
+                  {totalCards} ({activePages.length} pages × {effectiveExtractionSettings.grid.rows}×{effectiveExtractionSettings.grid.columns})
                 </p>
                 <p>
                   <span className="font-medium">Front cards:</span>{' '}
-                  {getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length} 
+                  {getAvailableCardIds('front', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length} 
                   {(() => {
-                    const totalFronts = countCardsByType('front', activePages, cardsPerPage, pdfMode, extractionSettings);
-                    const availableFronts = getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                    const totalFronts = countCardsByType('front', activePages, cardsPerPage, effectivePdfMode, effectiveExtractionSettings);
+                    const availableFronts = getAvailableCardIds('front', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
                     return totalFronts !== availableFronts ? ` (${totalFronts - availableFronts} skipped)` : '';
                   })()}
                 </p>
                 <p>
                   <span className="font-medium">Back cards:</span>{' '}
-                  {getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length}
+                  {getAvailableCardIds('back', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length}
                   {(() => {
-                    const totalBacks = countCardsByType('back', activePages, cardsPerPage, pdfMode, extractionSettings);
-                    const availableBacks = getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                    const totalBacks = countCardsByType('back', activePages, cardsPerPage, effectivePdfMode, effectiveExtractionSettings);
+                    const availableBacks = getAvailableCardIds('back', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
                     return totalBacks !== availableBacks ? ` (${totalBacks - availableBacks} skipped)` : '';
                   })()}
                 </p>
                 <p>
                   <span className="font-medium">PDF mode:</span>{' '}
-                  {pdfMode.type === 'simplex' ? 'Single-sided' : 
-                   pdfMode.type === 'duplex' ? 'Double-sided' : 
-                   pdfMode.type === 'gutter-fold' ? 'Gutter-fold' : pdfMode.type}
+                  {effectivePdfMode.type === 'simplex' ? 'Single-sided' : 
+                   effectivePdfMode.type === 'duplex' ? 'Double-sided' : 
+                   effectivePdfMode.type === 'gutter-fold' ? 'Gutter-fold' : effectivePdfMode.type}
                 </p>
               </div>
             </div>
@@ -1056,32 +1249,32 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
               <div className="text-sm text-gray-600 space-y-2">
                 <p>
                   <span className="font-medium">Page size:</span>{' '}
-                  {outputSettings.pageSize.width}" × {outputSettings.pageSize.height}"
+                  {effectiveOutputSettings.pageSize.width}" × {effectiveOutputSettings.pageSize.height}"
                 </p>
                 <p>
                   <span className="font-medium">Card size:</span>{' '}
-                  {outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches}" × {outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches}"
+                  {effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches}" × {effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches}"
                 </p>
                 <p>
                   <span className="font-medium">Card scale:</span>{' '}
-                  {outputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent}%
+                  {effectiveOutputSettings.cardScalePercent || DEFAULT_SETTINGS.outputSettings.cardScalePercent}%
                 </p>
                 <p>
                   <span className="font-medium">Bleed margin:</span>{' '}
-                  {outputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
+                  {effectiveOutputSettings.bleedMarginInches || DEFAULT_SETTINGS.outputSettings.bleedMarginInches}"
                 </p>
                 <p>
                   <span className="font-medium">Card offset:</span>{' '}
-                  {outputSettings.offset.horizontal.toFixed(3)}" horizontal, {outputSettings.offset.vertical.toFixed(3)}" vertical
+                  {effectiveOutputSettings.offset.horizontal.toFixed(3)}" horizontal, {effectiveOutputSettings.offset.vertical.toFixed(3)}" vertical
                 </p>
                 <p>
                   <span className="font-medium">Rotation:</span>{' '}
-                  Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
+                  Front {getRotationForCardType(effectiveOutputSettings, 'front')}°, Back {getRotationForCardType(effectiveOutputSettings, 'back')}°
                 </p>
                 <p>
                   <span className="font-medium">Final print size:</span>{' '}
                   {(() => {
-                    const cardDimensions = calculateCardDimensions(outputSettings);
+                    const cardDimensions = calculateCardDimensions(effectiveOutputSettings);
                     return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
                   })()}
                 </p>
@@ -1134,7 +1327,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   placeholder="1.25"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Distance from center dot to right edge of card (expect ~{(outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2}")
+                  Distance from center dot to right edge of card (expect ~{(effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2}")
                 </p>
               </div>
               
@@ -1151,7 +1344,7 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   placeholder="1.75"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Distance from center dot to top edge of card (expect ~{(outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2}")
+                  Distance from center dot to top edge of card (expect ~{(effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2}")
                 </p>
               </div>
               
