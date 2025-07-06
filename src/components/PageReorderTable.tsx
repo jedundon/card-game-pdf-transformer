@@ -215,10 +215,58 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     handlePagesUpdate(updatedPages);
   }, [pages, handlePagesUpdate]);
 
-  // Check if any group uses duplex mode to show page type column
+  // Check if any group uses non-default processing mode to show page type column
+  const hasAnySpecialProcessingMode = useMemo(() => {
+    return pageGroups.length > 0 || pdfMode.type !== 'simplex';
+  }, [pageGroups, pdfMode]);
+
+  // Check if any group uses duplex mode (for dropdown vs label)
   const hasAnyDuplexGroup = useMemo(() => {
     return pageGroups.some(group => group.processingMode?.type === 'duplex') || pdfMode.type === 'duplex';
   }, [pageGroups, pdfMode]);
+
+  // Get the effective processing mode for a specific page
+  const getPageProcessingMode = useCallback((pageIndex: number): PdfMode => {
+    // Find which group this page belongs to
+    const pageGroup = pageGroups.find(group => group.pageIndices.includes(pageIndex));
+    return pageGroup?.processingMode || pdfMode;
+  }, [pageGroups, pdfMode]);
+
+  // Get page type display for a specific page
+  const getPageTypeDisplay = useCallback((pageIndex: number, page: PageSettings & PageSource) => {
+    const processingMode = getPageProcessingMode(pageIndex);
+    
+    switch (processingMode.type) {
+      case 'duplex':
+        // Show dropdown for duplex mode
+        return (
+          <select
+            value={page.type || 'front'}
+            onChange={(e) => handleCardTypeChange(pageIndex, e.target.value)}
+            className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            disabled={disabled}
+          >
+            <option value="front">Front</option>
+            <option value="back">Back</option>
+          </select>
+        );
+      case 'gutter-fold':
+        // Show label for gutter-fold mode
+        return (
+          <span className="text-sm text-gray-600 font-medium">
+            front&back
+          </span>
+        );
+      case 'simplex':
+      default:
+        // Show label for simplex mode
+        return (
+          <span className="text-sm text-gray-600 font-medium">
+            single
+          </span>
+        );
+    }
+  }, [getPageProcessingMode, handleCardTypeChange, disabled]);
 
   // Handle group assignment
   const handleGroupAssignment = useCallback((pageIndex: number, groupId: string | null) => {
@@ -783,7 +831,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Source
               </th>
-              {hasAnyDuplexGroup && (
+              {hasAnySpecialProcessingMode && (
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Page Type
                 </th>
@@ -915,18 +963,10 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
                     </div>
                   </td>
 
-                  {/* Page Type (Front/Back) - only show when any group uses duplex */}
-                  {hasAnyDuplexGroup && (
+                  {/* Page Type - show appropriate display based on processing mode */}
+                  {hasAnySpecialProcessingMode && (
                     <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <select
-                        value={page.type || 'front'}
-                        onChange={(e) => handleCardTypeChange(originalIndex, e.target.value)}
-                        className="border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        disabled={disabled}
-                      >
-                        <option value="front">Front</option>
-                        <option value="back">Back</option>
-                      </select>
+                      {getPageTypeDisplay(originalIndex, page)}
                     </td>
                   )}
 
