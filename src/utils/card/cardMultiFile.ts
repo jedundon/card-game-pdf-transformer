@@ -42,8 +42,8 @@ export function calculateCardNumbersForReorderedPages(
   
   // Process pages in their display order (not original file order)
   pages.forEach((page, displayIndex) => {
-    if (page.skip) {
-      // Skipped pages don't get card numbers
+    if (page.skip || page.removed) {
+      // Skipped or removed pages don't get card numbers
       cardNumberMap.set(displayIndex, []);
       return;
     }
@@ -138,7 +138,7 @@ function findPreviousFrontPageInDisplayOrder(
 export function getActivePagesWithSource(
   pageSettings: (PageSettings & PageSource)[]
 ): (PageSettings & PageSource)[] {
-  return pageSettings.filter(page => !page?.skip);
+  return pageSettings.filter(page => !page?.skip && !page?.removed);
 }
 
 /**

@@ -107,8 +107,8 @@ export function recalculateCardNumbers(
   
   // Process pages in their current display order
   pages.forEach((page, pageIndex) => {
-    if (page.skip) {
-      // Skipped pages don't get card numbers
+    if (page.skip || page.removed) {
+      // Skipped or removed pages don't get card numbers
       cardNumberMap.set(pageIndex, []);
       return;
     }
@@ -173,7 +173,7 @@ function findPreviousFrontPage(
   currentIndex: number
 ): number {
   for (let i = currentIndex - 1; i >= 0; i--) {
-    if (!pages[i].skip && pages[i].type === 'front') {
+    if (!pages[i].skip && !pages[i].removed && pages[i].type === 'front') {
       return i;
     }
   }
