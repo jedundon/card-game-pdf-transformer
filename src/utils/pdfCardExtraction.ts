@@ -227,7 +227,15 @@ export async function extractCardImageFromPdfPage(
     if (extractionSettings.imageRotation && globalCardIndex !== undefined && activePages && pdfMode) {
       // Determine card type to get appropriate rotation
       const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
-      const cardInfo = getCardInfo(globalCardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardInfo = getCardInfo(
+        globalCardIndex, 
+        activePages, 
+        extractionSettings, 
+        pdfMode, 
+        cardsPerPage,
+        extractionSettings.pageDimensions?.width,
+        extractionSettings.pageDimensions?.height
+      );
       const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
       const rotation = extractionSettings.imageRotation[cardType] || 0;
       

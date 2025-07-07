@@ -382,7 +382,9 @@ export async function exportCardImagesAsZip(
               targetPages,
               groupSettings.extractionSettings,
               groupSettings.pdfMode,
-              cardsPerPage
+              cardsPerPage,
+              groupSettings.extractionSettings.pageDimensions?.width,
+              groupSettings.extractionSettings.pageDimensions?.height
             );
             
             if (!cardInfo || cardInfo.type === 'Unknown') {

@@ -359,7 +359,15 @@ export async function extractCardImage(
     // Apply image rotation if specified
     if (extractionSettings.imageRotation) {
       // Determine card type to get appropriate rotation
-      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardInfo = getCardInfo(
+        cardIndex, 
+        activePages, 
+        extractionSettings, 
+        pdfMode, 
+        cardsPerPage,
+        extractionSettings.pageDimensions?.width,
+        extractionSettings.pageDimensions?.height
+      );
       const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
       const rotation = extractionSettings.imageRotation[cardType] || 0;
       
@@ -623,7 +631,15 @@ export async function extractCardImageFromCanvas(
     // Apply image rotation if specified
     if (extractionSettings.imageRotation) {
       // Determine card type to get appropriate rotation
-      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+      const cardInfo = getCardInfo(
+        cardIndex, 
+        activePages, 
+        extractionSettings, 
+        pdfMode, 
+        cardsPerPage,
+        extractionSettings.pageDimensions?.width,
+        extractionSettings.pageDimensions?.height
+      );
       const cardType = cardInfo.type.toLowerCase() as 'front' | 'back';
       const rotation = extractionSettings.imageRotation[cardType] || 0;
       

@@ -33,7 +33,9 @@ function getEffectiveCardType(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  cardsPerPage: number,
+  pageWidth?: number,
+  pageHeight?: number
 ): 'front' | 'back' {
   const pageIndex = Math.floor(cardIndex / cardsPerPage);
   const cardOnPage = cardIndex % cardsPerPage;
@@ -53,7 +55,7 @@ function getEffectiveCardType(
   }
   
   // Fall back to automatic assignment based on processing mode
-  return getAutoAssignedCardType(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage);
+  return getAutoAssignedCardType(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, pageWidth, pageHeight);
 }
 
 /**
@@ -64,8 +66,11 @@ function getEffectiveCardType(
  * 
  * @param cardIndex - Global card index across all pages (0-based)
  * @param activePages - Array of active pages with type information
+ * @param extractionSettings - Grid and override configuration
  * @param pdfMode - PDF processing mode and orientation settings
  * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @param pageWidth - Optional page width for flip edge calculations
+ * @param pageHeight - Optional page height for flip edge calculations
  * @returns Auto-assigned card type ('front' or 'back')
  * 
  * @internal
@@ -75,7 +80,9 @@ function getAutoAssignedCardType(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  cardsPerPage: number,
+  pageWidth?: number,
+  pageHeight?: number
 ): 'front' | 'back' {
   const pageIndex = Math.floor(cardIndex / cardsPerPage);
   const cardOnPage = cardIndex % cardsPerPage;
@@ -99,6 +106,11 @@ function getAutoAssignedCardType(
     }
   }
   
+  if (pdfMode.type === 'duplex' && pageType === 'back') {
+    // For duplex, we're dealing with back pages, so this is definitely a back card
+    return 'back';
+  }
+  
   // Duplex and simplex modes: use page type
   return pageType === 'back' ? 'back' : 'front';
 }
@@ -106,8 +118,8 @@ function getAutoAssignedCardType(
 /**
  * Calculate sequential ID for a card within its type group
  * 
- * This function counts how many cards of the same effective type come before
- * the current card in document order, then assigns a sequential ID.
+ * For duplex back cards, this function calculates the ID based on the mirrored
+ * position to ensure proper alignment with corresponding front cards during printing.
  * 
  * @param cardIndex - Global card index across all pages (0-based)
  * @param effectiveType - The effective type of the current card
@@ -127,8 +139,71 @@ function calculateSequentialId(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  cardsPerPage: number,
+  pageWidth?: number,
+  pageHeight?: number
 ): number {
+  // Special handling for duplex back cards - use mirrored position for ID calculation
+  if (pdfMode.type === 'duplex' && effectiveType === 'back') {
+    const pageIndex = Math.floor(cardIndex / cardsPerPage);
+    const cardOnPage = cardIndex % cardsPerPage;
+    const gridRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+    const gridCol = cardOnPage % extractionSettings.grid.columns;
+    
+    // Check if this specific card has a manual override
+    const hasOverride = extractionSettings.cardTypeOverrides?.some(override =>
+      override.pageIndex === pageIndex &&
+      override.gridRow === gridRow &&
+      override.gridColumn === gridCol
+    );
+    
+    // Only apply mirroring logic if there's no manual override for this card AND
+    // the duplex pattern hasn't been significantly altered by overrides
+    const hasSignificantOverrides = extractionSettings.cardTypeOverrides && extractionSettings.cardTypeOverrides.length > 0;
+    
+    if (!hasOverride && !hasSignificantOverrides && pageIndex < activePages.length && activePages[pageIndex]?.type === 'back') {
+      // Calculate the mirrored position for this back card
+      const mirroredCardIndex = calculateMirroredCardIndex(
+        cardOnPage,
+        extractionSettings,
+        pdfMode,
+        pageWidth,
+        pageHeight
+      );
+      
+      // For back cards, we want to assign IDs based on their mirrored position within the page
+      // Calculate how many back cards from this page and previous pages come before the mirrored position
+      let backCardsBefore = 0;
+      
+      // Count back cards from previous pages
+      for (let prevPageIndex = 0; prevPageIndex < pageIndex; prevPageIndex++) {
+        if (activePages[prevPageIndex]?.type === 'back') {
+          backCardsBefore += cardsPerPage; // All cards from previous back pages
+        }
+      }
+      
+      // Add cards from current page that come before the mirrored position
+      for (let currentPageCard = 0; currentPageCard < mirroredCardIndex; currentPageCard++) {
+        const currentCardIndex = pageIndex * cardsPerPage + currentPageCard;
+        const currentType = getEffectiveCardType(
+          currentCardIndex,
+          activePages,
+          extractionSettings,
+          pdfMode,
+          cardsPerPage,
+          pageWidth,
+          pageHeight
+        );
+        if (currentType === 'back') {
+          backCardsBefore++;
+        }
+      }
+      
+      return backCardsBefore + 1; // 1-based ID based on mirrored position
+    }
+  }
+  
+  // Standard sequential numbering for non-duplex or front cards
   let count = 0;
   
   // Count cards of same effective type that come before this position
@@ -138,7 +213,9 @@ function calculateSequentialId(
       activePages, 
       extractionSettings, 
       pdfMode, 
-      cardsPerPage
+      cardsPerPage,
+      pageWidth,
+      pageHeight
     );
     if (priorType === effectiveType) {
       count++;
@@ -146,6 +223,62 @@ function calculateSequentialId(
   }
   
   return count + 1; // Sequential ID within type group (1-based)
+}
+
+/**
+ * Calculate the mirrored card position for duplex back cards
+ * 
+ * @param cardOnPage - Card position within the page (0-based)
+ * @param extractionSettings - Grid configuration
+ * @param pdfMode - PDF processing mode with flip edge setting
+ * @param pageWidth - Page width for orientation detection
+ * @param pageHeight - Page height for orientation detection
+ * @returns Mirrored card position on the page
+ * 
+ * @internal
+ */
+function calculateMirroredCardIndex(
+  cardOnPage: number,
+  extractionSettings: ExtractionSettings,
+  pdfMode: PdfMode,
+  pageWidth?: number,
+  pageHeight?: number
+): number {
+  const gridRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+  const gridCol = cardOnPage % extractionSettings.grid.columns;
+  
+  let shouldFlipRows = false;
+  
+  // Determine mirroring direction based on page orientation and flip edge
+  if (pageWidth !== undefined && pageHeight !== undefined && pageWidth > 0 && pageHeight > 0) {
+    const isPortraitPage = pageHeight > pageWidth;
+    if (isPortraitPage) {
+      shouldFlipRows = (pdfMode.flipEdge === 'short'); 
+    } else {
+      shouldFlipRows = (pdfMode.flipEdge === 'long');  
+    }
+  } else {
+    // Fallback logic
+    console.warn(
+      'Duplex mirroring fallback logic triggered - page dimensions missing!',
+      'This can cause inconsistent card IDs. Please ensure page dimensions are passed to getCardInfo().',
+      { cardOnPage, flipEdge: pdfMode.flipEdge }
+    );
+    shouldFlipRows = (pdfMode.flipEdge === 'long');
+  }
+  
+  let mirroredRow = gridRow;
+  let mirroredCol = gridCol;
+  
+  if (shouldFlipRows) {
+    // Mirror rows (vertical flip)
+    mirroredRow = (extractionSettings.grid.rows - 1) - gridRow;
+  } else {
+    // Mirror columns (horizontal flip)
+    mirroredCol = (extractionSettings.grid.columns - 1) - gridCol;
+  }
+  
+  return mirroredRow * extractionSettings.grid.columns + mirroredCol;
 }
 
 /**
@@ -161,15 +294,21 @@ function calculateSequentialId(
  * - Manual overrides change the type and cause renumbering of all affected cards
  * 
  * **Processing Modes:**
- * - **Duplex**: Front/back pages determine default type, with sequential numbering
+ * - **Duplex**: Front/back pages determine default type, with sequential numbering and orientation-aware mirroring
  * - **Gutter-fold**: Position within page determines type, with sequential numbering
  * - **Simplex**: All cards treated as fronts by default, with sequential numbering
+ * 
+ * **CRITICAL for Duplex Mode:**
+ * Always pass pageWidth and pageHeight for correct duplex back card mirroring.
+ * Missing dimensions trigger fallback logic that may cause inconsistent card IDs.
  * 
  * @param cardIndex - Global card index across all pages (0-based)
  * @param activePages - Array of non-skipped pages with type information
  * @param extractionSettings - Grid and override configuration
  * @param pdfMode - PDF processing mode and orientation settings
  * @param cardsPerPage - Number of cards per page (grid rows × columns)
+ * @param pageWidth - Page width for duplex flip edge calculations (required for consistent duplex mirroring)
+ * @param pageHeight - Page height for duplex flip edge calculations (required for consistent duplex mirroring)
  * @returns Object containing card type ('Front'/'Back') and sequential ID number
  */
 export function getCardInfo(
@@ -177,7 +316,9 @@ export function getCardInfo(
   activePages: PageSettings[],
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
-  cardsPerPage: number
+  cardsPerPage: number,
+  pageWidth?: number,
+  pageHeight?: number
 ): CardInfo {
   if (!activePages.length) return { type: 'Unknown', id: 0 };
   
@@ -191,7 +332,9 @@ export function getCardInfo(
     activePages,
     extractionSettings,
     pdfMode,
-    cardsPerPage
+    cardsPerPage,
+    pageWidth,
+    pageHeight
   );
   
   // Calculate sequential ID within the type group
@@ -201,7 +344,9 @@ export function getCardInfo(
     activePages,
     extractionSettings,
     pdfMode,
-    cardsPerPage
+    cardsPerPage,
+    pageWidth,
+    pageHeight
   );
   
   // Format type for display (capitalize first letter)
@@ -307,6 +452,8 @@ export function getRotationForCardType(outputSettings: { rotation?: { front?: nu
  * @param cardsPerPage - Number of cards per page
  * @param pdfMode - PDF processing mode configuration
  * @param extractionSettings - Grid and override configuration
+ * @param pageWidth - Optional page width for duplex calculations
+ * @param pageHeight - Optional page height for duplex calculations
  * @returns Number of cards of the specified type
  */
 export function countCardsByType(
@@ -314,7 +461,9 @@ export function countCardsByType(
   activePages: PageSettings[],
   cardsPerPage: number,
   pdfMode: PdfMode,
-  extractionSettings: ExtractionSettings
+  extractionSettings: ExtractionSettings,
+  pageWidth?: number,
+  pageHeight?: number
 ): number {
   const maxIndex = activePages.length * cardsPerPage;
   let count = 0;
@@ -325,7 +474,9 @@ export function countCardsByType(
       activePages,
       extractionSettings,
       pdfMode,
-      cardsPerPage
+      cardsPerPage,
+      pageWidth,
+      pageHeight
     );
     
     if (effectiveType === cardType) {
