@@ -353,48 +353,111 @@ npm run test:e2e -- --update-snapshots  # After confirming changes
 **Testing Philosophy:** Impact over coverage, mathematical accuracy, visual consistency, minimal maintenance
 
 
-## Duplex Mirroring Logic and Card ID Consistency
+## Duplex Mode: Complete Card ID Assignment and Mirroring Logic
 
-This section documents critical insights about duplex mode card processing, learned from resolving GitHub Issue #67, to help future development avoid similar consistency bugs.
+This section documents the comprehensive duplex mode functionality, including critical insights learned from resolving GitHub Issue #67 regression during refactoring, to help future development maintain correct duplex printing behavior.
 
-### Understanding Duplex Mirroring
+### Understanding Duplex Mode
 
-Duplex mode processes double-sided cards where back cards must be positioned to align with their corresponding front cards when printed on the reverse side of the paper. The key insight is that **the correct mirroring direction depends on both flip edge setting AND page orientation**.
+Duplex mode processes double-sided cards where **back cards must be positioned to align with their corresponding front cards when printed on the reverse side of the paper**. This involves two critical aspects:
 
-#### Page Orientation Impact
+1. **Physical Mirroring**: Determining which direction to mirror based on page orientation and flip edge
+2. **Card ID Assignment**: Assigning back card IDs based on their mirrored positions for proper print alignment
+
+### Card ID Assignment in Duplex Mode
+
+**Key Principle**: Back cards receive IDs based on their **mirrored physical positions**, not their document order positions. This ensures that back card IDs correspond to where they will physically align with front cards during duplex printing.
+
+#### Example: Landscape 2x2 Grid with Short Edge Flip
+
+```
+Normal Card Positions:     Back Card Mirrored Positions:     Assigned Back IDs:
+┌─────┬─────┐              ┌─────┬─────┐                    ┌─────┬─────┐
+│  0  │  1  │              │  1  │  0  │                    │  2  │  1  │
+├─────┼─────┤      →       ├─────┼─────┤            →       ├─────┼─────┤
+│  2  │  3  │              │  3  │  2  │                    │  4  │  3  │
+└─────┴─────┘              └─────┴─────┘                    └─────┴─────┘
+IDs: [1,2,3,4]             Mirrored: [2,1,4,3]             Back IDs: [2,1,4,3]
+```
+
+**Why This Matters**: When a user prints front cards on one side and back cards on the reverse, the physical alignment will be correct because back card IDs reflect their mirrored positions.
+
+#### Mirroring Direction Logic
 
 **Portrait Pages (height > width):**
-- **Short Edge Flip**: Cards flip along the short (horizontal) edge → Mirror rows (vertical flip)
-- **Long Edge Flip**: Cards flip along the long (vertical) edge → Mirror columns (horizontal flip)
+- **Short Edge Flip**: Cards flip along the short (horizontal) edge → **Mirror rows** (vertical flip)
+- **Long Edge Flip**: Cards flip along the long (vertical) edge → **Mirror columns** (horizontal flip)
 
 **Landscape Pages (width > height):**
-- **Short Edge Flip**: Cards flip along the short (vertical) edge → Mirror columns (horizontal flip)  
-- **Long Edge Flip**: Cards flip along the long (horizontal) edge → Mirror rows (vertical flip)
+- **Short Edge Flip**: Cards flip along the short (vertical) edge → **Mirror columns** (horizontal flip)  
+- **Long Edge Flip**: Cards flip along the long (horizontal) edge → **Mirror rows** (vertical flip)
 
-#### Critical Implementation Details
+#### Flexible Page Support
 
-The `getCardInfo()` function in `cardUtils.ts` implements this logic:
+Duplex mirroring works with various page configurations:
+
+- **Mixed Front/Back Pages**: Traditional front page → back page alternation
+- **All-Back-Page PDFs**: 3 pages all marked as "back" pages (supports specialized workflows)
+- **Cross-File Groups**: Back cards from different source files can be properly mirrored
+
+### Implementation Architecture
+
+#### Core Function: getCardInfo()
+
+The `getCardInfo()` function in `src/utils/card/cardIdentification.ts` implements this logic:
 
 ```typescript
-// CORRECT: Orientation-aware logic
-if (pageWidth && pageHeight) {
+// CRITICAL: Always pass page dimensions for consistent duplex mirroring
+getCardInfo(
+  cardIndex, 
+  activePages, 
+  extractionSettings, 
+  pdfMode, 
+  cardsPerPage,
+  extractionSettings.pageDimensions?.width,    // Required for duplex
+  extractionSettings.pageDimensions?.height    // Required for duplex
+)
+```
+
+#### Mirroring Algorithm
+
+```typescript
+// Orientation-aware mirroring direction
+if (pageWidth && pageHeight && pageWidth > 0 && pageHeight > 0) {
   const isPortraitPage = pageHeight > pageWidth;
   if (isPortraitPage) {
     shouldFlipRows = (pdfMode.flipEdge === 'short'); 
   } else {
     shouldFlipRows = (pdfMode.flipEdge === 'long');  
   }
-} else {
-  // DANGEROUS: Legacy fallback - can cause inconsistent IDs
-  shouldFlipRows = (pdfMode.flipEdge === 'long');
+  
+  // Apply mirroring to grid position
+  if (shouldFlipRows) {
+    mirroredRow = (grid.rows - 1) - originalRow;
+  } else {
+    mirroredCol = (grid.columns - 1) - originalCol;
+  }
+  
+  // Assign ID based on mirrored position
+  return calculateIdFromMirroredPosition(mirroredRow, mirroredCol);
 }
 ```
 
-### Architecture for Page Dimension Propagation
+#### Smart Override Handling
+
+Duplex mirroring applies **only when the duplex pattern is maintained**:
+
+- **✅ Applied**: When pages follow natural duplex pattern with no manual overrides
+- **❌ Disabled**: When manual card type overrides significantly alter the expected duplex pattern
+- **🔄 Fallback**: Falls back to sequential numbering when duplex pattern is broken
+
+### Data Flow and Consistency Architecture
+
+#### Page Dimension Propagation
 
 To ensure consistent card ID calculation across all workflow steps, page dimensions must be available to all components that call `getCardInfo()`.
 
-#### Current Architecture (Post-Fix)
+**Current Architecture (Post-Fix)**:
 
 1. **ExtractStep** captures page dimensions from PDF/image rendering
 2. **Page dimensions stored in `extractionSettings.pageDimensions`** for propagation
@@ -427,6 +490,26 @@ getCardInfo(
   undefined     // ❌ Will break card ID consistency
 )
 ```
+
+### Fallback Logic and Error Detection
+
+When page dimensions are missing or invalid, the system includes robust fallback detection:
+
+```typescript
+if (pageWidth !== undefined && pageHeight !== undefined && pageWidth > 0 && pageHeight > 0) {
+  // Use proper orientation-aware logic
+} else {
+  // Log warning and use fallback
+  console.warn(
+    'Duplex mirroring fallback logic triggered - page dimensions missing!',
+    'This can cause inconsistent card IDs. Please ensure page dimensions are passed to getCardInfo().',
+    { cardOnPage, flipEdge: pdfMode.flipEdge }
+  );
+  shouldFlipRows = (pdfMode.flipEdge === 'long'); // Legacy fallback
+}
+```
+
+**Warning Indicators**: When fallback logic is used, console warnings help developers identify and fix dimension propagation issues before they cause user-facing problems.
 
 ### Development Guidelines
 
