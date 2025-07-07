@@ -77,11 +77,21 @@ The application uses a unified rendering system to ensure perfect consistency be
 
 ### Processing Mode Handling
 The application handles three layout types that apply to both PDF and image files:
-- **Simplex**: Single-sided pages/images, each card appears once
-- **Duplex**: Double-sided pages/images, cards have fronts and backs  
-- **Gutter-fold**: Cards are arranged for gutter folding across page center
 
-Card identification logic varies significantly between modes and is centralized in `cardUtils.ts`, with source-aware processing for both PDF and image inputs.
+- **Simplex**: Single-sided pages/images, each card appears once with sequential ID assignment
+
+- **Duplex**: Double-sided pages/images with sophisticated front/back card relationships
+  - **Physical Alignment**: Back cards must align with front cards during duplex printing
+  - **Mirrored ID Assignment**: Back cards receive IDs based on their mirrored positions, not document order
+  - **Orientation-Aware**: Mirroring direction depends on page orientation (portrait/landscape) and flip edge settings
+  - **Example**: Landscape 2x2 grid with short edge flip → Back IDs [2,1,4,3] instead of [1,2,3,4]
+  - **Flexible Pages**: Supports mixed front/back, all-back-page PDFs, and cross-file scenarios
+
+- **Gutter-fold**: Cards are arranged for gutter folding across page center with position-based front/back assignment
+
+Card identification logic varies significantly between modes and is centralized in `src/utils/card/cardIdentification.ts`, with source-aware processing for both PDF and image inputs. **Duplex mode requires special attention** due to its orientation-aware mirroring logic that ensures proper physical card alignment during printing.
+
+*For complete duplex mode implementation details, see the [Duplex Mode: Complete Card ID Assignment and Mirroring Logic](#duplex-mode-complete-card-id-assignment-and-mirroring-logic) section below.*
 
 ### Styling and UI
 - **Tailwind CSS**: Primary styling framework
