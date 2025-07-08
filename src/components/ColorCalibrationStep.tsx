@@ -27,6 +27,7 @@ import { ChevronLeftIcon, ChevronRightIcon, PaletteIcon, RotateCcwIcon } from 'l
 import { AddFilesButton } from './AddFilesButton';
 import { PrecisionSliderInput } from './PrecisionSliderInput';
 import { ExportPageButton } from './shared/ExportPageButton';
+import { GroupContextBar } from './ExtractStep/components/GroupContextBar';
 import { 
   getActivePagesWithSource, 
   calculateTotalCards, 
@@ -73,7 +74,8 @@ import {
   PageSettings,
   PageSource,
   ColorSettings,
-  MultiFileImportHook
+  MultiFileImportHook,
+  PageGroup
 } from '../types';
 
 
@@ -418,6 +420,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   } | null>(null);
   const [viewMode, setViewMode] = useState<'front' | 'back'>('front');
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  
+  // Get groups from multiFileImport (same pattern as ConfigureStep and ExtractStep)
+  const groups = multiFileImport.multiFileState.pageGroups;
   
   // Create a stable reference to image data map to prevent dependency issues
   const imageDataMap = useMemo(() => {
@@ -461,17 +467,65 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     return pdfDataMap.get(fileName);
   }, [pdfDataMap]);
   
+  // Effective settings pattern - merge group-specific settings with global settings
+  const effectiveColorSettings = useMemo(() => {
+    if (!activeGroupId) return colorSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.color ? 
+      { ...colorSettings, ...activeGroup.settings.color } : 
+      colorSettings;
+  }, [activeGroupId, colorSettings, groups]);
+
+  const effectiveExtractionSettings = useMemo(() => {
+    if (!activeGroupId) return extractionSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.extraction ? 
+      { ...extractionSettings, ...activeGroup.settings.extraction } : 
+      extractionSettings;
+  }, [activeGroupId, extractionSettings, groups]);
+
+  const effectivePdfMode = useMemo(() => {
+    if (!activeGroupId) return pdfMode;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.processingMode || pdfMode;
+  }, [activeGroupId, pdfMode, groups]);
+
   // Current color transformation settings from finalAdjustments
   const currentColorTransformation: ColorTransformation = useMemo(() => {
-    return colorSettings?.finalAdjustments || getDefaultColorTransformation();
-  }, [colorSettings?.finalAdjustments]);
+    return effectiveColorSettings?.finalAdjustments || getDefaultColorTransformation();
+  }, [effectiveColorSettings?.finalAdjustments]);
+
+  // Group-aware settings change handler
+  const handleGroupAwareColorSettingsChange = useCallback((newColorSettings: ColorSettings) => {
+    if (!activeGroupId) {
+      // No active group, save to global settings
+      onColorSettingsChange(newColorSettings);
+      return;
+    }
+
+    // Active group selected, save to group-specific settings
+    const updatedGroups = groups.map(group => {
+      if (group.id === activeGroupId) {
+        return {
+          ...group,
+          settings: {
+            ...group.settings,
+            color: newColorSettings
+          }
+        };
+      }
+      return group;
+    });
+
+    multiFileImport.updatePageGroups(updatedGroups);
+  }, [activeGroupId, groups, onColorSettingsChange, multiFileImport]);
 
   // Calculate crop region dimensions based on grid configuration
   const cropRegionDimensions = useMemo(() => {
     if (!cardRenderData) return null;
     
-    const gridColumns = colorSettings?.gridConfig?.columns || 4;
-    const gridRows = colorSettings?.gridConfig?.rows || 4;
+    const gridColumns = effectiveColorSettings?.gridConfig?.columns || 4;
+    const gridRows = effectiveColorSettings?.gridConfig?.rows || 4;
     
     // Calculate crop region size in preview pixels
     const cropWidthPreview = cardRenderData.previewScaling.previewCardWidth / gridColumns;
@@ -487,30 +541,30 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       widthInches: cropWidthInches,
       heightInches: cropHeightInches
     };
-  }, [cardRenderData, colorSettings?.gridConfig]);
+  }, [cardRenderData, effectiveColorSettings?.gridConfig]);
 
   // Update selected region preview coordinates when grid configuration changes
   useEffect(() => {
-    if (!colorSettings?.selectedRegion || !cardRenderData || !cropRegionDimensions) {
+    if (!effectiveColorSettings?.selectedRegion || !cardRenderData || !cropRegionDimensions) {
       return;
     }
 
     // Recalculate preview coordinates based on the stored real-world coordinates
-    const centerXPreview = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * cardRenderData.previewScaling.previewCardWidth + cardRenderData.previewScaling.previewX;
-    const centerYPreview = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * cardRenderData.previewScaling.previewCardHeight + cardRenderData.previewScaling.previewY;
+    const centerXPreview = (effectiveColorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * cardRenderData.previewScaling.previewCardWidth + cardRenderData.previewScaling.previewX;
+    const centerYPreview = (effectiveColorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * cardRenderData.previewScaling.previewCardHeight + cardRenderData.previewScaling.previewY;
 
     // Check if preview coordinates need updating
     const needsUpdate = 
-      Math.abs(colorSettings.selectedRegion.previewCenterX - centerXPreview) > 0.1 ||
-      Math.abs(colorSettings.selectedRegion.previewCenterY - centerYPreview) > 0.1 ||
-      Math.abs(colorSettings.selectedRegion.previewWidth - cropRegionDimensions.widthPreview) > 0.1 ||
-      Math.abs(colorSettings.selectedRegion.previewHeight - cropRegionDimensions.heightPreview) > 0.1;
+      Math.abs(effectiveColorSettings.selectedRegion.previewCenterX - centerXPreview) > 0.1 ||
+      Math.abs(effectiveColorSettings.selectedRegion.previewCenterY - centerYPreview) > 0.1 ||
+      Math.abs(effectiveColorSettings.selectedRegion.previewWidth - cropRegionDimensions.widthPreview) > 0.1 ||
+      Math.abs(effectiveColorSettings.selectedRegion.previewHeight - cropRegionDimensions.heightPreview) > 0.1;
 
     if (needsUpdate) {
       const updatedSettings = {
-        ...colorSettings,
+        ...effectiveColorSettings,
         selectedRegion: {
-          ...colorSettings.selectedRegion,
+          ...effectiveColorSettings.selectedRegion,
           // Update preview coordinates based on current grid configuration
           previewCenterX: centerXPreview,
           previewCenterY: centerYPreview,
@@ -521,9 +575,9 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           height: cropRegionDimensions.heightInches
         }
       };
-      onColorSettingsChange(updatedSettings);
+      handleGroupAwareColorSettingsChange(updatedSettings);
     }
-  }, [colorSettings?.gridConfig, cardRenderData, cropRegionDimensions, colorSettings, onColorSettingsChange]);
+  }, [effectiveColorSettings?.gridConfig, cardRenderData, cropRegionDimensions, effectiveColorSettings, handleGroupAwareColorSettingsChange]);
 
   // Unified page data handling - always prioritize multi-file state
   const unifiedPages = useMemo(() => {
@@ -545,30 +599,50 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
   
-  // Calculate total cards from extraction settings and active pages
-  const activePages = useMemo(() => 
-    getActivePagesWithSource(unifiedPages), 
-    [unifiedPages]
-  );
+  // Calculate active pages filtered by group selection
+  const activePages = useMemo(() => {
+    const allActivePages = getActivePagesWithSource(unifiedPages);
+    
+    if (!activeGroupId || groups.length === 0) {
+      // No active group or no groups exist - show ungrouped pages
+      const groupedPageIndices = new Set(
+        groups.flatMap(g => g.pageIndices)
+      );
+      
+      return allActivePages.filter(page => {
+        const pageIndex = unifiedPages.findIndex(p => p === page);
+        return !groupedPageIndices.has(pageIndex);
+      });
+    }
+    
+    // Active group selected - show only pages from that group
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    if (!activeGroup) return [];
+    
+    return activeGroup.pageIndices
+      .map(index => unifiedPages[index])
+      .filter(page => page && !page.skip && !page.removed)
+      .filter(page => page); // Remove any undefined pages
+  }, [unifiedPages, activeGroupId, groups]);
   
-  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  const cardsPerPage = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
 
   // Calculate total unique cards based on PDF mode and card type
   const totalCards = useMemo(() => 
-    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
-    [pdfMode, activePages, cardsPerPage]
+    calculateTotalCards(effectivePdfMode, activePages, cardsPerPage), 
+    [effectivePdfMode, activePages, cardsPerPage]
   );
 
   // Calculate card front/back identification based on PDF mode
   const getCardInfoCallback = useCallback((cardIndex: number) => 
-    getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height), 
-    [activePages, extractionSettings, pdfMode, cardsPerPage]
+    getCardInfo(cardIndex, activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage, effectiveExtractionSettings.pageDimensions?.width, effectiveExtractionSettings.pageDimensions?.height), 
+    [activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage]
   );
 
   // Calculate cards filtered by type (front/back) - get all card IDs available in current view mode
   const availableCardIds = useMemo(() => 
-    getAvailableCardIds(viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings), 
-    [viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings]
+    getAvailableCardIds(viewMode, totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings), 
+    [viewMode, totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings]
   );
 
   const totalFilteredCards = availableCardIds.length;
@@ -605,7 +679,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   // Extract card image for preview using source-aware logic
   const extractCardImage = useCallback(async (cardIndex: number): Promise<string | null> => {
     // Calculate which page this card belongs to
-    const cardsPerPageLocal = extractionSettings.grid.rows * extractionSettings.grid.columns;
+    const cardsPerPageLocal = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
     const pageIndex = Math.floor(cardIndex / cardsPerPageLocal);
     
     if (pageIndex >= activePages.length || pageIndex < 0) {
@@ -640,10 +714,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           filePdfData, 
           actualPageNumber, 
           cardOnPage, 
-          extractionSettings,
+          effectiveExtractionSettings,
           cardIndex, // globalCardIndex
           activePages, 
-          pdfMode
+          effectivePdfMode
         );
       } catch (error) {
         console.error(`ColorCalibrationStep: Failed to extract card ${cardIndex} from PDF page ${actualPageNumber}:`, error);
@@ -656,11 +730,11 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         console.error(`ColorCalibrationStep: No image data found for file: ${currentPageInfo.fileName}`);
         return null;
       }
-      return await extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
+      return await extractCardImageFromCanvas(cardIndex, imageData, effectivePdfMode, activePages, effectiveExtractionSettings);
     }
     
     return null;
-  }, [extractionSettings, pdfMode, activePages, getPdfData, getImageData]);
+  }, [effectiveExtractionSettings, effectivePdfMode, activePages, getPdfData, getImageData]);
 
   // Update card preview when current card changes
   useEffect(() => {
@@ -715,7 +789,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     totalFilteredCards,
     currentCardExists,
     currentCardIndex,
-    outputSettings
+    outputSettings,
+    activeGroupId,
+    effectiveExtractionSettings,
+    effectivePdfMode
   ]);
 
   // Apply color transformation to processed preview when color settings change
@@ -830,30 +907,30 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       }
     };
     
-    onColorSettingsChange(newSettings);
-  }, [cardRenderData, cropRegionDimensions, hoverPosition, colorSettings, onColorSettingsChange]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [cardRenderData, cropRegionDimensions, hoverPosition, effectiveColorSettings, handleGroupAwareColorSettingsChange]);
 
   // Helper function to update color transformation
   const updateColorTransformation = useCallback((field: keyof ColorTransformation, value: number) => {
     const newSettings = {
-      ...colorSettings,
+      ...effectiveColorSettings,
       finalAdjustments: {
-        ...colorSettings.finalAdjustments,
+        ...effectiveColorSettings.finalAdjustments,
         [field]: value
       }
     };
-    onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [effectiveColorSettings, handleGroupAwareColorSettingsChange]);
 
   // Helper function to apply color preset
   const applyColorPreset = useCallback((presetKey: ColorPresetKey) => {
     // If user is selecting 'none' (custom), just update the preset selection
     if (presetKey === 'none') {
       const newSettings = {
-        ...colorSettings,
+        ...effectiveColorSettings,
         selectedPreset: presetKey
       };
-      onColorSettingsChange(newSettings);
+      handleGroupAwareColorSettingsChange(newSettings);
       return;
     }
 
@@ -874,12 +951,12 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
     // Apply the preset
     const preset = COLOR_PRESETS[presetKey];
     const newSettings = {
-      ...colorSettings,
+      ...effectiveColorSettings,
       selectedPreset: presetKey,
       finalAdjustments: { ...preset.transformation }
     };
-    onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange, currentColorTransformation]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [effectiveColorSettings, handleGroupAwareColorSettingsChange, currentColorTransformation]);
 
   // Helper function to reset all color adjustments
   const resetAllAdjustments = useCallback(() => {
@@ -899,20 +976,32 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
 
     // Reset to defaults
     const newSettings = {
-      ...colorSettings,
+      ...effectiveColorSettings,
       selectedPreset: 'none',
       finalAdjustments: { ...getDefaultColorTransformation() }
     };
-    onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange, currentColorTransformation]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [effectiveColorSettings, handleGroupAwareColorSettingsChange, currentColorTransformation]);
+
+  // Group change handler
+  const handleActiveGroupChange = useCallback((groupId: string | null) => {
+    setActiveGroupId(groupId);
+    // Reset to first available card when switching groups
+    setCurrentCardId(1);
+    // Clear preview state to force regeneration with new group context
+    setCardPreviewUrl(null);
+    setCardRenderData(null);
+    setProcessedPreviewUrl(null);
+    setColorTransformedPreviewUrl(null);
+  }, []);
 
   // Helper function to update horizontal transformation type and auto-adjust range
   const updateHorizontalTransformationType = useCallback((type: string) => {
     const range = getTransformationRange(type);
     const newSettings = {
-      ...colorSettings,
+      ...effectiveColorSettings,
       transformations: {
-        ...colorSettings.transformations,
+        ...effectiveColorSettings.transformations,
         horizontal: {
           type,
           min: range.defaultMin,
@@ -920,16 +1009,16 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         }
       }
     };
-    onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [effectiveColorSettings, handleGroupAwareColorSettingsChange]);
 
   // Helper function to update vertical transformation type and auto-adjust range
   const updateVerticalTransformationType = useCallback((type: string) => {
     const range = getTransformationRange(type);
     const newSettings = {
-      ...colorSettings,
+      ...effectiveColorSettings,
       transformations: {
-        ...colorSettings.transformations,
+        ...effectiveColorSettings.transformations,
         vertical: {
           type,
           min: range.defaultMin,
@@ -937,8 +1026,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
         }
       }
     };
-    onColorSettingsChange(newSettings);
-  }, [colorSettings, onColorSettingsChange]);
+    handleGroupAwareColorSettingsChange(newSettings);
+  }, [effectiveColorSettings, handleGroupAwareColorSettingsChange]);
 
   /**
    * Extract crop region from card image with pixel-perfect sizing
@@ -965,7 +1054,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
    * @returns Promise resolving to data URL of extracted region, or null if failed
    */
   const extractCropRegion = useCallback(async (gridConfig?: { columns: number; rows: number }): Promise<string | null> => {
-    if (!cardPreviewUrl || !colorSettings?.selectedRegion || !cardRenderData) {
+    if (!cardPreviewUrl || !effectiveColorSettings?.selectedRegion || !cardRenderData) {
       return null;
     }
 
@@ -987,10 +1076,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           const imageHeight = img.naturalHeight;
           
           // Calculate crop position (same as before)
-          const cropXPx = (colorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - 
-                         (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth / 2;
-          const cropYPx = (colorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - 
-                         (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight / 2;
+          const cropXPx = (effectiveColorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - 
+                         (effectiveColorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth / 2;
+          const cropYPx = (effectiveColorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - 
+                         (effectiveColorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight / 2;
           
           let cropWidthPx: number;
           let cropHeightPx: number;
@@ -1006,8 +1095,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             // Validate final card dimensions
             if (finalCardWidthPx <= 0 || finalCardHeightPx <= 0) {
               console.warn('Invalid final card dimensions, falling back to region-based extraction');
-              cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
-              cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
+              cropWidthPx = (effectiveColorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
+              cropHeightPx = (effectiveColorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
             } else {
               // Calculate target grid cell dimensions in final output pixels
               const targetCellWidthPx = finalCardWidthPx / gridConfig.columns;
@@ -1027,8 +1116,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             }
           } else {
             // Fallback to original behavior for backward compatibility
-            cropWidthPx = (colorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
-            cropHeightPx = (colorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
+            cropWidthPx = (effectiveColorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth;
+            cropHeightPx = (effectiveColorSettings.selectedRegion.height / cardRenderData.renderDimensions.cardHeightInches) * imageHeight;
           }
           
           // Set canvas size to target pixel dimensions
@@ -1059,18 +1148,18 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       img.onerror = () => resolve(null);
       img.src = cardPreviewUrl;
     });
-  }, [cardPreviewUrl, colorSettings?.selectedRegion, cardRenderData, outputSettings]);
+  }, [cardPreviewUrl, effectiveColorSettings?.selectedRegion, cardRenderData, outputSettings]);
 
   // Generate color calibration test grid PDF
   const handleGenerateTestGrid = useCallback(async () => {
-    if (!colorSettings?.selectedRegion || !colorSettings?.gridConfig || !colorSettings?.transformations) {
+    if (!effectiveColorSettings?.selectedRegion || !effectiveColorSettings?.gridConfig || !effectiveColorSettings?.transformations) {
       console.warn('Missing required settings for test grid generation');
       return;
     }
 
     try {
       // Extract crop region from card image with pixel-perfect grid sizing
-      const cropImageUrl = await extractCropRegion(colorSettings.gridConfig);
+      const cropImageUrl = await extractCropRegion(effectiveColorSettings.gridConfig);
       if (!cropImageUrl) {
         alert('Failed to extract crop region from card image');
         return;
@@ -1079,10 +1168,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       // Generate color calibration PDF with user's current settings as baseline
       const pdfBlob = await generateColorCalibrationPDF(
         cropImageUrl,
-        colorSettings.gridConfig,
-        colorSettings.transformations,
+        effectiveColorSettings.gridConfig,
+        effectiveColorSettings.transformations,
         outputSettings,
-        colorSettings.selectedRegion,
+        effectiveColorSettings.selectedRegion,
         currentColorTransformation
       );
 
@@ -1099,7 +1188,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
       console.error('Failed to generate test grid PDF:', error);
       alert('Failed to generate test grid PDF. Please try again.');
     }
-  }, [colorSettings, outputSettings, extractCropRegion, currentColorTransformation]);
+  }, [effectiveColorSettings, outputSettings, extractCropRegion, currentColorTransformation]);
 
   // Ensure currentCardId is valid for the current view mode
   useEffect(() => {
@@ -1121,6 +1210,18 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           size="sm"
         />
       </div>
+
+      {/* Group Context Bar */}
+      {groups.length > 0 && (
+        <GroupContextBar
+          pages={unifiedPages}
+          groups={groups}
+          activeGroupId={activeGroupId}
+          extractionSettings={effectiveExtractionSettings}
+          globalPdfMode={pdfMode}
+          onActiveGroupChange={handleActiveGroupChange}
+        />
+      )}
       
       
       {!pdfData && multiFileImport.multiFileState.pages.length === 0 && (
@@ -1154,7 +1255,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
             </h4>
             <div className="space-y-2">
               <select
-                value={colorSettings?.selectedPreset || 'none'}
+                value={effectiveColorSettings?.selectedPreset || 'none'}
                 onChange={(e) => applyColorPreset(e.target.value as ColorPresetKey)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm bg-white"
               >
@@ -1164,9 +1265,9 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   </option>
                 ))}
               </select>
-              {colorSettings?.selectedPreset && colorSettings.selectedPreset !== 'none' && (
+              {effectiveColorSettings?.selectedPreset && effectiveColorSettings.selectedPreset !== 'none' && (
                 <p className="text-xs text-gray-600 mt-2">
-                  {COLOR_PRESETS[colorSettings.selectedPreset as ColorPresetKey]?.description}
+                  {COLOR_PRESETS[effectiveColorSettings.selectedPreset as ColorPresetKey]?.description}
                 </p>
               )}
             </div>
@@ -1629,8 +1730,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                       cardId={currentCardId}
                       cardType={viewMode}
                       pdfData={pdfData}
-                      pdfMode={pdfMode}
-                      extractionSettings={extractionSettings}
+                      pdfMode={effectivePdfMode}
+                      extractionSettings={effectiveExtractionSettings}
                       outputSettings={outputSettings}
                       colorTransformation={currentColorTransformation}
                       multiFileImport={multiFileImport}
@@ -1729,10 +1830,10 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   <div 
                     className="absolute border-2 border-green-500 bg-green-200 bg-opacity-30 pointer-events-none"
                     style={{
-                      left: `${colorSettings.selectedRegion.previewCenterX - colorSettings.selectedRegion.previewWidth / 2}px`,
-                      top: `${colorSettings.selectedRegion.previewCenterY - colorSettings.selectedRegion.previewHeight / 2}px`,
-                      width: `${colorSettings.selectedRegion.previewWidth}px`,
-                      height: `${colorSettings.selectedRegion.previewHeight}px`
+                      left: `${effectiveColorSettings.selectedRegion.previewCenterX - effectiveColorSettings.selectedRegion.previewWidth / 2}px`,
+                      top: `${effectiveColorSettings.selectedRegion.previewCenterY - effectiveColorSettings.selectedRegion.previewHeight / 2}px`,
+                      width: `${effectiveColorSettings.selectedRegion.previewWidth}px`,
+                      height: `${effectiveColorSettings.selectedRegion.previewHeight}px`
                     }}
                   >
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -1818,9 +1919,9 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               )}
               
               {/* Preset info */}
-              {colorSettings?.selectedPreset && colorSettings.selectedPreset !== 'none' && (
+              {effectiveColorSettings?.selectedPreset && effectiveColorSettings.selectedPreset !== 'none' && (
                 <div className="pt-1 border-t border-gray-300">
-                  <div><span className="font-medium">Preset:</span> {COLOR_PRESETS[colorSettings.selectedPreset as ColorPresetKey]?.name}</div>
+                  <div><span className="font-medium">Preset:</span> {COLOR_PRESETS[effectiveColorSettings.selectedPreset as ColorPresetKey]?.name}</div>
                 </div>
               )}
               
@@ -1869,7 +1970,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   <p className="text-green-700 font-medium">✓ Region selected</p>
                   <p>
                     <span className="font-medium">Center:</span>{' '}
-                    ({colorSettings.selectedRegion.centerX.toFixed(3)}", {colorSettings.selectedRegion.centerY.toFixed(3)}")
+                    ({effectiveColorSettings.selectedRegion.centerX.toFixed(3)}", {effectiveColorSettings.selectedRegion.centerY.toFixed(3)}")
                   </p>
                 </div>
               ) : (
@@ -1913,11 +2014,11 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                       const newSettings = {
                         ...colorSettings,
                         gridConfig: {
-                          ...colorSettings.gridConfig,
+                          ...effectiveColorSettings.gridConfig,
                           columns: cols
                         }
                       };
-                      onColorSettingsChange(newSettings);
+                      handleGroupAwareColorSettingsChange(newSettings);
                     }}
                     className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                   />
@@ -1934,11 +2035,11 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                       const newSettings = {
                         ...colorSettings,
                         gridConfig: {
-                          ...colorSettings.gridConfig,
+                          ...effectiveColorSettings.gridConfig,
                           rows: rows
                         }
                       };
-                      onColorSettingsChange(newSettings);
+                      handleGroupAwareColorSettingsChange(newSettings);
                     }}
                     className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                   />
@@ -1994,14 +2095,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                             const newSettings = {
                               ...colorSettings,
                               transformations: {
-                                ...colorSettings.transformations,
+                                ...effectiveColorSettings.transformations,
                                 horizontal: {
-                                  ...colorSettings.transformations.horizontal,
+                                  ...effectiveColorSettings.transformations.horizontal,
                                   min: parseFloat(e.target.value)
                                 }
                               }
                             };
-                            onColorSettingsChange(newSettings);
+                            handleGroupAwareColorSettingsChange(newSettings);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                         />
@@ -2020,14 +2121,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                             const newSettings = {
                               ...colorSettings,
                               transformations: {
-                                ...colorSettings.transformations,
+                                ...effectiveColorSettings.transformations,
                                 horizontal: {
-                                  ...colorSettings.transformations.horizontal,
+                                  ...effectiveColorSettings.transformations.horizontal,
                                   max: parseFloat(e.target.value)
                                 }
                               }
                             };
-                            onColorSettingsChange(newSettings);
+                            handleGroupAwareColorSettingsChange(newSettings);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                         />
@@ -2083,14 +2184,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                             const newSettings = {
                               ...colorSettings,
                               transformations: {
-                                ...colorSettings.transformations,
+                                ...effectiveColorSettings.transformations,
                                 vertical: {
-                                  ...colorSettings.transformations.vertical,
+                                  ...effectiveColorSettings.transformations.vertical,
                                   min: parseFloat(e.target.value)
                                 }
                               }
                             };
-                            onColorSettingsChange(newSettings);
+                            handleGroupAwareColorSettingsChange(newSettings);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                         />
@@ -2109,14 +2210,14 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                             const newSettings = {
                               ...colorSettings,
                               transformations: {
-                                ...colorSettings.transformations,
+                                ...effectiveColorSettings.transformations,
                                 vertical: {
-                                  ...colorSettings.transformations.vertical,
+                                  ...effectiveColorSettings.transformations.vertical,
                                   max: parseFloat(e.target.value)
                                 }
                               }
                             };
-                            onColorSettingsChange(newSettings);
+                            handleGroupAwareColorSettingsChange(newSettings);
                           }}
                           className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs"
                         />
@@ -2257,8 +2358,8 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               </h4>
               <GridPreview
                 cropImageUrl={extractCropRegion}
-                gridConfig={colorSettings.gridConfig}
-                transformations={colorSettings.transformations}
+                gridConfig={effectiveColorSettings.gridConfig}
+                transformations={effectiveColorSettings.transformations}
                 userColorSettings={currentColorTransformation}
               />
             </div>
