@@ -202,7 +202,10 @@ interface ComponentProps {
 
 **Icon Imports**: Always use base names (`Printer`, not `PrinterIcon`) to avoid runtime errors
 
-**React Variable Declaration Order**: Declare all `useState` calls before any `useCallback`/`useMemo` that reference the state variables to avoid "Cannot access before initialization" errors
+**React Variable Declaration Order**: Always declare variables before they're used in dependencies:
+- All `useState` calls first
+- Then `useMemo` and `useCallback` in dependency order
+- Remove duplicate declarations to avoid "Cannot access before initialization" errors
 
 **Custom Hooks**: Extract when useState patterns become complex, useMemo dependencies grow large, or multiple components need similar logic
 
