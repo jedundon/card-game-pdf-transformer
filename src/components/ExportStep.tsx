@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { MultiStreamExportManager } from './shared/MultiStreamExportManager';
-import { GroupContextBar } from './ExtractStep/components/GroupContextBar';
 import { 
   getActivePagesWithSource,
   calculateTotalCards,
@@ -41,74 +40,98 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   onPrevious
 }) => {
   // State declarations first
-  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
   const [exportError, setExportError] = useState<string>('');
   const [exportProgress, setExportProgress] = useState<string>('');
   const [exportedFiles, setExportedFiles] = useState<{
-    fronts: string | null;
-    backs: string | null;
-  }>({
-    fronts: null,
-    backs: null
-  });
+    [groupId: string]: {
+      fronts: string | null;
+      backs: string | null;
+    };
+  }>({});
   
-  // Handle active group change (after state declarations)
-  const handleActiveGroupChange = useCallback((groupId: string | null) => {
-    setActiveGroupId(groupId);
-    // Reset export state when switching groups
+  // Group selection helpers
+  const handleGroupSelectionChange = useCallback((groupId: string, selected: boolean) => {
+    setSelectedGroupIds(prev => {
+      const newSet = new Set(prev);
+      if (selected) {
+        newSet.add(groupId);
+      } else {
+        newSet.delete(groupId);
+      }
+      return newSet;
+    });
+    
+    // Reset export state when changing selection
     setExportStatus('idle');
     setExportError('');
     setExportProgress('');
-    if (exportedFiles.fronts) {
-      URL.revokeObjectURL(exportedFiles.fronts);
-    }
-    if (exportedFiles.backs) {
-      URL.revokeObjectURL(exportedFiles.backs);
-    }
-    setExportedFiles({ fronts: null, backs: null });
+    
+    // Clean up old exported files
+    Object.values(exportedFiles).forEach(files => {
+      if (files.fronts) URL.revokeObjectURL(files.fronts);
+      if (files.backs) URL.revokeObjectURL(files.backs);
+    });
+    setExportedFiles({});
   }, [exportedFiles]);
+  
+  const handleSelectAll = useCallback(() => {
+    const allGroupIds = new Set([
+      'default', // Always include default group
+      ...groups.map(g => g.id)
+    ]);
+    setSelectedGroupIds(allGroupIds);
+  }, [groups]);
+  
+  const handleSelectNone = useCallback(() => {
+    setSelectedGroupIds(new Set());
+  }, []);
 
   // Get page groups from multi-file state (moved up before effective settings)
   const groups = useMemo(() => {
     return multiFileImport.multiFileState.pageGroups || [];
   }, [multiFileImport.multiFileState.pageGroups]);
 
-  // Effective settings with group inheritance (moved up before usage)
-  const effectiveExtractionSettings = useMemo(() => {
-    if (!activeGroupId) return extractionSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.extraction ? 
-      { ...extractionSettings, ...activeGroup.settings.extraction } : 
-      extractionSettings;
-  }, [activeGroupId, extractionSettings, groups]);
+  // Helper function to get effective settings for a specific group
+  const getEffectiveSettingsForGroup = useCallback((groupId: string | null) => {
+    if (!groupId || groupId === 'default') {
+      return {
+        extraction: extractionSettings,
+        output: outputSettings,
+        color: colorSettings,
+        pdfMode: pdfMode
+      };
+    }
+    
+    const group = groups.find(g => g.id === groupId);
+    if (!group) {
+      return {
+        extraction: extractionSettings,
+        output: outputSettings,
+        color: colorSettings,
+        pdfMode: pdfMode
+      };
+    }
+    
+    return {
+      extraction: group.settings?.extraction ? 
+        { ...extractionSettings, ...group.settings.extraction } : 
+        extractionSettings,
+      output: group.settings?.output ? 
+        { ...outputSettings, ...group.settings.output } : 
+        outputSettings,
+      color: group.settings?.color ? 
+        { ...colorSettings, ...group.settings.color } : 
+        colorSettings,
+      pdfMode: group.processingMode || pdfMode
+    };
+  }, [extractionSettings, outputSettings, colorSettings, pdfMode, groups]);
 
-  const effectiveOutputSettings = useMemo(() => {
-    if (!activeGroupId) return outputSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.output ? 
-      { ...outputSettings, ...activeGroup.settings.output } : 
-      outputSettings;
-  }, [activeGroupId, outputSettings, groups]);
-
-  const effectiveColorSettings = useMemo(() => {
-    if (!activeGroupId) return colorSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.color ? 
-      { ...colorSettings, ...activeGroup.settings.color } : 
-      colorSettings;
-  }, [activeGroupId, colorSettings, groups]);
-
-  const effectivePdfMode = useMemo(() => {
-    if (!activeGroupId) return pdfMode;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.processingMode || pdfMode;
-  }, [activeGroupId, pdfMode, groups]);
-
-  // Get current color transformation settings (use effective settings)
+  // Get current color transformation settings (use global settings for summary)
   const currentColorTransformation: ColorTransformation = useMemo(() => {
-    return effectiveColorSettings?.finalAdjustments || getDefaultColorTransformation();
-  }, [effectiveColorSettings?.finalAdjustments]);
+    return colorSettings?.finalAdjustments || getDefaultColorTransformation();
+  }, [colorSettings?.finalAdjustments]);
 
   // Check if color adjustments are being applied
   const hasColorAdjustments = useMemo(() => {
@@ -135,33 +158,72 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
 
-  // Helper function to get ungrouped pages (for default group)
-  const getUngroupedPages = useCallback((allPages: any[]) => {
-    const groupedPageIndices = new Set(
-      groups
-        .filter(g => g.id !== 'default')
-        .flatMap(g => g.pageIndices)
-    );
-    
-    return allPages.filter((page, index) => !groupedPageIndices.has(index));
-  }, [groups]);
-
-  // Group-filtered pages
-  const groupFilteredPages = useMemo(() => {
+  // Helper function to get pages for a specific group
+  const getPagesForGroup = useCallback((groupId: string | null) => {
     const allPages = getActivePagesWithSource(unifiedPages);
     
-    if (!activeGroupId || activeGroupId === 'default') {
-      // Show ungrouped pages for default group
-      return getUngroupedPages(allPages);
+    if (!groupId || groupId === 'default') {
+      // Get ungrouped pages for default group
+      const groupedPageIndices = new Set(
+        groups
+          .filter(g => g.id !== 'default')
+          .flatMap(g => g.pageIndices)
+      );
+      
+      return allPages.filter((page, index) => !groupedPageIndices.has(index));
     }
     
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    if (!activeGroup) return [];
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return [];
     
-    return activeGroup.pageIndices
+    return group.pageIndices
       .map(index => unifiedPages[index])
       .filter(page => page && !page.skip && !page.removed);
-  }, [unifiedPages, activeGroupId, groups, getUngroupedPages]);
+  }, [unifiedPages, groups]);
+
+  // Calculate stats for all groups
+  const groupStats = useMemo(() => {
+    const allGroups = [
+      { id: 'default', name: 'Default Group' },
+      ...groups.map(g => ({ id: g.id, name: g.name }))
+    ];
+    
+    return allGroups.map(group => {
+      const groupPages = getPagesForGroup(group.id);
+      const groupSettings = getEffectiveSettingsForGroup(group.id);
+      const cardsPerPage = groupSettings.extraction.grid.rows * groupSettings.extraction.grid.columns;
+      const totalCards = calculateTotalCards(groupSettings.pdfMode, groupPages, cardsPerPage);
+      const frontCards = getAvailableCardIds('front', totalCards, groupSettings.pdfMode, groupPages, cardsPerPage, groupSettings.extraction).length;
+      const backCards = getAvailableCardIds('back', totalCards, groupSettings.pdfMode, groupPages, cardsPerPage, groupSettings.extraction).length;
+      
+      return {
+        id: group.id,
+        name: group.name,
+        pageCount: groupPages.length,
+        frontCards,
+        backCards,
+        totalCards,
+        processingMode: groupSettings.pdfMode.type,
+        hasCustomSettings: group.id !== 'default' && groups.find(g => g.id === group.id)?.settings !== undefined
+      };
+    }).filter(stat => stat.pageCount > 0); // Only include groups with pages
+  }, [groups, getPagesForGroup, getEffectiveSettingsForGroup]);
+
+  // All active pages (for overall statistics)
+  const activePages = useMemo(() => 
+    getActivePagesWithSource(unifiedPages), 
+    [unifiedPages]
+  );
+  
+  // Overall totals across all groups
+  const overallTotals = useMemo(() => {
+    return groupStats.reduce((totals, group) => ({
+      pages: totals.pages + group.pageCount,
+      frontCards: totals.frontCards + group.frontCards,
+      backCards: totals.backCards + group.backCards,
+      totalCards: totals.totalCards + group.totalCards
+    }), { pages: 0, frontCards: 0, backCards: 0, totalCards: 0 });
+  }, [groupStats]);
 
   // Create a stable reference to image data map to prevent dependency issues
   const imageDataMap = useMemo(() => {
@@ -195,31 +257,25 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     return map;
   }, [multiFileImport]);
 
-  // Calculate total cards using group-filtered pages and effective settings
-  const activePages = useMemo(() => 
-    groupFilteredPages, 
-    [groupFilteredPages]
-  );
-  
-  const cardsPerPage = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
-  const totalCards = useMemo(() => 
-    calculateTotalCards(effectivePdfMode, activePages, cardsPerPage), 
-    [effectivePdfMode, activePages, cardsPerPage]
-  );
+  // Initialize selected groups to all groups by default
+  useEffect(() => {
+    if (groupStats.length > 0 && selectedGroupIds.size === 0) {
+      const allGroupIds = new Set(groupStats.map(stat => stat.id));
+      setSelectedGroupIds(allGroupIds);
+    }
+  }, [groupStats, selectedGroupIds.size]);
   // Cleanup blob URLs when component unmounts or files change
   useEffect(() => {
     return () => {
-      if (exportedFiles.fronts) {
-        URL.revokeObjectURL(exportedFiles.fronts);
-      }
-      if (exportedFiles.backs) {
-        URL.revokeObjectURL(exportedFiles.backs);
-      }
+      Object.values(exportedFiles).forEach(files => {
+        if (files.fronts) URL.revokeObjectURL(files.fronts);
+        if (files.backs) URL.revokeObjectURL(files.backs);
+      });
     };
   }, [exportedFiles]);
 
   // Generate filename based on PDF name and group context
-  const generateFileName = (fileType: 'fronts' | 'backs'): string => {
+  const generateFileName = (groupId: string, fileType: 'fronts' | 'backs'): string => {
     let baseName = 'card';
     
     // Use current PDF filename if available
@@ -227,12 +283,14 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       baseName = currentPdfFileName.replace(/\.pdf$/i, '');
     }
     
-    // Add group context if a specific group is active
-    if (activeGroupId && activeGroupId !== 'default') {
-      const activeGroup = groups.find(g => g.id === activeGroupId);
-      if (activeGroup) {
-        baseName += `_${activeGroup.name.replace(/\s+/g, '_')}`;
+    // Add group context
+    if (groupId && groupId !== 'default') {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        baseName += `_${group.name.replace(/\s+/g, '_')}`;
       }
+    } else if (groupId === 'default') {
+      baseName += '_Default';
     }
     
     return `${baseName}_${fileType}.pdf`;
@@ -246,46 +304,59 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       errors.push('No files available for export');
     }
     
-    // Check if there are active pages
-    if (activePages.length === 0) {
-      errors.push('No active pages selected for export');
+    // Check if there are selected groups
+    if (selectedGroupIds.size === 0) {
+      errors.push('No groups selected for export');
     }
     
-    // Check if output settings are valid (use effective settings)
-    if (!effectiveOutputSettings.pageSize || effectiveOutputSettings.pageSize.width <= 0 || effectiveOutputSettings.pageSize.height <= 0) {
-      errors.push('Invalid page size settings');
+    // Check if selected groups have pages
+    const selectedGroupStats = groupStats.filter(stat => selectedGroupIds.has(stat.id));
+    if (selectedGroupStats.length === 0) {
+      errors.push('Selected groups have no pages available for export');
     }
     
-    // Check if card size settings are valid
-    if (effectiveOutputSettings.cardSize && (effectiveOutputSettings.cardSize.widthInches <= 0 || effectiveOutputSettings.cardSize.heightInches <= 0)) {
-      errors.push('Invalid card size settings');
+    // Check if any selected group has cards
+    const totalCardsInSelection = selectedGroupStats.reduce((total, stat) => total + stat.totalCards, 0);
+    if (totalCardsInSelection <= 0) {
+      errors.push('No cards available in selected groups');
     }
     
-    // Check if card scale is valid
-    const scale = effectiveOutputSettings.cardScalePercent || 100;
-    if (scale <= 0 || scale > 200) {
-      errors.push('Invalid card scale percentage (must be between 1% and 200%)');
-    }
+    // Validate settings for each selected group
+    selectedGroupStats.forEach(stat => {
+      const groupSettings = getEffectiveSettingsForGroup(stat.id);
+      
+      // Check if output settings are valid
+      if (!groupSettings.output.pageSize || groupSettings.output.pageSize.width <= 0 || groupSettings.output.pageSize.height <= 0) {
+        errors.push(`Invalid page size settings for group "${stat.name}"`);
+      }
+      
+      // Check if card size settings are valid
+      if (groupSettings.output.cardSize && (groupSettings.output.cardSize.widthInches <= 0 || groupSettings.output.cardSize.heightInches <= 0)) {
+        errors.push(`Invalid card size settings for group "${stat.name}"`);
+      }
+      
+      // Check if card scale is valid
+      const scale = groupSettings.output.cardScalePercent || 100;
+      if (scale <= 0 || scale > 200) {
+        errors.push(`Invalid card scale percentage for group "${stat.name}" (must be between 1% and 200%)`);
+      }
+      
       // Check if bleed margin is valid
-    const bleed = effectiveOutputSettings.bleedMarginInches || 0;
-    if (bleed < 0 || bleed > 1) {
-      errors.push('Invalid bleed margin (must be between 0 and 1 inch)');
-    }
-    
-    // Check if offset values are reasonable
-    const horizontalOffset = effectiveOutputSettings.offset.horizontal || 0;
-    const verticalOffset = effectiveOutputSettings.offset.vertical || 0;
-    if (Math.abs(horizontalOffset) > effectiveOutputSettings.pageSize.width / 2) {
-      errors.push('Horizontal offset is too large for page size');
-    }
-    if (Math.abs(verticalOffset) > effectiveOutputSettings.pageSize.height / 2) {
-      errors.push('Vertical offset is too large for page size');
-    }
-    
-    // Check if total cards is greater than 0
-    if (totalCards <= 0) {
-      errors.push('No cards available for export');
-    }
+      const bleed = groupSettings.output.bleedMarginInches || 0;
+      if (bleed < 0 || bleed > 1) {
+        errors.push(`Invalid bleed margin for group "${stat.name}" (must be between 0 and 1 inch)`);
+      }
+      
+      // Check if offset values are reasonable
+      const horizontalOffset = groupSettings.output.offset.horizontal || 0;
+      const verticalOffset = groupSettings.output.offset.vertical || 0;
+      if (Math.abs(horizontalOffset) > groupSettings.output.pageSize.width / 2) {
+        errors.push(`Horizontal offset too large for page size in group "${stat.name}"`);
+      }
+      if (Math.abs(verticalOffset) > groupSettings.output.pageSize.height / 2) {
+        errors.push(`Vertical offset too large for page size in group "${stat.name}"`);
+      }
+    });
     
     return {
       isValid: errors.length === 0,
@@ -751,40 +822,20 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         </div>
       </div>
 
-      {/* Group Context Bar - only show if groups exist */}
-      {groups.length > 0 && (
-        <GroupContextBar
-          pages={unifiedPages}
-          groups={groups}
-          activeGroupId={activeGroupId}
-          extractionSettings={effectiveExtractionSettings}
-          globalPdfMode={pdfMode}
-          onActiveGroupChange={handleActiveGroupChange}
-          disabled={exportStatus === 'processing'}
-        />
-      )}
-      
-      
+      {/* Overall Export Summary */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <h3 className="text-lg font-medium text-gray-800 mb-3">
           Export Summary
-        </h3>        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            {/* Group context information */}
-            {groups.length > 0 && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Active Group:</span>
-                <span className="font-medium text-gray-800">
-                  {(() => {
-                    if (!activeGroupId || activeGroupId === 'default') {
-                      return 'Default Group (ungrouped pages)';
-                    }
-                    const activeGroup = groups.find(g => g.id === activeGroupId);
-                    return activeGroup ? activeGroup.name : 'Unknown Group';
-                  })()}
-                </span>
-              </div>
-            )}
+            {/* Overall statistics */}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Total Groups:</span>
+              <span className="font-medium text-gray-800">
+                {groupStats.length} groups
+              </span>
+            </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Source Type:</span>
               <span className="font-medium text-gray-800">
@@ -803,41 +854,33 @@ export const ExportStep: React.FC<ExportStepProps> = ({
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">PDF Mode:</span>
-              <span className="font-medium text-gray-800">{effectivePdfMode.type}</span>
+              <span className="text-gray-600">Total Pages:</span>
+              <span className="font-medium text-gray-800">{overallTotals.pages} pages</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total Cards:</span>
               <span className="font-medium text-gray-800">
-                {(() => {
-                  const frontCards = getAvailableCardIds('front', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
-                  const backCards = getAvailableCardIds('back', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
-                  const effectiveTotal = frontCards + backCards;
-                  const skippedCount = effectiveExtractionSettings.skippedCards?.length || 0;
-                  return skippedCount > 0 ? `${effectiveTotal} (${skippedCount} skipped)` : totalCards;
-                })()}
+                {overallTotals.frontCards} front, {overallTotals.backCards} back
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Selected for Export:</span>
+              <span className="font-medium text-gray-800">
+                {selectedGroupIds.size} of {groupStats.length} groups
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Output Page Size:</span>
               <span className="font-medium text-gray-800">
-                {effectiveOutputSettings.pageSize.width}" ×{' '}
-                {effectiveOutputSettings.pageSize.height}"
-              </span>
-            </div>            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Card Size:</span>
-              <span className="font-medium text-gray-800">
-                {effectiveOutputSettings.cardSize?.widthInches || 2.5}" ×{' '}
-                {effectiveOutputSettings.cardSize?.heightInches || 3.5}"
+                {outputSettings.pageSize.width}" ×{' '}
+                {outputSettings.pageSize.height}" (global default)
               </span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Final Print Size:</span>
+              <span className="text-gray-600">Card Size:</span>
               <span className="font-medium text-gray-800">
-                {(() => {
-                  const cardDimensions = calculateCardDimensions(effectiveOutputSettings);
-                  return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
-                })()}
+                {outputSettings.cardSize?.widthInches || 2.5}" ×{' '}
+                {outputSettings.cardSize?.heightInches || 3.5}" (global default)
               </span>
             </div>
           </div>
@@ -845,40 +888,104 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Position:</span>
               <span className="font-medium text-gray-800">
-                {effectiveOutputSettings.offset.horizontal > 0 ? '+' : ''}
-                {effectiveOutputSettings.offset.horizontal}" H,{' '}
-                {effectiveOutputSettings.offset.vertical > 0 ? '+' : ''}
-                {effectiveOutputSettings.offset.vertical}" V
+                {outputSettings.offset.horizontal > 0 ? '+' : ''}
+                {outputSettings.offset.horizontal}" H,{' '}
+                {outputSettings.offset.vertical > 0 ? '+' : ''}
+                {outputSettings.offset.vertical}" V (global default)
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Scale:</span>
               <span className="font-medium text-gray-800">
-                {effectiveOutputSettings.cardScalePercent || 100}%
+                {outputSettings.cardScalePercent || 100}% (global default)
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
-                Front {getRotationForCardType(effectiveOutputSettings, 'front')}°, Back {getRotationForCardType(effectiveOutputSettings, 'back')}°
+                Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}° (global default)
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Color Adjustments:</span>
               <span className={`font-medium ${hasColorAdjustments ? 'text-green-700' : 'text-gray-800'}`}>
-                {hasColorAdjustments ? '✓ Applied' : 'None'}
+                {hasColorAdjustments ? '✓ Applied' : 'None'} (global default)
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Bleed Margin:</span>
               <span className="font-medium text-gray-800">
-                {effectiveOutputSettings.bleedMarginInches || 0}" 
-                ({effectiveOutputSettings.bleedMarginInches ? 'applied' : 'none'})
+                {outputSettings.bleedMarginInches || 0}" 
+                ({outputSettings.bleedMarginInches ? 'applied' : 'none'}) (global default)
               </span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Group Selection Interface */}
+      {groupStats.length > 0 && (
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-gray-50 p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-800">Group Selection</h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleSelectAll}
+                  className="text-sm px-3 py-1 bg-indigo-100 text-indigo-800 rounded-md hover:bg-indigo-200"
+                >
+                  Select All
+                </button>
+                <button
+                  onClick={handleSelectNone}
+                  className="text-sm px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                >
+                  Select None
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="p-4">
+            <div className="space-y-3">
+              {groupStats.map((stat) => (
+                <div
+                  key={stat.id}
+                  className={`flex items-center justify-between p-3 border rounded-lg ${
+                    selectedGroupIds.has(stat.id) 
+                      ? 'border-indigo-200 bg-indigo-50' 
+                      : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroupIds.has(stat.id)}
+                      onChange={(e) => handleGroupSelectionChange(stat.id, e.target.checked)}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {stat.name}
+                        {stat.hasCustomSettings && (
+                          <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                            Custom Settings
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {stat.pageCount} pages • {stat.frontCards} front cards • {stat.backCards} back cards • {stat.processingMode}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {stat.totalCards} total cards
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Advanced Export System */}
       {showAdvancedExport && hasAdvancedFeatures && (
@@ -886,10 +993,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           pages={unifiedPages}
           groups={multiFileImport.multiFileState.pageGroups || []}
           pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings || {}}
-          globalExtractionSettings={effectiveExtractionSettings}
-          globalOutputSettings={effectiveOutputSettings}
-          globalColorSettings={effectiveColorSettings}
-          pdfMode={effectivePdfMode}
+          globalExtractionSettings={extractionSettings}
+          globalOutputSettings={outputSettings}
+          globalColorSettings={colorSettings}
+          pdfMode={pdfMode}
           pdfData={pdfData}
           multiFileImport={multiFileImport}
           disabled={exportStatus === 'processing'}
@@ -906,13 +1013,18 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           {exportStatus === 'idle' && (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-6">
-                Ready to generate output PDF files{groups.length > 0 && activeGroupId ? 
-                  ` for ${activeGroupId === 'default' ? 'ungrouped pages' : groups.find(g => g.id === activeGroupId)?.name || 'the selected group'}` : 
-                  ''} with your configured settings.
+                Ready to generate PDF files for {selectedGroupIds.size} selected group{selectedGroupIds.size !== 1 ? 's' : ''}.
+                {selectedGroupIds.size === 0 && (
+                  <span className="text-red-600"> Please select at least one group above.</span>
+                )}
               </p>
-              <button onClick={handleExport} className="inline-flex items-center bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
+              <button 
+                onClick={handleExport} 
+                disabled={selectedGroupIds.size === 0}
+                className="inline-flex items-center bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <DownloadIcon size={18} className="mr-2" />
-                Generate PDF Files
+                Generate PDF Files for Selected Groups
               </button>
             </div>
           )}
