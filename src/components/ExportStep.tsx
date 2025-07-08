@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ChevronLeftIcon, DownloadIcon, CheckCircleIcon } from 'lucide-react';
 import { AddFilesButton } from './AddFilesButton';
 import { MultiStreamExportManager } from './shared/MultiStreamExportManager';
+import { GroupContextBar } from './ExtractStep/components/GroupContextBar';
 import { 
   getActivePagesWithSource,
   calculateTotalCards,
@@ -39,6 +40,29 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   multiFileImport,
   onPrevious
 }) => {
+  // Group state management
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  
+  // Get page groups from multi-file state
+  const groups = useMemo(() => {
+    return multiFileImport.multiFileState.pageGroups || [];
+  }, [multiFileImport.multiFileState.pageGroups]);
+  
+  // Handle active group change
+  const handleActiveGroupChange = useCallback((groupId: string | null) => {
+    setActiveGroupId(groupId);
+    // Reset export state when switching groups
+    setExportStatus('idle');
+    setExportError('');
+    setExportProgress('');
+    if (exportedFiles.fronts) {
+      URL.revokeObjectURL(exportedFiles.fronts);
+    }
+    if (exportedFiles.backs) {
+      URL.revokeObjectURL(exportedFiles.backs);
+    }
+    setExportedFiles({ fronts: null, backs: null });
+  }, [exportedFiles]);
   const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
   const [exportError, setExportError] = useState<string>('');
   const [exportProgress, setExportProgress] = useState<string>('');
@@ -50,10 +74,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     backs: null
   });
 
-  // Get current color transformation settings
+  // Get current color transformation settings (use effective settings)
   const currentColorTransformation: ColorTransformation = useMemo(() => {
-    return colorSettings?.finalAdjustments || getDefaultColorTransformation();
-  }, [colorSettings?.finalAdjustments]);
+    return effectiveColorSettings?.finalAdjustments || getDefaultColorTransformation();
+  }, [effectiveColorSettings?.finalAdjustments]);
 
   // Check if color adjustments are being applied
   const hasColorAdjustments = useMemo(() => {
@@ -79,6 +103,65 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       return [];
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
+
+  // Effective settings with group inheritance
+  const effectiveExtractionSettings = useMemo(() => {
+    if (!activeGroupId) return extractionSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.extraction ? 
+      { ...extractionSettings, ...activeGroup.settings.extraction } : 
+      extractionSettings;
+  }, [activeGroupId, extractionSettings, groups]);
+
+  const effectiveOutputSettings = useMemo(() => {
+    if (!activeGroupId) return outputSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.output ? 
+      { ...outputSettings, ...activeGroup.settings.output } : 
+      outputSettings;
+  }, [activeGroupId, outputSettings, groups]);
+
+  const effectiveColorSettings = useMemo(() => {
+    if (!activeGroupId) return colorSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.color ? 
+      { ...colorSettings, ...activeGroup.settings.color } : 
+      colorSettings;
+  }, [activeGroupId, colorSettings, groups]);
+
+  const effectivePdfMode = useMemo(() => {
+    if (!activeGroupId) return pdfMode;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.processingMode || pdfMode;
+  }, [activeGroupId, pdfMode, groups]);
+
+  // Helper function to get ungrouped pages (for default group)
+  const getUngroupedPages = useCallback((allPages: any[]) => {
+    const groupedPageIndices = new Set(
+      groups
+        .filter(g => g.id !== 'default')
+        .flatMap(g => g.pageIndices)
+    );
+    
+    return allPages.filter((page, index) => !groupedPageIndices.has(index));
+  }, [groups]);
+
+  // Group-filtered pages
+  const groupFilteredPages = useMemo(() => {
+    const allPages = getActivePagesWithSource(unifiedPages);
+    
+    if (!activeGroupId || activeGroupId === 'default') {
+      // Show ungrouped pages for default group
+      return getUngroupedPages(allPages);
+    }
+    
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    if (!activeGroup) return [];
+    
+    return activeGroup.pageIndices
+      .map(index => unifiedPages[index])
+      .filter(page => page && !page.skip && !page.removed);
+  }, [unifiedPages, activeGroupId, groups, getUngroupedPages]);
 
   // Create a stable reference to image data map to prevent dependency issues
   const imageDataMap = useMemo(() => {
@@ -112,16 +195,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     return map;
   }, [multiFileImport]);
 
-  // Calculate total cards using unified pages
+  // Calculate total cards using group-filtered pages and effective settings
   const activePages = useMemo(() => 
-    getActivePagesWithSource(unifiedPages), 
-    [unifiedPages]
+    groupFilteredPages, 
+    [groupFilteredPages]
   );
   
-  const cardsPerPage = extractionSettings.grid.rows * extractionSettings.grid.columns;
+  const cardsPerPage = effectiveExtractionSettings.grid.rows * effectiveExtractionSettings.grid.columns;
   const totalCards = useMemo(() => 
-    calculateTotalCards(pdfMode, activePages, cardsPerPage), 
-    [pdfMode, activePages, cardsPerPage]
+    calculateTotalCards(effectivePdfMode, activePages, cardsPerPage), 
+    [effectivePdfMode, activePages, cardsPerPage]
   );
   // Cleanup blob URLs when component unmounts or files change
   useEffect(() => {
@@ -135,14 +218,24 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     };
   }, [exportedFiles]);
 
-  // Generate filename based on PDF name
+  // Generate filename based on PDF name and group context
   const generateFileName = (fileType: 'fronts' | 'backs'): string => {
+    let baseName = 'card';
+    
+    // Use current PDF filename if available
     if (currentPdfFileName) {
-      // Remove .pdf extension and add the type suffix
-      const baseName = currentPdfFileName.replace(/\.pdf$/i, '');
-      return `${baseName} - ${fileType}.pdf`;
+      baseName = currentPdfFileName.replace(/\.pdf$/i, '');
     }
-    return `card_${fileType}.pdf`;
+    
+    // Add group context if a specific group is active
+    if (activeGroupId && activeGroupId !== 'default') {
+      const activeGroup = groups.find(g => g.id === activeGroupId);
+      if (activeGroup) {
+        baseName += `_${activeGroup.name.replace(/\s+/g, '_')}`;
+      }
+    }
+    
+    return `${baseName}_${fileType}.pdf`;
   };
   // Validate export settings before generating PDFs
   const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
@@ -158,34 +251,34 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       errors.push('No active pages selected for export');
     }
     
-    // Check if output settings are valid
-    if (!outputSettings.pageSize || outputSettings.pageSize.width <= 0 || outputSettings.pageSize.height <= 0) {
+    // Check if output settings are valid (use effective settings)
+    if (!effectiveOutputSettings.pageSize || effectiveOutputSettings.pageSize.width <= 0 || effectiveOutputSettings.pageSize.height <= 0) {
       errors.push('Invalid page size settings');
     }
     
     // Check if card size settings are valid
-    if (outputSettings.cardSize && (outputSettings.cardSize.widthInches <= 0 || outputSettings.cardSize.heightInches <= 0)) {
+    if (effectiveOutputSettings.cardSize && (effectiveOutputSettings.cardSize.widthInches <= 0 || effectiveOutputSettings.cardSize.heightInches <= 0)) {
       errors.push('Invalid card size settings');
     }
     
     // Check if card scale is valid
-    const scale = outputSettings.cardScalePercent || 100;
+    const scale = effectiveOutputSettings.cardScalePercent || 100;
     if (scale <= 0 || scale > 200) {
       errors.push('Invalid card scale percentage (must be between 1% and 200%)');
     }
       // Check if bleed margin is valid
-    const bleed = outputSettings.bleedMarginInches || 0;
+    const bleed = effectiveOutputSettings.bleedMarginInches || 0;
     if (bleed < 0 || bleed > 1) {
       errors.push('Invalid bleed margin (must be between 0 and 1 inch)');
     }
     
     // Check if offset values are reasonable
-    const horizontalOffset = outputSettings.offset.horizontal || 0;
-    const verticalOffset = outputSettings.offset.vertical || 0;
-    if (Math.abs(horizontalOffset) > outputSettings.pageSize.width / 2) {
+    const horizontalOffset = effectiveOutputSettings.offset.horizontal || 0;
+    const verticalOffset = effectiveOutputSettings.offset.vertical || 0;
+    if (Math.abs(horizontalOffset) > effectiveOutputSettings.pageSize.width / 2) {
       errors.push('Horizontal offset is too large for page size');
     }
-    if (Math.abs(verticalOffset) > outputSettings.pageSize.height / 2) {
+    if (Math.abs(verticalOffset) > effectiveOutputSettings.pageSize.height / 2) {
       errors.push('Vertical offset is too large for page size');
     }
     
@@ -205,7 +298,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     const maxIndex = activePages.length * cardsPerPage;
     
     for (let cardIndex = 0; cardIndex < maxIndex; cardIndex++) {
-      const cardInfo = getCardInfo(cardIndex, activePages, extractionSettings, pdfMode, cardsPerPage, extractionSettings.pageDimensions?.width, extractionSettings.pageDimensions?.height);
+      const cardInfo = getCardInfo(cardIndex, activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage, effectiveExtractionSettings.pageDimensions?.width, effectiveExtractionSettings.pageDimensions?.height);
       if (cardInfo.id === targetCardID && cardInfo.type.toLowerCase() === targetCardType) {
         return cardIndex;
       }
@@ -385,11 +478,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           }
 
           // Warn if card goes off page (but still allow it in case user intends it)
-          if (finalX < 0 || finalX + finalWidth > outputSettings.pageSize.width) {
-            console.warn(`Card ${cardId} X position (${finalX.toFixed(3)}") may be off page (width: ${outputSettings.pageSize.width}")`);
+          if (finalX < 0 || finalX + finalWidth > effectiveOutputSettings.pageSize.width) {
+            console.warn(`Card ${cardId} X position (${finalX.toFixed(3)}") may be off page (width: ${effectiveOutputSettings.pageSize.width}")`);
           }
-          if (finalY < 0 || finalY + finalHeight > outputSettings.pageSize.height) {
-            console.warn(`Card ${cardId} Y position (${finalY.toFixed(3)}") may be off page (height: ${outputSettings.pageSize.height}")`);
+          if (finalY < 0 || finalY + finalHeight > effectiveOutputSettings.pageSize.height) {
+            console.warn(`Card ${cardId} Y position (${finalY.toFixed(3)}") may be off page (height: ${effectiveOutputSettings.pageSize.height}")`);
           }
 
           console.log(`Adding ${cardType} card ${cardId} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
@@ -476,10 +569,13 @@ export const ExportStep: React.FC<ExportStepProps> = ({
         return;
       }
       
-      console.log('PDF Mode:', pdfMode);
+      console.log('PDF Mode:', effectivePdfMode);
       console.log('Total Cards:', totalCards);
       console.log('Active Pages:', activePages.length);
-      console.log('Output Settings:', outputSettings);
+      console.log('Output Settings:', effectiveOutputSettings);
+      if (activeGroupId) {
+        console.log('Active Group:', activeGroupId);
+      }
       
       setExportProgress('Generating PDF files...');
       
@@ -654,6 +750,19 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           />
         </div>
       </div>
+
+      {/* Group Context Bar - only show if groups exist */}
+      {groups.length > 0 && (
+        <GroupContextBar
+          pages={unifiedPages}
+          groups={groups}
+          activeGroupId={activeGroupId}
+          extractionSettings={effectiveExtractionSettings}
+          globalPdfMode={pdfMode}
+          onActiveGroupChange={handleActiveGroupChange}
+          disabled={exportStatus === 'processing'}
+        />
+      )}
       
       
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
@@ -661,6 +770,21 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           Export Summary
         </h3>        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
+            {/* Group context information */}
+            {groups.length > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Active Group:</span>
+                <span className="font-medium text-gray-800">
+                  {(() => {
+                    if (!activeGroupId || activeGroupId === 'default') {
+                      return 'Default Group (ungrouped pages)';
+                    }
+                    const activeGroup = groups.find(g => g.id === activeGroupId);
+                    return activeGroup ? activeGroup.name : 'Unknown Group';
+                  })()}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Source Type:</span>
               <span className="font-medium text-gray-800">
@@ -680,16 +804,16 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">PDF Mode:</span>
-              <span className="font-medium text-gray-800">{pdfMode.type}</span>
+              <span className="font-medium text-gray-800">{effectivePdfMode.type}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Total Cards:</span>
               <span className="font-medium text-gray-800">
                 {(() => {
-                  const frontCards = getAvailableCardIds('front', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
-                  const backCards = getAvailableCardIds('back', totalCards, pdfMode, activePages, cardsPerPage, extractionSettings).length;
+                  const frontCards = getAvailableCardIds('front', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
+                  const backCards = getAvailableCardIds('back', totalCards, effectivePdfMode, activePages, cardsPerPage, effectiveExtractionSettings).length;
                   const effectiveTotal = frontCards + backCards;
-                  const skippedCount = extractionSettings.skippedCards?.length || 0;
+                  const skippedCount = effectiveExtractionSettings.skippedCards?.length || 0;
                   return skippedCount > 0 ? `${effectiveTotal} (${skippedCount} skipped)` : totalCards;
                 })()}
               </span>
@@ -697,21 +821,21 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Output Page Size:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.pageSize.width}" ×{' '}
-                {outputSettings.pageSize.height}"
+                {effectiveOutputSettings.pageSize.width}" ×{' '}
+                {effectiveOutputSettings.pageSize.height}"
               </span>
             </div>            <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Size:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.cardSize?.widthInches || 2.5}" ×{' '}
-                {outputSettings.cardSize?.heightInches || 3.5}"
+                {effectiveOutputSettings.cardSize?.widthInches || 2.5}" ×{' '}
+                {effectiveOutputSettings.cardSize?.heightInches || 3.5}"
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Final Print Size:</span>
               <span className="font-medium text-gray-800">
                 {(() => {
-                  const cardDimensions = calculateCardDimensions(outputSettings);
+                  const cardDimensions = calculateCardDimensions(effectiveOutputSettings);
                   return `${cardDimensions.scaledCardWidthInches.toFixed(2)}" × ${cardDimensions.scaledCardHeightInches.toFixed(2)}"`;
                 })()}
               </span>
@@ -721,22 +845,22 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Position:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.offset.horizontal > 0 ? '+' : ''}
-                {outputSettings.offset.horizontal}" H,{' '}
-                {outputSettings.offset.vertical > 0 ? '+' : ''}
-                {outputSettings.offset.vertical}" V
+                {effectiveOutputSettings.offset.horizontal > 0 ? '+' : ''}
+                {effectiveOutputSettings.offset.horizontal}" H,{' '}
+                {effectiveOutputSettings.offset.vertical > 0 ? '+' : ''}
+                {effectiveOutputSettings.offset.vertical}" V
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Scale:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.cardScalePercent || 100}%
+                {effectiveOutputSettings.cardScalePercent || 100}%
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Card Rotation:</span>
               <span className="font-medium text-gray-800">
-                Front {getRotationForCardType(outputSettings, 'front')}°, Back {getRotationForCardType(outputSettings, 'back')}°
+                Front {getRotationForCardType(effectiveOutputSettings, 'front')}°, Back {getRotationForCardType(effectiveOutputSettings, 'back')}°
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -748,8 +872,8 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Bleed Margin:</span>
               <span className="font-medium text-gray-800">
-                {outputSettings.bleedMarginInches || 0}" 
-                ({outputSettings.bleedMarginInches ? 'applied' : 'none'})
+                {effectiveOutputSettings.bleedMarginInches || 0}" 
+                ({effectiveOutputSettings.bleedMarginInches ? 'applied' : 'none'})
               </span>
             </div>
           </div>
@@ -762,10 +886,10 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           pages={unifiedPages}
           groups={multiFileImport.multiFileState.pageGroups || []}
           pageTypeSettings={multiFileImport.multiFileState.pageTypeSettings || {}}
-          globalExtractionSettings={extractionSettings}
-          globalOutputSettings={outputSettings}
-          globalColorSettings={colorSettings}
-          pdfMode={pdfMode}
+          globalExtractionSettings={effectiveExtractionSettings}
+          globalOutputSettings={effectiveOutputSettings}
+          globalColorSettings={effectiveColorSettings}
+          pdfMode={effectivePdfMode}
           pdfData={pdfData}
           multiFileImport={multiFileImport}
           disabled={exportStatus === 'processing'}
@@ -782,8 +906,9 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           {exportStatus === 'idle' && (
             <div className="text-center py-8">
               <p className="text-gray-600 mb-6">
-                Ready to generate output PDF files with your configured
-                settings.
+                Ready to generate output PDF files{groups.length > 0 && activeGroupId ? 
+                  ` for ${activeGroupId === 'default' ? 'ungrouped pages' : groups.find(g => g.id === activeGroupId)?.name || 'the selected group'}` : 
+                  ''} with your configured settings.
               </p>
               <button onClick={handleExport} className="inline-flex items-center bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700">
                 <DownloadIcon size={18} className="mr-2" />
