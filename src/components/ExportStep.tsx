@@ -53,11 +53,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     backs: null
   });
   
-  // Get page groups from multi-file state
-  const groups = useMemo(() => {
-    return multiFileImport.multiFileState.pageGroups || [];
-  }, [multiFileImport.multiFileState.pageGroups]);
-  
   // Handle active group change (after state declarations)
   const handleActiveGroupChange = useCallback((groupId: string | null) => {
     setActiveGroupId(groupId);
@@ -73,6 +68,42 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }
     setExportedFiles({ fronts: null, backs: null });
   }, [exportedFiles]);
+
+  // Get page groups from multi-file state (moved up before effective settings)
+  const groups = useMemo(() => {
+    return multiFileImport.multiFileState.pageGroups || [];
+  }, [multiFileImport.multiFileState.pageGroups]);
+
+  // Effective settings with group inheritance (moved up before usage)
+  const effectiveExtractionSettings = useMemo(() => {
+    if (!activeGroupId) return extractionSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.extraction ? 
+      { ...extractionSettings, ...activeGroup.settings.extraction } : 
+      extractionSettings;
+  }, [activeGroupId, extractionSettings, groups]);
+
+  const effectiveOutputSettings = useMemo(() => {
+    if (!activeGroupId) return outputSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.output ? 
+      { ...outputSettings, ...activeGroup.settings.output } : 
+      outputSettings;
+  }, [activeGroupId, outputSettings, groups]);
+
+  const effectiveColorSettings = useMemo(() => {
+    if (!activeGroupId) return colorSettings;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.settings?.color ? 
+      { ...colorSettings, ...activeGroup.settings.color } : 
+      colorSettings;
+  }, [activeGroupId, colorSettings, groups]);
+
+  const effectivePdfMode = useMemo(() => {
+    if (!activeGroupId) return pdfMode;
+    const activeGroup = groups.find(g => g.id === activeGroupId);
+    return activeGroup?.processingMode || pdfMode;
+  }, [activeGroupId, pdfMode, groups]);
 
   // Get current color transformation settings (use effective settings)
   const currentColorTransformation: ColorTransformation = useMemo(() => {
@@ -103,37 +134,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       return [];
     }
   }, [multiFileImport.multiFileState.pages, pageSettings]);
-
-  // Effective settings with group inheritance
-  const effectiveExtractionSettings = useMemo(() => {
-    if (!activeGroupId) return extractionSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.extraction ? 
-      { ...extractionSettings, ...activeGroup.settings.extraction } : 
-      extractionSettings;
-  }, [activeGroupId, extractionSettings, groups]);
-
-  const effectiveOutputSettings = useMemo(() => {
-    if (!activeGroupId) return outputSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.output ? 
-      { ...outputSettings, ...activeGroup.settings.output } : 
-      outputSettings;
-  }, [activeGroupId, outputSettings, groups]);
-
-  const effectiveColorSettings = useMemo(() => {
-    if (!activeGroupId) return colorSettings;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.settings?.color ? 
-      { ...colorSettings, ...activeGroup.settings.color } : 
-      colorSettings;
-  }, [activeGroupId, colorSettings, groups]);
-
-  const effectivePdfMode = useMemo(() => {
-    if (!activeGroupId) return pdfMode;
-    const activeGroup = groups.find(g => g.id === activeGroupId);
-    return activeGroup?.processingMode || pdfMode;
-  }, [activeGroupId, pdfMode, groups]);
 
   // Helper function to get ungrouped pages (for default group)
   const getUngroupedPages = useCallback((allPages: any[]) => {
