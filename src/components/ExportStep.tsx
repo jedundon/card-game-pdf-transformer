@@ -8,7 +8,6 @@ import {
   getAvailableCardIds,
   getCardInfo,
   extractCardImageFromCanvas,
-  calculateCardDimensions,
   getRotationForCardType
 } from '../utils/cardUtils';
 import { 
@@ -23,7 +22,6 @@ import {
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
-import { /* DPI_CONSTANTS, */ TIMEOUT_CONSTANTS } from '../constants';
 import type { ExportStepProps /*, MultiFileImportHook */ } from '../types';
 import jsPDF from 'jspdf';
 
@@ -50,6 +48,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       backs: string | null;
     };
   }>({});
+
+  // Get page groups from multi-file state - must be declared before callbacks that use it
+  const groups = useMemo(() => {
+    return multiFileImport.multiFileState.pageGroups || [];
+  }, [multiFileImport.multiFileState.pageGroups]);
   
   // Group selection helpers
   const handleGroupSelectionChange = useCallback((groupId: string, selected: boolean) => {
@@ -87,11 +90,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   const handleSelectNone = useCallback(() => {
     setSelectedGroupIds(new Set());
   }, []);
-
-  // Get page groups from multi-file state (moved up before effective settings)
-  const groups = useMemo(() => {
-    return multiFileImport.multiFileState.pageGroups || [];
-  }, [multiFileImport.multiFileState.pageGroups]);
 
   // Helper function to get effective settings for a specific group
   const getEffectiveSettingsForGroup = useCallback((groupId: string | null) => {
@@ -183,8 +181,12 @@ export const ExportStep: React.FC<ExportStepProps> = ({
 
   // Calculate stats for all groups
   const groupStats = useMemo(() => {
+    // Check if default group already exists
+    const hasDefaultGroup = groups.some(g => g.id === 'default');
+    
     const allGroups = [
-      { id: 'default', name: 'Default Group' },
+      // Only add default group if it doesn't already exist
+      ...(hasDefaultGroup ? [] : [{ id: 'default', name: 'Default Group' }]),
       ...groups.map(g => ({ id: g.id, name: g.name }))
     ];
     
@@ -193,6 +195,8 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       const groupSettings = getEffectiveSettingsForGroup(group.id);
       const cardsPerPage = groupSettings.extraction.grid.rows * groupSettings.extraction.grid.columns;
       const totalCards = calculateTotalCards(groupSettings.pdfMode, groupPages, cardsPerPage);
+      
+      // Fix parameter order for getAvailableCardIds: (viewMode, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings)
       const frontCards = getAvailableCardIds('front', totalCards, groupSettings.pdfMode, groupPages, cardsPerPage, groupSettings.extraction).length;
       const backCards = getAvailableCardIds('back', totalCards, groupSettings.pdfMode, groupPages, cardsPerPage, groupSettings.extraction).length;
       
@@ -209,11 +213,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }).filter(stat => stat.pageCount > 0); // Only include groups with pages
   }, [groups, getPagesForGroup, getEffectiveSettingsForGroup]);
 
-  // All active pages (for overall statistics)
-  const activePages = useMemo(() => 
-    getActivePagesWithSource(unifiedPages), 
-    [unifiedPages]
-  );
+  // Note: activePages removed as it was unused - use getActivePagesWithSource(unifiedPages) directly where needed
   
   // Overall totals across all groups
   const overallTotals = useMemo(() => {
@@ -274,470 +274,408 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     };
   }, [exportedFiles]);
 
-  // Generate filename based on PDF name and group context
-  const generateFileName = (groupId: string, fileType: 'fronts' | 'backs'): string => {
-    let baseName = 'card';
-    
-    // Use current PDF filename if available
-    if (currentPdfFileName) {
-      baseName = currentPdfFileName.replace(/\.pdf$/i, '');
-    }
-    
-    // Add group context
-    if (groupId && groupId !== 'default') {
-      const group = groups.find(g => g.id === groupId);
-      if (group) {
-        baseName += `_${group.name.replace(/\s+/g, '_')}`;
-      }
-    } else if (groupId === 'default') {
-      baseName += '_Default';
-    }
-    
-    return `${baseName}_${fileType}.pdf`;
-  };
-  // Validate export settings before generating PDFs
-  const validateExportSettings = (): { isValid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-    
-    // Check if data is available for export
-    if (!pdfData && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
-      errors.push('No files available for export');
-    }
-    
-    // Check if there are selected groups
-    if (selectedGroupIds.size === 0) {
-      errors.push('No groups selected for export');
-    }
-    
-    // Check if selected groups have pages
-    const selectedGroupStats = groupStats.filter(stat => selectedGroupIds.has(stat.id));
-    if (selectedGroupStats.length === 0) {
-      errors.push('Selected groups have no pages available for export');
-    }
-    
-    // Check if any selected group has cards
-    const totalCardsInSelection = selectedGroupStats.reduce((total, stat) => total + stat.totalCards, 0);
-    if (totalCardsInSelection <= 0) {
-      errors.push('No cards available in selected groups');
-    }
-    
-    // Validate settings for each selected group
-    selectedGroupStats.forEach(stat => {
-      const groupSettings = getEffectiveSettingsForGroup(stat.id);
-      
-      // Check if output settings are valid
-      if (!groupSettings.output.pageSize || groupSettings.output.pageSize.width <= 0 || groupSettings.output.pageSize.height <= 0) {
-        errors.push(`Invalid page size settings for group "${stat.name}"`);
-      }
-      
-      // Check if card size settings are valid
-      if (groupSettings.output.cardSize && (groupSettings.output.cardSize.widthInches <= 0 || groupSettings.output.cardSize.heightInches <= 0)) {
-        errors.push(`Invalid card size settings for group "${stat.name}"`);
-      }
-      
-      // Check if card scale is valid
-      const scale = groupSettings.output.cardScalePercent || 100;
-      if (scale <= 0 || scale > 200) {
-        errors.push(`Invalid card scale percentage for group "${stat.name}" (must be between 1% and 200%)`);
-      }
-      
-      // Check if bleed margin is valid
-      const bleed = groupSettings.output.bleedMarginInches || 0;
-      if (bleed < 0 || bleed > 1) {
-        errors.push(`Invalid bleed margin for group "${stat.name}" (must be between 0 and 1 inch)`);
-      }
-      
-      // Check if offset values are reasonable
-      const horizontalOffset = groupSettings.output.offset.horizontal || 0;
-      const verticalOffset = groupSettings.output.offset.vertical || 0;
-      if (Math.abs(horizontalOffset) > groupSettings.output.pageSize.width / 2) {
-        errors.push(`Horizontal offset too large for page size in group "${stat.name}"`);
-      }
-      if (Math.abs(verticalOffset) > groupSettings.output.pageSize.height / 2) {
-        errors.push(`Vertical offset too large for page size in group "${stat.name}"`);
-      }
-    });
-    
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
-  };
-
-  // Helper function to find card index by card ID and type
-  const findCardIndexByIDAndType = (targetCardID: number, targetCardType: 'front' | 'back'): number | null => {
-    const maxIndex = activePages.length * cardsPerPage;
-    
-    for (let cardIndex = 0; cardIndex < maxIndex; cardIndex++) {
-      const cardInfo = getCardInfo(cardIndex, activePages, effectiveExtractionSettings, effectivePdfMode, cardsPerPage, effectiveExtractionSettings.pageDimensions?.width, effectiveExtractionSettings.pageDimensions?.height);
-      if (cardInfo.id === targetCardID && cardInfo.type.toLowerCase() === targetCardType) {
-        return cardIndex;
-      }
-    }
-    
-    return null; // Card ID with matching type not found
-  };
 
   // Generate a PDF with all cards of a specific type
-  const generatePDF = async (cardType: 'front' | 'back'): Promise<Blob | null> => {
-    // Validate data availability
-    if (!pdfData && (!multiFileImport.multiFileState.files || multiFileImport.multiFileState.files.length === 0)) {
-      throw new Error('No files available for export');
-    }
-
+  // Generate PDF for a specific group with group-specific settings
+  const generatePDFForGroup = async (
+    cardType: 'front' | 'back',
+    groupId: string,
+    groupSettings: {
+      extraction: ExtractionSettings;
+      output: OutputSettings;
+      color: ColorSettings;
+    },
+    groupPages: (PageSettings & PageSource)[]
+  ): Promise<Blob> => {
     try {
-      console.log(`Starting ${cardType} PDF generation...`);
-      setExportProgress(`Preparing ${cardType} cards...`);
+      console.log(`Generating ${cardType} PDF for group ${groupId}...`);
       
-      // Get all card IDs for this type (already sorted numerically)
-      const cardIds = getAvailableCardIds(cardType, totalCards, pdfMode, activePages, cardsPerPage, extractionSettings);
+      // Get group-specific processing mode
+      const groupProcessingMode = groupId === 'default' ? pdfMode : 
+        groups.find(g => g.id === groupId)?.processingMode || pdfMode;
       
-      console.log(`Available ${cardType} card IDs (sorted):`, cardIds);
+      // Calculate cards for this specific group
+      const groupCardsPerPage = groupSettings.extraction.grid.rows * groupSettings.extraction.grid.columns;
+      const groupTotalCards = calculateTotalCards(groupProcessingMode, groupPages, groupCardsPerPage);
       
-      if (cardIds.length === 0) {
-        console.log(`No ${cardType} cards found`);
-        return null;
-      }
-
-      // Validate jsPDF creation
-      let doc: jsPDF;
-      try {
-        doc = new jsPDF({
-          orientation: outputSettings.pageSize.width > outputSettings.pageSize.height ? 'landscape' : 'portrait',
+      console.log(`Group ${groupId} ${cardType} cards:`, {
+        pages: groupPages.length,
+        cardsPerPage: groupCardsPerPage,
+        totalCards: groupTotalCards,
+        processingMode: groupProcessingMode
+      });
+      
+      // Get available card IDs for this group
+      const groupCardIds = getAvailableCardIds(
+        cardType,
+        groupTotalCards,
+        groupProcessingMode,
+        groupPages,
+        groupCardsPerPage,
+        groupSettings.extraction
+      );
+      
+      if (groupCardIds.length === 0) {
+        console.warn(`No ${cardType} cards found for group ${groupId}`);
+        // Return an empty PDF rather than throwing an error
+        const emptyDoc = new jsPDF({
+          orientation: groupSettings.output.pageSize.width > groupSettings.output.pageSize.height ? 'landscape' : 'portrait',
           unit: 'in',
-          format: [outputSettings.pageSize.width, outputSettings.pageSize.height]
+          format: [groupSettings.output.pageSize.width, groupSettings.output.pageSize.height]
         });
-      } catch (error) {
-        throw new Error(`Failed to create PDF document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const groupName = groupId === 'default' ? 'Default Group' : 
+          groups.find(g => g.id === groupId)?.name || groupId;
+        emptyDoc.text(`No ${cardType} cards found in group "${groupName}"`, 1, 1);
+        return new Blob([emptyDoc.output('arraybuffer')], { type: 'application/pdf' });
       }
-
-      let cardCount = 0;
-      let colorTransformationCount = 0;
-      const failedCards: number[] = [];
       
-      console.log(`Processing ${cardIds.length} ${cardType} cards in numerical order...`);
-      console.log(`Color adjustments ${hasColorAdjustments ? 'will be applied' : 'are disabled (all settings are neutral)'} for ${cardType} cards`);
+      // For card export, use one card per page approach
+      // The PDF page size should accommodate the card size plus margins
+      const cardWidth = groupSettings.output.cardSize?.widthInches || 2.5;
+      const cardHeight = groupSettings.output.cardSize?.heightInches || 3.5;
+      const margin = groupSettings.output.margin || 0.5;
       
-      // Process each card ID in sorted order
-      for (let i = 0; i < cardIds.length; i++) {
-        const cardId = cardIds[i];
+      // Calculate required page size for one card plus margins
+      const requiredPageWidth = cardWidth + 2 * margin;
+      const requiredPageHeight = cardHeight + 2 * margin;
+      
+      // Use the larger of configured page size or required size for card
+      const pageWidth = Math.max(groupSettings.output.pageSize.width, requiredPageWidth);
+      const pageHeight = Math.max(groupSettings.output.pageSize.height, requiredPageHeight);
+      
+      // For card export, we use one card per page
+      const cardsPerOutputPage = 1;
+      
+      // Create PDF document with calculated page settings to fit cards
+      const doc = new jsPDF({
+        orientation: pageWidth > pageHeight ? 'landscape' : 'portrait',
+        unit: 'in',
+        format: [pageWidth, pageHeight]
+      });
+      
+      console.log(`Group ${groupId} layout:`, {
+        pageSize: `${pageWidth}" x ${pageHeight}"`,
+        cardSize: `${cardWidth}" x ${cardHeight}"`,
+        layout: 'One card per page',
+        cardsPerPage: cardsPerOutputPage
+      });
+      
+      // Process each card using one card per page logic
+      for (let i = 0; i < groupCardIds.length; i++) {
+        const cardId = groupCardIds[i];
+        
+        // Add new page if needed (skip for first card)
+        if (i > 0) {
+          doc.addPage();
+        }
+        
+        // Center the card on the page
+        const x = (pageWidth - cardWidth) / 2;
+        const y = (pageHeight - cardHeight) / 2;
         
         try {
-          setExportProgress(`Processing ${cardType} card ${cardId} (${i + 1}/${cardIds.length})...`);
+          // Find the actual global card index that produces this card ID and type
+          let globalCardIndex = -1;
+          const maxIndex = groupPages.length * groupCardsPerPage;
           
-          // Find the card index for this card ID and type
-          const cardIndex = findCardIndexByIDAndType(cardId, cardType);
+          for (let testIndex = 0; testIndex < maxIndex; testIndex++) {
+            const testCardInfo = getCardInfo(
+              testIndex,
+              groupPages,
+              groupSettings.extraction,
+              groupProcessingMode,
+              groupCardsPerPage,
+              groupSettings.extraction.pageDimensions?.width,
+              groupSettings.extraction.pageDimensions?.height
+            );
+            
+            if (testCardInfo.type.toLowerCase() === cardType && testCardInfo.id === cardId) {
+              globalCardIndex = testIndex;
+              break;
+            }
+          }
           
-          if (cardIndex === null) {
-            console.warn(`Could not find card index for ${cardType} card ID ${cardId}`);
-            failedCards.push(cardId);
+          if (globalCardIndex === -1) {
+            console.warn(`Could not find global card index for card ${cardId} of type ${cardType} in group ${groupId}`);
             continue;
           }
           
-          console.log(`Processing ${cardType} card ${cardId} at index ${cardIndex}...`);
+          // Get card info using group-specific pages and settings
+          const cardInfo = getCardInfo(
+            globalCardIndex,
+            groupPages,
+            groupSettings.extraction,
+            groupProcessingMode,
+            groupCardsPerPage,
+            groupSettings.extraction.pageDimensions?.width,
+            groupSettings.extraction.pageDimensions?.height
+          );
           
-          // Extract the card image with source-aware logic and timeout
-          let extractPromise: Promise<string | null>;
+          if (!cardInfo) {
+            console.warn(`No card info found for card ${cardId} in group ${groupId}`);
+            continue;
+          }
           
-          // Get current page info to determine extraction method
-          const pageIndex = Math.floor(cardIndex / cardsPerPage);
-          const currentPageInfo = activePages[pageIndex];
+          // Calculate which page this card belongs to
+          const pageIndex = Math.floor(globalCardIndex / groupCardsPerPage);
+          if (pageIndex >= groupPages.length) {
+            console.warn(`Page index ${pageIndex} exceeds available pages for card ${cardId} in group ${groupId}`);
+            continue;
+          }
           
-          if (currentPageInfo && currentPageInfo.fileType === 'image') {
-            // Extract from image file
-            const imageData = imageDataMap.get(currentPageInfo.fileName);
+          const pageData = groupPages[pageIndex];
+          if (!pageData) {
+            console.warn(`No page data found for page ${pageIndex}, card ${cardId} in group ${groupId}`);
+            continue;
+          }
+          
+          // Extract card image URL using source-aware logic
+          let cardImageUrl: string | null = null;
+          
+          if (pageData.sourceType === 'image') {
+            // Handle image source
+            const imageData = imageDataMap.get(pageData.fileName);
             if (!imageData) {
-              console.error(`ExportStep: No image data found for file: ${currentPageInfo.fileName}`);
-              failedCards.push(cardId);
+              console.error(`No image data found for file: ${pageData.fileName}`);
               continue;
             }
-            extractPromise = extractCardImageFromCanvas(cardIndex, imageData, pdfMode, activePages, extractionSettings);
-          } else if (currentPageInfo && currentPageInfo.fileType === 'pdf') {
-            // Get the correct PDF data for this specific file
-            const filePdfData = pdfDataMap.get(currentPageInfo.fileName);
-            if (!filePdfData) {
-              console.error(`ExportStep: No PDF data available for file ${currentPageInfo.fileName} on page ${pageIndex}`);
-              failedCards.push(cardId);
-              continue;
-            }
-            
-            // For multi-file scenarios, calculate the card extraction directly
-            const cardOnPage = cardIndex % cardsPerPage;
-            
-            // Use the original page index from the current page info
-            const actualPageNumber = currentPageInfo.originalPageIndex + 1;
-            
-            // Extract the card directly using the file-specific PDF data and page number
-            extractPromise = extractCardImageFromPdfPage(
-              filePdfData, 
-              actualPageNumber, 
-              cardOnPage, 
-              extractionSettings,
-              cardIndex, // globalCardIndex
-              activePages, 
-              pdfMode
+            cardImageUrl = await extractCardImageFromCanvas(
+              globalCardIndex,
+              imageData,
+              groupProcessingMode,
+              groupPages,
+              groupSettings.extraction
             );
           } else {
-            console.error(`ExportStep: Invalid page info for card ${cardId} at page ${pageIndex}:`, currentPageInfo);
-            failedCards.push(cardId);
-            continue;
+            // Handle PDF source
+            const filePdfData = pdfDataMap.get(pageData.fileName) || pdfData;
+            if (!filePdfData) {
+              console.error(`No PDF data available for file ${pageData.fileName}`);
+              continue;
+            }
+            
+            // Use the PDF extraction method
+            const actualPageNumber = pageData.originalPageIndex + 1;
+            const cardOnPage = globalCardIndex % groupCardsPerPage;
+            
+            cardImageUrl = await extractCardImageFromPdfPage(
+              filePdfData,
+              actualPageNumber,
+              cardOnPage,
+              groupSettings.extraction,
+              globalCardIndex,
+              groupPages,
+              groupProcessingMode
+            );
           }
-          const extractTimeout = new Promise<null>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} extraction timed out`)), TIMEOUT_CONSTANTS.CARD_EXTRACTION_TIMEOUT)
-          );
-          
-          const cardImageUrl = await Promise.race([extractPromise, extractTimeout]);
           
           if (!cardImageUrl) {
-            console.warn(`Failed to extract card image for ${cardType} card ${cardId}`);
-            failedCards.push(cardId);
+            console.warn(`Failed to extract card image for card ${cardId} in group ${groupId}`);
             continue;
           }
-
-          // Create a new page for each card
-          if (cardCount > 0) {
-            doc.addPage();
-          }
-
-          console.log(`Processing ${cardType} card ${cardId} with unified render utils...`);
           
-          // Use unified rendering functions with timeout
-          const renderPromise = calculateFinalCardRenderDimensions(cardImageUrl, outputSettings);
-          const renderTimeout = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} render calculation timed out`)), TIMEOUT_CONSTANTS.IMAGE_PROCESSING_TIMEOUT)
+          // Calculate final card dimensions using the extracted image
+          const groupCardDimensions = await calculateFinalCardRenderDimensions(
+            cardImageUrl,
+            groupSettings.output
           );
           
-          const renderDimensions = await Promise.race([renderPromise, renderTimeout]);
-          const positioning = calculateCardPositioning(renderDimensions, outputSettings, cardType);
+          // Calculate positioning
+          const positioning = calculateCardPositioning(groupCardDimensions, groupSettings.output, cardType);
           
-          const processPromise = processCardImageForRendering(cardImageUrl, renderDimensions, positioning.rotation);
-          const processTimeout = new Promise<never>((_, reject) => 
-            setTimeout(() => reject(new Error(`Card ${cardId} image processing timed out`)), TIMEOUT_CONSTANTS.IMAGE_PROCESSING_TIMEOUT)
+          // Process card image for rendering
+          const processedImage = await processCardImageForRendering(
+            cardImageUrl,
+            groupCardDimensions,
+            positioning.rotation
           );
           
-          const processedImage = await Promise.race([processPromise, processTimeout]);
-          
-          console.log(`Card ${cardId} final dimensions: ${positioning.width.toFixed(3)}" × ${positioning.height.toFixed(3)}" at (${positioning.x.toFixed(3)}", ${positioning.y.toFixed(3)}") with ${positioning.rotation}° rotation`);
-          
-          // Apply color transformation to the processed image
+          // Apply group-specific color transformations if needed
           let finalImageUrl = processedImage.imageUrl;
-          if (hasColorAdjustments) {
-            try {
-              const colorPromise = applyColorTransformation(processedImage.imageUrl, currentColorTransformation);
-              const colorTimeout = new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error(`Card ${cardId} color transformation timed out`)), TIMEOUT_CONSTANTS.COLOR_TRANSFORMATION_TIMEOUT)
-              );
-              
-              finalImageUrl = await Promise.race([colorPromise, colorTimeout]);
-              colorTransformationCount++;
-              console.log(`Applied color transformation to ${cardType} card ${cardId}`);
-            } catch (error) {
-              console.warn(`Failed to apply color transformation to ${cardType} card ${cardId}:`, error);
-              // Use original image if color transformation fails
-              finalImageUrl = processedImage.imageUrl;
-            }
+          const groupColorTransformation = groupSettings.color.finalAdjustments || {
+            brightness: groupSettings.color.brightness ?? 0,
+            contrast: groupSettings.color.contrast ?? 0,
+            saturation: groupSettings.color.saturation ?? 0,
+            gamma: groupSettings.color.gamma ?? 1.0,
+            temperature: groupSettings.color.temperature ?? 0,
+            tint: groupSettings.color.tint ?? 0,
+            highlights: groupSettings.color.highlights ?? 0,
+            shadows: groupSettings.color.shadows ?? 0,
+            whites: groupSettings.color.whites ?? 0,
+            blacks: groupSettings.color.blacks ?? 0
+          };
+          
+          if (hasNonDefaultColorSettings(groupColorTransformation)) {
+            finalImageUrl = await applyColorTransformation(processedImage.imageUrl, groupColorTransformation);
           }
           
-          const finalX = positioning.x;
-          const finalY = positioning.y;
-          const finalWidth = positioning.width;
-          const finalHeight = positioning.height;
-
-          // Validate dimensions
-          if (finalWidth <= 0 || finalHeight <= 0) {
-            throw new Error(`Invalid dimensions for card ${cardId}: ${finalWidth}" × ${finalHeight}"`);
-          }
-
-          // Warn if card goes off page (but still allow it in case user intends it)
-          if (finalX < 0 || finalX + finalWidth > effectiveOutputSettings.pageSize.width) {
-            console.warn(`Card ${cardId} X position (${finalX.toFixed(3)}") may be off page (width: ${effectiveOutputSettings.pageSize.width}")`);
-          }
-          if (finalY < 0 || finalY + finalHeight > effectiveOutputSettings.pageSize.height) {
-            console.warn(`Card ${cardId} Y position (${finalY.toFixed(3)}") may be off page (height: ${effectiveOutputSettings.pageSize.height}")`);
-          }
-
-          console.log(`Adding ${cardType} card ${cardId} to PDF at position (${finalX.toFixed(2)}", ${finalY.toFixed(2)}") with size ${finalWidth.toFixed(2)}" × ${finalHeight.toFixed(2)}"`);
-
-          // Add the card image to PDF with error handling
-          try {
-            doc.addImage(
-              finalImageUrl,
-              'PNG',
-              finalX,
-              finalY,
-              finalWidth,
-              finalHeight
-            );
-          } catch (error) {
-            throw new Error(`Failed to add card ${cardId} to PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          }
-
-          cardCount++;
+          // Add to PDF
+          doc.addImage(
+            finalImageUrl,
+            'JPEG',
+            x,
+            y,
+            cardWidth,
+            cardHeight
+          );
           
         } catch (error) {
-          console.error(`Failed to process ${cardType} card ${cardId}:`, error);
-          failedCards.push(cardId);
-          
-          // If more than 50% of cards fail, abort the process
-          if (failedCards.length > cardIds.length / 2) {
-            throw new Error(`Too many cards failed to process (${failedCards.length}/${cardIds.length}). Export aborted.`);
-          }
-          
-          continue;
+          console.error(`Error processing card ${cardId} in group ${groupId}:`, error);
+          // Continue with next card instead of failing entire export
         }
       }
-
-      console.log(`${cardType} PDF generation completed with ${cardCount} cards${hasColorAdjustments ? `, ${colorTransformationCount} with color transformations applied` : ' (no color adjustments)'}`);
       
-      if (failedCards.length > 0) {
-        console.warn(`${failedCards.length} ${cardType} cards failed to process: ${failedCards.join(', ')}`);
-      }
-
-      if (cardCount === 0) {
-        throw new Error(`No ${cardType} cards were successfully processed`);
-      }
-
-      // Generate PDF blob with error handling
+      // Generate PDF blob
       try {
-        setExportProgress(`Finalizing ${cardType} PDF...`);
         return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
       } catch (error) {
-        throw new Error(`Failed to generate ${cardType} PDF blob: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to generate ${cardType} PDF blob for group ${groupId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
       
     } catch (error) {
-      console.error(`Error generating ${cardType} PDF:`, error);
-      throw error; // Re-throw to be handled by caller
+      console.error(`Error generating ${cardType} PDF for group ${groupId}:`, error);
+      throw error;
     }
   };
+
 
   const handleExport = async () => {
     // Reset state
     setExportStatus('processing');
     setExportError('');
-    setExportProgress('Initializing export...');
+    setExportProgress('Initializing multi-group export...');
     
     // Clean up any existing blob URLs
-    if (exportedFiles.fronts) {
-      URL.revokeObjectURL(exportedFiles.fronts);
+    Object.values(exportedFiles).forEach(files => {
+      if (files.fronts) URL.revokeObjectURL(files.fronts);
+      if (files.backs) URL.revokeObjectURL(files.backs);
+    });
+    setExportedFiles({});
+    
+    // Validate that groups are selected
+    if (selectedGroupIds.size === 0) {
+      setExportError('Please select at least one group to export.');
+      setExportStatus('error');
+      return;
     }
-    if (exportedFiles.backs) {
-      URL.revokeObjectURL(exportedFiles.backs);
-    }
-    setExportedFiles({ fronts: null, backs: null });
     
     try {
-      console.log('Starting PDF export process...');
+      console.log('Starting multi-group PDF export process...');
+      console.log('Selected Groups:', Array.from(selectedGroupIds));
       setExportProgress('Validating export settings...');
       
-      // Validate settings before export
-      const validation = validateExportSettings();
-      if (!validation.isValid) {
-        const errorMessage = 'Export validation failed:\n\n' + validation.errors.join('\n');
-        console.error('Export validation failed:', validation.errors);
-        setExportError(errorMessage);
-        setExportStatus('error');
-        return;
+      const selectedGroupsArray = Array.from(selectedGroupIds);
+      const newExportedFiles: { [groupId: string]: { fronts: string | null; backs: string | null } } = {};
+      
+      // Process each selected group
+      for (let i = 0; i < selectedGroupsArray.length; i++) {
+        const groupId = selectedGroupsArray[i];
+        const groupName = groupId === 'default' ? 'Default Group' : 
+          groups.find(g => g.id === groupId)?.name || groupId;
+        
+        setExportProgress(`Processing group "${groupName}" (${i + 1} of ${selectedGroupsArray.length})...`);
+        
+        try {
+          // Get effective settings for this group
+          const groupEffectiveSettings = getEffectiveSettingsForGroup(groupId === 'default' ? null : groupId);
+          const groupPages = getPagesForGroup(groupId === 'default' ? null : groupId);
+          
+          console.log(`Processing group ${groupId}:`, {
+            groupName,
+            pageCount: groupPages.length,
+            settings: groupEffectiveSettings
+          });
+          
+          // Validate this group has pages
+          if (groupPages.length === 0) {
+            console.warn(`Group ${groupId} has no pages, skipping...`);
+            continue;
+          }
+          
+          // Generate PDFs for this group using its specific settings
+          let groupFrontsPdf: Blob | null = null;
+          let groupBacksPdf: Blob | null = null;
+          let groupFrontsError: string | null = null;
+          let groupBacksError: string | null = null;
+          
+          try {
+            setExportProgress(`Generating fronts PDF for "${groupName}"...`);
+            groupFrontsPdf = await generatePDFForGroup('front', groupId, groupEffectiveSettings, groupPages);
+          } catch (error) {
+            groupFrontsError = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`Failed to generate fronts PDF for group ${groupId}:`, error);
+          }
+          
+          try {
+            setExportProgress(`Generating backs PDF for "${groupName}"...`);
+            groupBacksPdf = await generatePDFForGroup('back', groupId, groupEffectiveSettings, groupPages);
+          } catch (error) {
+            groupBacksError = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`Failed to generate backs PDF for group ${groupId}:`, error);
+          }
+          
+          // Create download URLs for this group
+          let groupFrontsUrl: string | null = null;
+          let groupBacksUrl: string | null = null;
+          
+          try {
+            groupFrontsUrl = groupFrontsPdf ? URL.createObjectURL(groupFrontsPdf) : null;
+          } catch (error) {
+            console.error(`Failed to create fronts blob URL for group ${groupId}:`, error);
+            groupFrontsError = 'Failed to create download link';
+          }
+          
+          try {
+            groupBacksUrl = groupBacksPdf ? URL.createObjectURL(groupBacksPdf) : null;
+          } catch (error) {
+            console.error(`Failed to create backs blob URL for group ${groupId}:`, error);
+            groupBacksError = 'Failed to create download link';
+          }
+          
+          // Store results for this group
+          newExportedFiles[groupId] = {
+            fronts: groupFrontsUrl,
+            backs: groupBacksUrl
+          };
+          
+          // Log progress
+          console.log(`Group ${groupId} processing completed:`, {
+            fronts: groupFrontsUrl ? 'Generated' : (groupFrontsError || 'No content'),
+            backs: groupBacksUrl ? 'Generated' : (groupBacksError || 'No content')
+          });
+          
+        } catch (error) {
+          console.error(`Error processing group ${groupId}:`, error);
+          // Continue with other groups even if one fails
+        }
       }
       
-      console.log('PDF Mode:', effectivePdfMode);
-      console.log('Total Cards:', totalCards);
-      console.log('Active Pages:', activePages.length);
-      console.log('Output Settings:', effectiveOutputSettings);
-      if (activeGroupId) {
-        console.log('Active Group:', activeGroupId);
-      }
-      
-      setExportProgress('Generating PDF files...');
-      
-      // Generate PDFs with individual error handling
-      let frontsPdf: Blob | null = null;
-      let backsPdf: Blob | null = null;
-      let frontsError: string | null = null;
-      let backsError: string | null = null;
-      
-      try {
-        setExportProgress('Generating fronts PDF...');
-        frontsPdf = await generatePDF('front');
-      } catch (error) {
-        frontsError = error instanceof Error ? error.message : 'Unknown error generating fronts PDF';
-        console.error('Failed to generate fronts PDF:', error);
-      }
-      
-      try {
-        setExportProgress('Generating backs PDF...');
-        backsPdf = await generatePDF('back');
-      } catch (error) {
-        backsError = error instanceof Error ? error.message : 'Unknown error generating backs PDF';
-        console.error('Failed to generate backs PDF:', error);
-      }
+      setExportedFiles(newExportedFiles);
       
       // Check if any PDFs were generated successfully
-      if (!frontsPdf && !backsPdf) {
-        const errorMessages = [];
-        if (frontsError) errorMessages.push(`Fronts PDF: ${frontsError}`);
-        if (backsError) errorMessages.push(`Backs PDF: ${backsError}`);
-        
-        throw new Error(`Failed to generate any PDF files:\n\n${errorMessages.join('\n\n')}`);
-      }
+      const hasAnySuccess = Object.values(newExportedFiles).some(files => 
+        files.fronts || files.backs
+      );
       
-      // Log warnings for partial failures
-      if (frontsError && backsPdf) {
-        console.warn('Fronts PDF generation failed, but backs PDF was successful:', frontsError);
-      }
-      if (backsError && frontsPdf) {
-        console.warn('Backs PDF generation failed, but fronts PDF was successful:', backsError);
-      }
-
-      console.log('PDF generation completed:', {
-        frontsPdf: frontsPdf ? 'Generated' : 'Failed',
-        backsPdf: backsPdf ? 'Generated' : 'Failed'
-      });
-
-      setExportProgress('Creating download links...');
-      
-      // Create download URLs with error handling
-      let frontsUrl: string | null = null;
-      let backsUrl: string | null = null;
-      
-      try {
-        frontsUrl = frontsPdf ? URL.createObjectURL(frontsPdf) : null;
-      } catch (error) {
-        console.error('Failed to create fronts blob URL:', error);
-        frontsError = 'Failed to create download link for fronts PDF';
-      }
-      
-      try {
-        backsUrl = backsPdf ? URL.createObjectURL(backsPdf) : null;
-      } catch (error) {
-        console.error('Failed to create backs blob URL:', error);
-        backsError = 'Failed to create download link for backs PDF';
-      }
-
-      setExportedFiles({
-        fronts: frontsUrl,
-        backs: backsUrl
-      });
-      
-      // Set final status
-      if (frontsUrl || backsUrl) {
+      if (hasAnySuccess) {
         setExportStatus('completed');
-        setExportProgress('Export completed successfully!');
+        setExportProgress(`Export completed! Generated PDFs for ${Object.keys(newExportedFiles).length} groups.`);
         
-        // Show warning if some PDFs failed
-        if (frontsError || backsError) {
-          const warnings = [];
-          if (frontsError) warnings.push(`Fronts: ${frontsError}`);
-          if (backsError) warnings.push(`Backs: ${backsError}`);
-          
-          setExportError(`Some files failed to generate:\n\n${warnings.join('\n\n')}\n\nSuccessfully generated files are available for download.`);
+        // Count partial failures for warning
+        const totalExpected = selectedGroupsArray.length * 2; // fronts + backs per group
+        const actualGenerated = Object.values(newExportedFiles).reduce((count, files) => 
+          count + (files.fronts ? 1 : 0) + (files.backs ? 1 : 0), 0
+        );
+        
+        if (actualGenerated < totalExpected) {
+          setExportError(`Some files could not be generated. Successfully created ${actualGenerated} of ${totalExpected} possible PDF files. Check console for details.`);
         }
       } else {
-        throw new Error('Failed to create download links for generated PDFs');
+        throw new Error('Failed to generate any PDF files for the selected groups.');
       }
       
     } catch (error) {
-      console.error('Export failed:', error);
+      console.error('Multi-group export failed:', error);
       
       let errorMessage = 'Export failed due to an unexpected error.';
       
@@ -748,8 +686,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           errorMessage = 'Export timed out. This can happen with large or complex PDFs. Please try:\n\n• Using a smaller PDF file\n• Reducing output quality settings\n• Refreshing the page and trying again';
         } else if (error.message.includes('memory') || error.message.includes('out of memory')) {
           errorMessage = 'Not enough memory to complete export. Please try:\n\n• Refreshing the page\n• Using a smaller PDF file\n• Closing other browser tabs\n• Reducing card scale or page size';
-        } else if (error.message.includes('Failed to generate any PDF files')) {
-          errorMessage = error.message;
         } else {
           errorMessage = `Export failed: ${error.message}`;
         }
@@ -760,10 +696,11 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       setExportProgress('');
     }
   };
-  const handleDownload = (fileType: 'fronts' | 'backs') => {
-    const url = exportedFiles[fileType];
+  const handleDownload = (groupId: string, fileType: 'fronts' | 'backs') => {
+    const groupFiles = exportedFiles[groupId];
+    const url = groupFiles?.[fileType];
     if (!url) {
-      console.error(`No ${fileType} PDF available for download`);
+      console.error(`No ${fileType} PDF available for group ${groupId}`);
       return;
     }
 
@@ -771,16 +708,24 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       // Create download link and trigger download
       const link = document.createElement('a');
       link.href = url;
-      link.download = generateFileName(fileType);
+      link.download = generateFileNameForGroup(groupId, fileType);
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      console.log(`Download initiated for ${fileType} PDF`);
+      console.log(`Download initiated for ${fileType} PDF from group ${groupId}`);
     } catch (error) {
-      console.error(`Error downloading ${fileType} PDF:`, error);
+      console.error(`Error downloading ${fileType} PDF from group ${groupId}:`, error);
     }
+  };
+
+  const generateFileNameForGroup = (groupId: string, fileType: 'fronts' | 'backs'): string => {
+    const groupName = groupId === 'default' ? 'Default_Group' : 
+      groups.find(g => g.id === groupId)?.name?.replace(/[^a-zA-Z0-9]/g, '_') || groupId;
+    const fileName = currentPdfFileName || 'cards';
+    const timestamp = new Date().toISOString().split('T')[0];
+    return `${fileName}_${groupName}_${fileType}_${timestamp}.pdf`;
   };
 
   // State for controlling export mode
@@ -1100,41 +1045,64 @@ export const ExportStep: React.FC<ExportStepProps> = ({
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {exportedFiles.fronts && (
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-center mb-3">
-                      <CheckCircleIcon size={24} className="text-red-500 mr-2" />
-                      <h4 className="text-lg font-medium">Card Fronts</h4>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Contains all front card images positioned according to your
-                      settings.
-                    </p>
-                    <button onClick={() => handleDownload('fronts')} className="w-full flex items-center justify-center bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50">
-                      <DownloadIcon size={16} className="mr-2" />
-                      Download Card Fronts
-                    </button>
-                  </div>
-                )}
-                {exportedFiles.backs && (
-                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                    <div className="flex items-center mb-3">
-                      <CheckCircleIcon size={24} className="text-blue-500 mr-2" />
-                      <h4 className="text-lg font-medium">Card Backs</h4>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Contains all back card images positioned according to your
-                      settings.
-                    </p>
-                    <button onClick={() => handleDownload('backs')} className="w-full flex items-center justify-center bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50">
-                      <DownloadIcon size={16} className="mr-2" />
-                      Download Card Backs
-                    </button>
-                  </div>
-                )}
-                {!exportedFiles.fronts && !exportedFiles.backs && (
-                  <div className="col-span-full bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              {/* Per-Group Export Results */}
+              <div className="space-y-4">
+                {Object.keys(exportedFiles).length > 0 ? (
+                  Object.entries(exportedFiles).map(([groupId, files]) => {
+                    const groupName = groupId === 'default' ? 'Default Group' : 
+                      groups.find(g => g.id === groupId)?.name || groupId;
+                    const groupStat = groupStats.find(s => s.id === groupId);
+                    
+                    return (
+                      <div key={groupId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center">
+                            <CheckCircleIcon size={20} className="text-green-500 mr-2" />
+                            <h4 className="text-lg font-medium text-gray-900">{groupName}</h4>
+                            {groupStat?.hasCustomSettings && (
+                              <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                Custom Settings
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {groupStat?.frontCards || 0} front • {groupStat?.backCards || 0} back cards
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {files.fronts && (
+                            <button 
+                              onClick={() => handleDownload(groupId, 'fronts')} 
+                              className="flex items-center justify-center bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50"
+                            >
+                              <DownloadIcon size={16} className="mr-2" />
+                              Download Fronts PDF
+                            </button>
+                          )}
+                          {files.backs && (
+                            <button 
+                              onClick={() => handleDownload(groupId, 'backs')} 
+                              className="flex items-center justify-center bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-50"
+                            >
+                              <DownloadIcon size={16} className="mr-2" />
+                              Download Backs PDF
+                            </button>
+                          )}
+                        </div>
+                        
+                        {!files.fronts && !files.backs && (
+                          <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                            <p className="text-sm text-yellow-800">
+                              No PDF files were generated for this group. This could happen if no cards were found.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-yellow-800">
                       No PDF files were generated. This could happen if no cards were found matching your current settings.
                     </p>
