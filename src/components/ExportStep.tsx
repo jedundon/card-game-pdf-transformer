@@ -40,15 +40,25 @@ export const ExportStep: React.FC<ExportStepProps> = ({
   multiFileImport,
   onPrevious
 }) => {
-  // Group state management
+  // State declarations first
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
+  const [exportError, setExportError] = useState<string>('');
+  const [exportProgress, setExportProgress] = useState<string>('');
+  const [exportedFiles, setExportedFiles] = useState<{
+    fronts: string | null;
+    backs: string | null;
+  }>({
+    fronts: null,
+    backs: null
+  });
   
   // Get page groups from multi-file state
   const groups = useMemo(() => {
     return multiFileImport.multiFileState.pageGroups || [];
   }, [multiFileImport.multiFileState.pageGroups]);
   
-  // Handle active group change
+  // Handle active group change (after state declarations)
   const handleActiveGroupChange = useCallback((groupId: string | null) => {
     setActiveGroupId(groupId);
     // Reset export state when switching groups
@@ -63,16 +73,6 @@ export const ExportStep: React.FC<ExportStepProps> = ({
     }
     setExportedFiles({ fronts: null, backs: null });
   }, [exportedFiles]);
-  const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'completed' | 'error'>('idle');
-  const [exportError, setExportError] = useState<string>('');
-  const [exportProgress, setExportProgress] = useState<string>('');
-  const [exportedFiles, setExportedFiles] = useState<{
-    fronts: string | null;
-    backs: string | null;
-  }>({
-    fronts: null,
-    backs: null
-  });
 
   // Get current color transformation settings (use effective settings)
   const currentColorTransformation: ColorTransformation = useMemo(() => {
