@@ -70,6 +70,9 @@ export function App() {
           lastImportedFileInfo={pdfDataManager.lastImportedFileInfo} 
           onClearLastImportedFile={pdfDataManager.handleClearLastImportedFile} 
           multiFileImport={multiFileImport}
+          extractionSettings={settingsManager.extractionSettings}
+          outputSettings={settingsManager.outputSettings}
+          colorSettings={settingsManager.colorSettings}
         />
       </PDFProcessingErrorBoundary>
     )

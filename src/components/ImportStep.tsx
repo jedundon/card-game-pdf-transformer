@@ -31,7 +31,10 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   autoRestoredSettings,
   lastImportedFileInfo,
   onClearLastImportedFile,
-  multiFileImport
+  multiFileImport,
+  extractionSettings,
+  outputSettings,
+  colorSettings
 }) => {
   // const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string>('');
@@ -643,6 +646,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
                   }
                 }}
                 onGlobalPdfModeChange={onModeSelect}
+                globalExtractionSettings={extractionSettings}
+                globalOutputSettings={outputSettings}
+                globalColorSettings={colorSettings}
               />
           )}
 

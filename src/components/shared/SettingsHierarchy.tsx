@@ -306,7 +306,7 @@ export const SettingsHierarchy: React.FC<SettingsHierarchyProps> = ({
         </div>
         
         {conflict?.hasConflict && (
-          <AlertTriangle className="w-4 h-4 text-orange-500" title="Setting conflict detected" />
+          <AlertTriangle className="w-4 h-4 text-orange-500" />
         )}
         
         {isInherited && (

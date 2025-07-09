@@ -17,9 +17,10 @@
  */
 
 import React, { useState, useCallback, useMemo, useRef, flushSync } from 'react';
-import { Plus, ArrowUp, ArrowDown, Edit2, Trash2 } from 'lucide-react';
+import { Plus, ArrowUp, ArrowDown, Edit2, Trash2, Settings as SettingsIcon } from 'lucide-react';
 import { PageReorderTable } from './PageReorderTable';
 import { ProcessingModeSelector } from './shared/ProcessingModeSelector';
+import { SettingsHierarchy } from './shared/SettingsHierarchy';
 import { usePageGrouping } from '../hooks/usePageGrouping';
 import { useOperationHistory } from '../hooks/useOperationHistory';
 import type { 
@@ -27,7 +28,10 @@ import type {
   PageSource, 
   PdfMode, 
   PageGroup, 
-  PageTypeSettings 
+  PageTypeSettings,
+  ExtractionSettings,
+  OutputSettings,
+  ColorSettings
 } from '../types';
 
 interface PageGroupsManagerProps {
@@ -69,6 +73,10 @@ interface PageGroupsManagerProps {
   disabled?: boolean;
   /** Callback when the global PDF mode should be updated (for Default group) */
   onGlobalPdfModeChange?: (mode: PdfMode) => void;
+  /** Global settings for inheritance hierarchy */
+  globalExtractionSettings?: ExtractionSettings;
+  globalOutputSettings?: OutputSettings;
+  globalColorSettings?: ColorSettings;
 }
 
 /**
@@ -98,11 +106,17 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
   onPageGroupsChange,
   onPagesUpdate,
   disabled = false,
-  onGlobalPdfModeChange
+  onGlobalPdfModeChange,
+  globalExtractionSettings,
+  globalOutputSettings,
+  globalColorSettings
 }) => {
   // Group name editing state
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState<string>('');
+  
+  // Settings hierarchy state
+  const [showSettingsForGroup, setShowSettingsForGroup] = useState<Record<string, boolean>>({});
   
   // Drag and drop state for inter-group operations
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
@@ -445,6 +459,31 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     );
     onPageGroupsChange(updatedGroups);
   }, [pageGroups, onPageGroupsChange, onGlobalPdfModeChange]);
+
+  // Toggle settings hierarchy display for a group
+  const handleToggleGroupSettings = useCallback((groupId: string) => {
+    setShowSettingsForGroup(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
+  }, []);
+
+  // Update group settings
+  const handleGroupSettingsChange = useCallback((groupId: string, settingsType: 'extraction' | 'output' | 'color', settings: any) => {
+    const updatedGroups = pageGroups.map(group =>
+      group.id === groupId
+        ? { 
+            ...group, 
+            settings: {
+              ...group.settings,
+              [settingsType]: settings
+            },
+            modifiedAt: Date.now() 
+          }
+        : group
+    );
+    onPageGroupsChange(updatedGroups);
+  }, [pageGroups, onPageGroupsChange]);
 
   // Handle page moves between groups (with global index mapping)
   const handlePageGroupChange = useCallback((localPageIndex: number, targetGroupId: string | null, sourceGroupId: string) => {
@@ -828,6 +867,20 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
                       <ArrowDown size={16} />
                     </button>
                     
+                    {/* Settings hierarchy button */}
+                    <button
+                      onClick={() => handleToggleGroupSettings(group.id)}
+                      disabled={disabled}
+                      className={`p-1 transition-colors ${
+                        showSettingsForGroup[group.id]
+                          ? 'text-indigo-600 hover:text-indigo-700'
+                          : 'text-gray-400 hover:text-gray-600'
+                      } disabled:opacity-50 ml-2`}
+                      title="Show settings hierarchy and inheritance"
+                    >
+                      <SettingsIcon size={16} />
+                    </button>
+                    
                     {/* Delete group button (not for default group) */}
                     {!isDefaultGroup && (
                       <button
@@ -859,6 +912,25 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
                 </div>
               </div>
 
+              {/* Settings Hierarchy Panel */}
+              {showSettingsForGroup[group.id] && globalExtractionSettings && globalOutputSettings && globalColorSettings && (
+                <div className="border-t border-gray-200 bg-gray-50 p-4">
+                  <SettingsHierarchy
+                    globalSettings={{
+                      extraction: globalExtractionSettings,
+                      output: globalOutputSettings,
+                      color: globalColorSettings
+                    }}
+                    groupSettings={group.settings}
+                    groupId={group.id}
+                    groupName={group.name}
+                    onGroupSettingsChange={(settingsType, settings) => 
+                      handleGroupSettingsChange(group.id, settingsType, settings)
+                    }
+                    disabled={disabled}
+                  />
+                </div>
+              )}
 
               {/* Group table */}
               {groupPages.length > 0 ? (

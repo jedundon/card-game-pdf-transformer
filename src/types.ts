@@ -696,6 +696,10 @@ export interface ImportStepProps {
   lastImportedFileInfo: LastImportedFileInfo | null;
   onClearLastImportedFile: () => void;
   multiFileImport: MultiFileImportHook;
+  /** Global settings for settings hierarchy */
+  extractionSettings?: ExtractionSettings;
+  outputSettings?: OutputSettings;
+  colorSettings?: ColorSettings;
 }
 
 /** Props for ExtractStep component */
