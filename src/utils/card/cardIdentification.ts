@@ -383,16 +383,17 @@ export function getActualPageNumber(
  */
 export function getAvailableCardIds(
   viewMode: 'front' | 'back',
-  totalCards: number,
+  totalCards: number, // Note: parameter kept for API compatibility but not used
   pdfMode: PdfMode,
   activePages: PageSettings[],
   cardsPerPage: number,
   extractionSettings: ExtractionSettings
 ): number[] {
   const cardIds: number[] = [];
-  const maxIndex = pdfMode.type === 'duplex' || pdfMode.type === 'gutter-fold' 
-    ? activePages.length * cardsPerPage 
-    : totalCards;
+  // Always use activePages.length * cardsPerPage for consistent card indexing
+  // This ensures Front and Back cards are numbered independently within their type groups
+  // without making assumptions about paired relationships
+  const maxIndex = activePages.length * cardsPerPage;
   const skippedCards = extractionSettings.skippedCards || [];
 
   for (let cardIndex = 0; cardIndex < maxIndex; cardIndex++) {
