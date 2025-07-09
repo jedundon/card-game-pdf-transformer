@@ -95,8 +95,8 @@ describe('cardUtils - Critical Card Logic Functions', () => {
 
       const result = calculateTotalCards(pdfMode, activePages, cardsPerPage)
 
-      // Duplex mode: only count front pages, so 2 pages × 4 cards = 8 cards
-      expect(result).toBe(8)
+      // Duplex mode: count all pages, so 4 pages × 4 cards = 16 cards
+      expect(result).toBe(16)
     })
 
     it('should calculate total cards for gutter-fold mode', () => {

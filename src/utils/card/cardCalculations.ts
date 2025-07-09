@@ -84,9 +84,9 @@ export function calculateTotalCards(
   const totalPages = activePages.length;
   
   if (pdfMode.type === 'duplex') {
-    // In duplex mode, front and back pages alternate
-    const frontPages = activePages.filter((page: PageSettings) => page.type === 'front').length;
-    return frontPages * cardsPerPage; // Each front card has a corresponding back card
+    // In duplex mode, each page contains real cards (front or back)
+    // Total physical cards = total pages * cards per page
+    return totalPages * cardsPerPage;
   } else if (pdfMode.type === 'gutter-fold') {
     // In gutter-fold mode, each page contains both front and back cards
     // Total unique cards = total pages * cards per page (each card is unique)
