@@ -6,6 +6,6 @@
 export { AutoRestoredSettingsNotification } from './AutoRestoredSettingsNotification';
 export { FileUploadDropZone } from './FileUploadDropZone';
 export { PreviousFileDisplay } from './PreviousFileDisplay';
-export { ProcessingModeSelector } from './ProcessingModeSelector';
+export { ProcessingModeSelector } from '../shared/ProcessingModeSelector';
 export { StartOverConfirmationDialog } from './StartOverConfirmationDialog';
 export { ThumbnailPopup } from './ThumbnailPopup';

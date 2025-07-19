@@ -21,7 +21,14 @@ import {
   hasNonDefaultColorSettings
 } from '../utils/colorUtils';
 import { extractCardImageFromPdfPage } from '../utils/pdfCardExtraction';
-import type { ExportStepProps /*, MultiFileImportHook */ } from '../types';
+import type { 
+  ExportStepProps, 
+  ExtractionSettings, 
+  OutputSettings, 
+  ColorSettings, 
+  PageSettings, 
+  PageSource 
+} from '../types';
 import jsPDF from 'jspdf';
 
 
@@ -167,7 +174,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           .flatMap(g => g.pageIndices)
       );
       
-      return allPages.filter((page, index) => !groupedPageIndices.has(index));
+      return allPages.filter((_, index) => !groupedPageIndices.has(index));
     }
     
     const group = groups.find(g => g.id === groupId);
@@ -332,7 +339,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
       // The PDF page size should accommodate the card size plus margins
       const cardWidth = groupSettings.output.cardSize?.widthInches || 2.5;
       const cardHeight = groupSettings.output.cardSize?.heightInches || 3.5;
-      const margin = groupSettings.output.margin || 0.5;
+      const margin = groupSettings.output.bleedMarginInches || 0.5;
       
       // Calculate required page size for one card plus margins
       const requiredPageWidth = cardWidth + 2 * margin;
@@ -431,7 +438,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           // Extract card image URL using source-aware logic
           let cardImageUrl: string | null = null;
           
-          if (pageData.sourceType === 'image') {
+          if (pageData.fileType === 'image') {
             // Handle image source
             const imageData = imageDataMap.get(pageData.fileName);
             if (!imageData) {
@@ -491,18 +498,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           
           // Apply group-specific color transformations if needed
           let finalImageUrl = processedImage.imageUrl;
-          const groupColorTransformation = groupSettings.color.finalAdjustments || {
-            brightness: groupSettings.color.brightness ?? 0,
-            contrast: groupSettings.color.contrast ?? 0,
-            saturation: groupSettings.color.saturation ?? 0,
-            gamma: groupSettings.color.gamma ?? 1.0,
-            temperature: groupSettings.color.temperature ?? 0,
-            tint: groupSettings.color.tint ?? 0,
-            highlights: groupSettings.color.highlights ?? 0,
-            shadows: groupSettings.color.shadows ?? 0,
-            whites: groupSettings.color.whites ?? 0,
-            blacks: groupSettings.color.blacks ?? 0
-          };
+          const groupColorTransformation = groupSettings.color.finalAdjustments || getDefaultColorTransformation();
           
           if (hasNonDefaultColorSettings(groupColorTransformation)) {
             finalImageUrl = await applyColorTransformation(processedImage.imageUrl, groupColorTransformation);

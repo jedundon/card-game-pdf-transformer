@@ -64,7 +64,10 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
     return {
       pdfMode,
       pageSettings,
-      extractionSettings,
+      extractionSettings: {
+        ...extractionSettings,
+        gutterWidth: extractionSettings.gutterWidth ?? 0.5
+      },
       outputSettings,
       colorSettings,
       savedAt: new Date().toISOString(),
