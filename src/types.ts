@@ -597,7 +597,7 @@ export interface ErrorBoundaryProps {
 }
 
 // Event handler types
-export type FileSelectHandler = (data: PdfData, fileName: string, file?: File) => void;
+export type FileSelectHandler = (data: PdfData | null, fileName: string, file?: File) => void;
 export type ModeSelectHandler = (mode: PdfMode) => void;
 export type PageSettingsChangeHandler = (settings: PageSettings[]) => void;
 export type ExtractionSettingsChangeHandler = (settings: ExtractionSettings) => void;

@@ -60,7 +60,7 @@ export const GroupContextBar: React.FC<GroupContextBarProps> = ({
   pages,
   groups,
   activeGroupId,
-  extractionSettings, // eslint-disable-line @typescript-eslint/no-unused-vars -- kept for interface compatibility
+  // extractionSettings, // eslint-disable-line @typescript-eslint/no-unused-vars -- kept for interface compatibility
   globalPdfMode,
   onActiveGroupChange,
   disabled = false

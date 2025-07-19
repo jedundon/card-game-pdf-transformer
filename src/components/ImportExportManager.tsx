@@ -61,15 +61,41 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
 
   // Create settings object to save (excluding PDF name and data)
   const createSettingsObject = (): WorkflowSettings => {
+    // Transform ColorSettings to match WorkflowSettings structure
+    const transformedColorSettings = {
+      selectedRegion: colorSettings.selectedRegion ? {
+        x: colorSettings.selectedRegion.centerX - colorSettings.selectedRegion.width / 2,
+        y: colorSettings.selectedRegion.centerY - colorSettings.selectedRegion.height / 2,
+        width: colorSettings.selectedRegion.width,
+        height: colorSettings.selectedRegion.height,
+        pageIndex: colorSettings.selectedRegion.pageIndex ?? 0
+      } : null,
+      gridConfig: colorSettings.gridConfig,
+      transformations: colorSettings.transformations,
+      selectedPreset: colorSettings.selectedPreset ? {
+        name: colorSettings.selectedPreset,
+        values: colorSettings.finalAdjustments
+      } : null,
+      finalAdjustments: colorSettings.finalAdjustments
+    };
+
+    // Ensure extractionSettings has all required fields
+    const transformedExtractionSettings = {
+      crop: extractionSettings.crop,
+      grid: extractionSettings.grid,
+      gutterWidth: extractionSettings.gutterWidth ?? 0.5,
+      cardCrop: extractionSettings.cardCrop ?? { top: 0, right: 0, bottom: 0, left: 0 },
+      imageRotation: extractionSettings.imageRotation ?? { front: 0, back: 0 },
+      skippedCards: extractionSettings.skippedCards ?? [],
+      cardTypeOverrides: extractionSettings.cardTypeOverrides ?? []
+    };
+
     return {
       pdfMode,
       pageSettings,
-      extractionSettings: {
-        ...extractionSettings,
-        gutterWidth: extractionSettings.gutterWidth ?? 0.5
-      },
+      extractionSettings: transformedExtractionSettings,
       outputSettings,
-      colorSettings,
+      colorSettings: transformedColorSettings,
       savedAt: new Date().toISOString(),
       version: '1.0'
     };
@@ -144,7 +170,26 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   // Reset to default values with mode-specific grid
   const handleResetToDefaults = () => {
     const defaultsForCurrentMode = getDefaultSettingsForMode(pdfMode);
-    onLoadSettings(defaultsForCurrentMode);
+    // Add missing colorSettings with sensible defaults
+    const completeDefaults = {
+      ...defaultsForCurrentMode,
+      colorSettings: {
+        selectedRegion: null,
+        gridConfig: { columns: 3, rows: 3 },
+        transformations: {
+          horizontal: { type: 'brightness', min: -50, max: 50 },
+          vertical: { type: 'contrast', min: -50, max: 50 }
+        },
+        selectedPreset: null,
+        finalAdjustments: {
+          brightness: 0, contrast: 0, saturation: 0, hue: 0, gamma: 1,
+          vibrance: 0, redMultiplier: 1, greenMultiplier: 1, blueMultiplier: 1,
+          shadows: 0, highlights: 0, midtoneBalance: 0, blackPoint: 0,
+          whitePoint: 100, outputBlack: 0, outputWhite: 100
+        }
+      }
+    };
+    onLoadSettings(completeDefaults);
   };
 
   return (

@@ -15,7 +15,7 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Activity, 
   BarChart3, 
@@ -33,6 +33,7 @@ import { usePerformanceMonitoring } from '../../utils/performanceUtils';
 import { useProgressManager } from '../../utils/progressManager';
 import { getThumbnailCacheStats, clearThumbnailCache } from '../../utils/card/cardRendering';
 import { globalPerformanceMonitor } from '../../utils/performanceUtils';
+void globalPerformanceMonitor; // Mark as intentionally unused for now
 
 interface PerformanceMonitoringPanelProps {
   /** Whether the panel is visible */
@@ -55,6 +56,7 @@ export function PerformanceMonitoringPanel({
   className = ''
 }: PerformanceMonitoringPanelProps) {
   const { metrics, getMemoryUsage, getPerformanceSummary, forceGarbageCollection } = usePerformanceMonitoring();
+  void metrics; // Mark as intentionally unused for now
   const { operations } = useProgressManager();
   const [cacheStats, setCacheStats] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);

@@ -287,6 +287,7 @@ export function VirtualScrollList<T extends VirtualScrollItem>({
       behavior: smoothScrolling ? 'smooth' : 'auto'
     });
   }, [virtualItems, height, totalSize, smoothScrolling]);
+  void scrollToItem; // Mark as intentionally unused for now
 
   // Check if item is in visible viewport (not just rendered)
   const isItemVisible = useCallback((index: number): boolean => {

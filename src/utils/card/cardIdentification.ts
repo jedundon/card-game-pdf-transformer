@@ -81,8 +81,10 @@ function getAutoAssignedCardType(
   extractionSettings: ExtractionSettings,
   pdfMode: PdfMode,
   cardsPerPage: number,
-  pageWidth?: number,
-  pageHeight?: number
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _pageWidth?: number,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _pageHeight?: number
 ): 'front' | 'back' {
   const pageIndex = Math.floor(cardIndex / cardsPerPage);
   const cardOnPage = cardIndex % cardsPerPage;
@@ -383,7 +385,8 @@ export function getActualPageNumber(
  */
 export function getAvailableCardIds(
   viewMode: 'front' | 'back',
-  totalCards: number, // Note: parameter kept for API compatibility but not used
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _totalCards: number, // Note: parameter kept for API compatibility but not used
   pdfMode: PdfMode,
   activePages: PageSettings[],
   cardsPerPage: number,

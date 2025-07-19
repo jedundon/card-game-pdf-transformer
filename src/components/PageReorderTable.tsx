@@ -23,8 +23,9 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useCallback, useRef, useEffect, flushSync, useMemo } from 'react';
-import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon, Plus, Users, Tag } from 'lucide-react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { flushSync } from 'react-dom';
+import { GripVertical, FileIcon, ImageIcon, XIcon, ChevronUpIcon, ChevronDownIcon, RotateCcwIcon, Plus } from 'lucide-react';
 import { 
   PageSettings, 
   PageSource, 
@@ -112,7 +113,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   pdfMode,
   onPagesReorder,
   onPageSettingsChange,
-  onPageRemove,
+  /* onPageRemove, */
   onResetToImportOrder,
   isPagesReordered = false,
   thumbnails,
@@ -153,9 +154,8 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   const ROW_HEIGHT = 64; // Approximate height of table rows in pixels
 
   // Page selection functionality
-  const pageSelection = usePageSelection({
-    pages,
-    maxSelections: pages.length,
+  const pageSelection = usePageSelection(pages, {
+    maxSelection: pages.length,
     persistSelection: false
   });
 
@@ -170,9 +170,11 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
     defaultGroupColor: '#3b82f6',
     autoExpandNew: true
   });
+  void pageGrouping; // Mark as intentionally unused for now
 
   // Group creation modal state
   const [showGroupModal, setShowGroupModal] = useState(false);
+  void showGroupModal; // Mark as intentionally unused for now
 
   // Handlers for integrated functionality
   const handlePagesUpdate = useCallback((updatedPages: (PageSettings & PageSource)[]) => {
@@ -188,6 +190,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   const handleGroupsChange = useCallback((groups: PageGroup[]) => {
     onPageGroupsChange(groups);
   }, [onPageGroupsChange]);
+  void handleGroupsChange; // Mark as intentionally unused for now
 
   const handleConfirmOperation = useCallback((operation: string, details: any) => {
     console.log(`Confirmed operation: ${operation}`, details);
@@ -209,11 +212,13 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
 
   // Handle page type change
   const handlePageTypeChange = useCallback((pageIndex: number, pageType: string) => {
+    const validPageType = pageType as 'card' | 'rule' | 'skip';
     const updatedPages = pages.map((page, index) =>
-      index === pageIndex ? { ...page, pageType } : page
+      index === pageIndex ? { ...page, pageType: validPageType } : page
     );
     handlePagesUpdate(updatedPages);
   }, [pages, handlePagesUpdate]);
+  void handlePageTypeChange; // Mark as intentionally unused for now
 
   // Check if any group uses non-default processing mode to show page type column
   const hasAnySpecialProcessingMode = useMemo(() => {
@@ -324,8 +329,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
               
               // Schedule inter-group mode trigger after render completes
               if (onInterGroupDragStart && currentDragState.dragIndex !== null) {
+                const dragIndex = currentDragState.dragIndex;
                 setTimeout(() => {
-                  onInterGroupDragStart(currentDragState.dragIndex);
+                  onInterGroupDragStart(dragIndex);
                 }, 0);
               }
               

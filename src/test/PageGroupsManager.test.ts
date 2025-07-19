@@ -160,6 +160,7 @@ const simulateHandleMoveGroupDown = (
 
 describe('PageGroupsManager Group Reordering', () => {
   const mockPdfMode: PdfMode = { type: 'simplex', flipEdge: 'short' };
+  void mockPdfMode; // Mark as intentionally unused for now
 
   describe('Empty Custom Groups Reordering', () => {
     it('should reorder empty custom groups successfully', () => {
@@ -217,6 +218,7 @@ describe('PageGroupsManager Group Reordering', () => {
       const pageGroups = [
         createMockGroup('group1', 'Group 1', 1, [0, 1])
       ];
+      void pageGroups; // Mark as intentionally unused for now
 
       // const result = simulateHandleMoveGroupDown('group1', pageGroups, mockPdfMode);
       
@@ -300,7 +302,7 @@ describe('PageGroupsManager Group Reordering', () => {
       ];
 
       const upResult = simulateHandleMoveGroupUp('group1', pageGroups);
-      const downResult = simulateHandleMoveGroupDown('group1', pageGroups, mockPdfMode);
+      const downResult = simulateHandleMoveGroupDown('group1', pageGroups);
       
       // Moving up should swap with default group
       const upDefaultGroup = upResult.find(g => g.id === DEFAULT_GROUP_ID);

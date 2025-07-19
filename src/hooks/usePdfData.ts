@@ -70,7 +70,7 @@ export interface PdfDataState {
  */
 export interface PdfDataActions {
   /** Handle PDF file selection and processing */
-  handleFileSelect: (data: PdfData, fileName: string, file?: File) => void;
+  handleFileSelect: (data: PdfData | null, fileName: string, file?: File) => void;
   /** Update calculated card dimensions */
   setCardDimensions: (dimensions: CardDimensions | null) => void;
   /** Clear all PDF-related data and reset state */
@@ -150,7 +150,7 @@ export function usePdfData(): PdfDataHook {
    * @param fileName - Name of the selected file
    * @param file - Optional File object for metadata extraction
    */
-  const handleFileSelect = useCallback((data: PdfData, fileName: string, file?: File): void => {
+  const handleFileSelect = useCallback((data: PdfData | null, fileName: string, file?: File): void => {
     // Update core PDF state
     setPdfData(data);
     setCurrentPdfFileName(fileName);

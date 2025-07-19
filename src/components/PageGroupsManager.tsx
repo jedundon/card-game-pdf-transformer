@@ -16,7 +16,8 @@
  * @author Card Game PDF Transformer
  */
 
-import React, { useState, useCallback, useMemo, useRef, flushSync } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Plus, ArrowUp, ArrowDown, Edit2, Trash2, Settings as SettingsIcon } from 'lucide-react';
 import { PageReorderTable } from './PageReorderTable';
 import { ProcessingModeSelector } from './shared/ProcessingModeSelector';
@@ -132,11 +133,13 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     defaultGroupColor: '#3b82f6',
     autoExpandNew: true
   });
+  void pageGrouping; // Mark as intentionally unused for now
 
   // Operation history for undo/redo
   const operationHistory = useOperationHistory({
     maxHistorySize: 20
   });
+  void operationHistory; // Mark as intentionally unused for now
 
   // Constants for default group
   const DEFAULT_GROUP_ID = 'default';
@@ -393,7 +396,7 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
   }, []);
 
   // Utility function to refresh thumbnails after a group change
-  const refreshThumbnailsAfterGroupChange = useCallback((movedPageIndex: number, sourceGroupId: string, targetGroupId: string | null) => {
+  const refreshThumbnailsAfterGroupChange = useCallback((movedPageIndex: number, _sourceGroupId: string, _targetGroupId: string | null) => {
     // Only proceed if component is mounted and we have thumbnail update callbacks
     if (!isMountedRef.current || !onThumbnailsUpdate || !onThumbnailLoadingUpdate || !onThumbnailErrorsUpdate) {
       return;
@@ -532,6 +535,7 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
     
     // Create a mapping of old local position to new local position
     const originalGroupPages = pages.filter((_, index) => globalIndices.includes(index));
+    void originalGroupPages; // Mark as intentionally unused for now
     
     // Build the complete global page array with reordered group pages
     const newGlobalPages = [...pages];
@@ -779,13 +783,13 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
               onDragOver={(e) => handleGroupDragOver(e, group.id)}
               onDragLeave={(e) => handleGroupDragLeave(e, group.id)}
               onDrop={(e) => handleGroupDrop(e, group.id)}
-              onMouseEnter={(e) => {
+              onMouseEnter={() => {
                 // Handle mouse-based inter-group drag (when not using HTML5 drag)
                 if (isDraggingBetweenGroups && draggedPageInfo && group.id !== draggedPageInfo.sourceGroupId) {
                   setDragOverGroupId(group.id);
                 }
               }}
-              onMouseLeave={(e) => {
+              onMouseLeave={() => {
                 // Handle mouse-based inter-group drag leave
                 if (isDraggingBetweenGroups && dragOverGroupId === group.id) {
                   setDragOverGroupId(null);
@@ -916,15 +920,12 @@ export const PageGroupsManager: React.FC<PageGroupsManagerProps> = ({
               {showSettingsForGroup[group.id] && globalExtractionSettings && globalOutputSettings && globalColorSettings && (
                 <div className="border-t border-gray-200 bg-gray-50 p-4">
                   <SettingsHierarchy
-                    globalSettings={{
-                      extraction: globalExtractionSettings,
-                      output: globalOutputSettings,
-                      color: globalColorSettings
-                    }}
-                    groupSettings={group.settings}
-                    groupId={group.id}
-                    groupName={group.name}
-                    onGroupSettingsChange={(settingsType, settings) => 
+                    globalExtractionSettings={globalExtractionSettings}
+                    globalOutputSettings={globalOutputSettings}
+                    globalColorSettings={globalColorSettings}
+                    pageTypeSettings={{}}
+                    currentGroup={group}
+                    onSettingsChange={(_level: 'global' | 'group' | 'page', settingsType: 'extraction' | 'output' | 'color', settings: any) => 
                       handleGroupSettingsChange(group.id, settingsType, settings)
                     }
                     disabled={disabled}

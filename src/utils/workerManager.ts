@@ -242,13 +242,15 @@ export class WorkerPool<TaskData = any, TaskResult = any> {
         reject(new Error('Worker initialization timeout'));
       }, 5000);
 
-      worker.addEventListener('message', function onMessage(event) {
+      const onMessage = (event: MessageEvent) => {
         if (event.data?.id === 'worker-ready') {
           clearTimeout(timeout);
           worker.removeEventListener('message', onMessage);
           resolve();
         }
-      });
+      };
+
+      worker.addEventListener('message', onMessage);
 
       worker.addEventListener('error', (error) => {
         clearTimeout(timeout);
