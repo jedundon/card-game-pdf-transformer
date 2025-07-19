@@ -48,7 +48,7 @@ export async function renderPageThumbnail(
   maxHeight = 600
 ): Promise<string> {
   // Create cache key based on PDF fingerprint and parameters
-  const pdfFingerprint = pdfData.fingerprint || 'unknown';
+  const pdfFingerprint = pdfData.fingerprints?.[0] || 'unknown';
   const cacheKey = createCacheKey('pdf-thumb', pdfFingerprint, pageNumber, maxWidth, maxHeight);
   
   // Check cache first

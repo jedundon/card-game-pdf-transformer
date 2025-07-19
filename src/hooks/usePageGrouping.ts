@@ -15,7 +15,7 @@
  * @author Card Game PDF Transformer
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import { PageSettings, PageSource, PageGroup, PageTypeSettings } from '../types';
 
 interface UsePageGroupingOptions {
@@ -106,7 +106,7 @@ export const usePageGrouping = (
   const {
     maxGroups = 50,
     defaultGroupColor = DEFAULT_GROUP_COLORS[0],
-    autoExpandNew = true,
+    // autoExpandNew = true,
     onGroupLimitReached
   } = options;
 

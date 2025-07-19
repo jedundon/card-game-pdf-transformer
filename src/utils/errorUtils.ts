@@ -171,7 +171,7 @@ export function createError(
 ): Error {
   const error = new Error(message);
   if (cause) {
-    error.cause = cause;
+    (error as any).cause = cause;
   }
   
   // Add context as a property for debugging
@@ -197,7 +197,7 @@ export function getErrorDetails(error: Error): Record<string, any> {
     message: error.message,
     name: error.name,
     stack: error.stack,
-    cause: error.cause,
+    cause: (error as any).cause,
     context: (error as any).context,
   };
 }

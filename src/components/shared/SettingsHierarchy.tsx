@@ -25,8 +25,6 @@ import {
   Check, 
   X, 
   Copy,
-  Download,
-  Upload,
   Eye,
   EyeOff,
   Layers
@@ -82,18 +80,18 @@ interface SettingsHierarchyProps {
   showAdvanced?: boolean;
 }
 
-interface SettingsTemplate {
-  id: string;
-  name: string;
-  description: string;
-  settings: {
-    extraction?: Partial<ExtractionSettings>;
-    output?: Partial<OutputSettings>;
-    color?: Partial<ColorSettings>;
-  };
-  createdAt: number;
-  tags: string[];
-}
+// interface SettingsTemplate {
+//   id: string;
+//   name: string;
+//   description: string;
+//   settings: {
+//     extraction?: Partial<ExtractionSettings>;
+//     output?: Partial<OutputSettings>;
+//     color?: Partial<ColorSettings>;
+//   };
+//   createdAt: number;
+//   tags: string[];
+// }
 
 /**
  * Settings Hierarchy Component
@@ -107,7 +105,7 @@ export const SettingsHierarchy: React.FC<SettingsHierarchyProps> = ({
   pageTypeSettings,
   onSettingsChange,
   disabled = false,
-  showAdvanced = false
+  // showAdvanced = false
 }) => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['global']));
   const [showConflicts, setShowConflicts] = useState(false);

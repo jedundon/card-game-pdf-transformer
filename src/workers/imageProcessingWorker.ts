@@ -517,9 +517,9 @@ async function cropImage(
  * Process multiple operations in batch
  */
 async function processBatch(
-  imageData: { width: number; height: number; data: ImageData | ArrayBuffer },
-  params: any,
-  requestId: string
+  imageData: { width: number; height: number; data: ImageData | ArrayBuffer }
+  // params: any,
+  // requestId: string
 ): Promise<{ dataUrl: string; imageData?: any }> {
   // This would implement batch processing of multiple operations
   // For now, just return the original image

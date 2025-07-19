@@ -101,10 +101,10 @@ async function processThumbnailRequest(request: ThumbnailRequest): Promise<Thumb
  * Generate PDF page thumbnail
  */
 async function generatePdfThumbnail(
-  pdfData: any,
-  pageNumber: number,
-  maxWidth: number,
-  maxHeight: number,
+  // pdfData: any,
+  // pageNumber: number,
+  // maxWidth: number,
+  // maxHeight: number,
   requestId: string
 ): Promise<string> {
   // Report progress

@@ -26,6 +26,7 @@ describe('Duplex Mirroring Regression Tests (Issue #67)', () => {
 
   const baseExtractionSettings: ExtractionSettings = {
     grid: { rows: 2, columns: 2 },
+    crop: { top: 0, right: 0, bottom: 0, left: 0 },
     pageDimensions: undefined, // Will be set per test
     skippedCards: [],
     cardTypeOverrides: []

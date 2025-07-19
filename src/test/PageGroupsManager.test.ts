@@ -9,7 +9,7 @@
  * when trying to swap positions with the default group.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { PageGroup, PdfMode } from '../types';
 
 // Mock the DEFAULT_GROUP_ID constant
@@ -43,7 +43,7 @@ const createDefaultGroup = (order: number = 0): PageGroup => ({
 });
 
 // Helper function to simulate sortedGroupsWithDefault logic
-const createSortedGroupsWithDefault = (pageGroups: PageGroup[], pdfMode: PdfMode): PageGroup[] => {
+const createSortedGroupsWithDefault = (pageGroups: PageGroup[]): PageGroup[] => {
   const allGroups = [...pageGroups];
   
   // Check if default group exists
@@ -62,10 +62,9 @@ const createSortedGroupsWithDefault = (pageGroups: PageGroup[], pdfMode: PdfMode
 // Mock implementation of the move functions logic
 const simulateHandleMoveGroupUp = (
   groupId: string,
-  pageGroups: PageGroup[],
-  pdfMode: PdfMode
+  pageGroups: PageGroup[]
 ): PageGroup[] => {
-  const sortedGroupsWithDefault = createSortedGroupsWithDefault(pageGroups, pdfMode);
+  const sortedGroupsWithDefault = createSortedGroupsWithDefault(pageGroups);
   const groupIndex = sortedGroupsWithDefault.findIndex(g => g.id === groupId);
   
   if (groupIndex > 0) {
@@ -112,10 +111,9 @@ const simulateHandleMoveGroupUp = (
 
 const simulateHandleMoveGroupDown = (
   groupId: string,
-  pageGroups: PageGroup[],
-  pdfMode: PdfMode
+  pageGroups: PageGroup[]
 ): PageGroup[] => {
-  const sortedGroupsWithDefault = createSortedGroupsWithDefault(pageGroups, pdfMode);
+  const sortedGroupsWithDefault = createSortedGroupsWithDefault(pageGroups);
   const groupIndex = sortedGroupsWithDefault.findIndex(g => g.id === groupId);
   
   if (groupIndex < sortedGroupsWithDefault.length - 1) {
@@ -171,7 +169,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group2', 'Group 2', 2)
       ];
 
-      const result = simulateHandleMoveGroupUp('group2', pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupUp('group2', pageGroups);
       
       // Group 2 should now have order 1, Group 1 should have order 2
       const group1 = result.find(g => g.id === 'group1');
@@ -187,7 +185,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group2', 'Group 2', 2)
       ];
 
-      const result = simulateHandleMoveGroupDown('group2', pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupDown('group2', pageGroups);
       
       // Should be unchanged since group2 is already at the bottom
       expect(result).toEqual(pageGroups);
@@ -201,7 +199,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group1', 'Group 1', 1, [0, 1]) // Has pages
       ];
 
-      const result = simulateHandleMoveGroupUp('group1', pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupUp('group1', pageGroups);
       
       // Default group should now be added to pageGroups and have order 1
       // Group 1 should have order 0 (swapped with default)
@@ -220,7 +218,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group1', 'Group 1', 1, [0, 1])
       ];
 
-      const result = simulateHandleMoveGroupDown('group1', pageGroups, mockPdfMode);
+      // const result = simulateHandleMoveGroupDown('group1', pageGroups, mockPdfMode);
       
       // Since there's only the default group below, this should be a no-op
       // But let's add another group to test proper swapping
@@ -229,7 +227,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group2', 'Group 2', 2, [2, 3])
       ];
 
-      const result2 = simulateHandleMoveGroupDown('group1', pageGroupsWithTwo, mockPdfMode);
+      const result2 = simulateHandleMoveGroupDown('group1', pageGroupsWithTwo);
       
       const group1 = result2.find(g => g.id === 'group1');
       const group2 = result2.find(g => g.id === 'group2');
@@ -248,7 +246,7 @@ describe('PageGroupsManager Group Reordering', () => {
       ];
 
       // Move group3 up (should swap with group2)
-      const result = simulateHandleMoveGroupUp('group3', pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupUp('group3', pageGroups);
       
       const group2 = result.find(g => g.id === 'group2');
       const group3 = result.find(g => g.id === 'group3');
@@ -268,7 +266,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group1', 'Group 1', 1, [0, 1])
       ];
 
-      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups);
       
       const defaultGroup = result.find(g => g.id === DEFAULT_GROUP_ID);
       const group1 = result.find(g => g.id === 'group1');
@@ -283,7 +281,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group1', 'Group 1', 1, [0, 1])
       ];
 
-      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups);
       
       // Default group should be added to result
       const defaultGroup = result.find(g => g.id === DEFAULT_GROUP_ID);
@@ -301,7 +299,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group1', 'Group 1', 1, [0, 1])
       ];
 
-      const upResult = simulateHandleMoveGroupUp('group1', pageGroups, mockPdfMode);
+      const upResult = simulateHandleMoveGroupUp('group1', pageGroups);
       const downResult = simulateHandleMoveGroupDown('group1', pageGroups, mockPdfMode);
       
       // Moving up should swap with default group
@@ -319,7 +317,7 @@ describe('PageGroupsManager Group Reordering', () => {
       const pageGroups: PageGroup[] = [];
 
       // Try to move the default group (which only exists dynamically)
-      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupDown(DEFAULT_GROUP_ID, pageGroups);
       
       // Should be no-op since there's only the default group
       expect(result).toEqual(pageGroups);
@@ -335,7 +333,7 @@ describe('PageGroupsManager Group Reordering', () => {
         }
       ];
 
-      const result = simulateHandleMoveGroupUp('group1', pageGroups, mockPdfMode);
+      const result = simulateHandleMoveGroupUp('group1', pageGroups);
       
       const group1 = result.find(g => g.id === 'group1');
       
@@ -355,7 +353,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group2', 'Group 2', 1)
       ];
 
-      const sorted = createSortedGroupsWithDefault(pageGroups, mockPdfMode);
+      const sorted = createSortedGroupsWithDefault(pageGroups);
       
       // Should have default group at order 0, then group2 at order 1, then group1 at order 5
       expect(sorted).toHaveLength(3);
@@ -374,7 +372,7 @@ describe('PageGroupsManager Group Reordering', () => {
         createMockGroup('group2', 'Group 2', 1)
       ];
 
-      const sorted = createSortedGroupsWithDefault(pageGroups, mockPdfMode);
+      const sorted = createSortedGroupsWithDefault(pageGroups);
       
       // Should sort by order: group2 (1), default (3), group1 (5)
       expect(sorted).toHaveLength(3);

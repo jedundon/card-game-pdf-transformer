@@ -18,16 +18,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { 
   Save, 
-  Download, 
-  Upload, 
   Search, 
-  Filter, 
   Star,
   Tag,
-  Copy,
   Trash2,
-  Edit3,
-  Check,
   X,
   Plus,
   Package
@@ -36,8 +30,7 @@ import {
   ExtractionSettings, 
   OutputSettings, 
   ColorSettings,
-  PageGroup,
-  PageTypeSettings
+  PageGroup
 } from '../../types';
 
 interface SettingsTemplate {
@@ -630,7 +623,7 @@ export const SettingsTemplateManager: React.FC<SettingsTemplateManagerProps> = (
               
               <div className="flex items-center space-x-1 ml-2">
                 {template.isBuiltIn && (
-                  <Star className="w-4 h-4 text-yellow-500" title="Built-in template" />
+                  <Star className="w-4 h-4 text-yellow-500" />
                 )}
                 {!template.isBuiltIn && (
                   <button

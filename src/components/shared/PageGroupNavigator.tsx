@@ -21,8 +21,6 @@ import {
   ChevronRight, 
   Filter, 
   Home, 
-  Users, 
-  Eye,
   BarChart3,
   Layers
 } from 'lucide-react';

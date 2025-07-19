@@ -307,6 +307,8 @@ export const PageGroupManager: React.FC<PageGroupManagerProps> = ({
       name,
       pageIndices: Array.from(selectedPages),
       type: 'manual',
+      order: groups.length,
+      processingMode: { type: 'simplex', flipEdge: 'short' }, // Default processing mode
       color,
       createdAt: Date.now(),
       modifiedAt: Date.now()
@@ -379,18 +381,18 @@ export const PageGroupManager: React.FC<PageGroupManagerProps> = ({
   /**
    * Filter pages based on current filter
    */
-  const filteredPages = useMemo(() => {
-    switch (filterType) {
-      case 'grouped':
-        return pages.filter((_, index) => 
-          groups.some(group => group.pageIndices.includes(index))
-        );
-      case 'ungrouped':
-        return ungroupedPages;
-      default:
-        return pages;
-    }
-  }, [pages, groups, ungroupedPages, filterType]);
+  // const filteredPages = useMemo(() => {
+  //   switch (filterType) {
+  //     case 'grouped':
+  //       return pages.filter((_, index) => 
+  //         groups.some(group => group.pageIndices.includes(index))
+  //       );
+  //     case 'ungrouped':
+  //       return ungroupedPages;
+  //     default:
+  //       return pages;
+  //   }
+  // }, [pages, groups, ungroupedPages, filterType]);
 
   if (pages.length === 0) {
     return null;
