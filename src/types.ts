@@ -352,15 +352,23 @@ export interface ColorSettings {
   /** Selected region for color sampling and preview */
   selectedRegion: {
     /** X coordinate of region center in extraction coordinates */
-    x: number;
+    centerX: number;
     /** Y coordinate of region center in extraction coordinates */
-    y: number;
+    centerY: number;
     /** Width of region in extraction coordinates */
     width: number;
     /** Height of region in extraction coordinates */
     height: number;
+    /** X coordinate of region center in preview coordinates */
+    previewCenterX: number;
+    /** Y coordinate of region center in preview coordinates */
+    previewCenterY: number;
+    /** Width of region in preview coordinates */
+    previewWidth: number;
+    /** Height of region in preview coordinates */
+    previewHeight: number;
     /** Source page index */
-    pageIndex: number;
+    pageIndex?: number;
   } | null;
   /** Calibration grid configuration */
   gridConfig: ColorGridConfig;
@@ -371,13 +379,8 @@ export interface ColorSettings {
     /** Vertical axis transformation range */
     vertical: ColorTransformationRange;
   };
-  /** Selected preset configuration */
-  selectedPreset: {
-    /** Preset name */
-    name: string;
-    /** Preset transformation values */
-    values: ColorTransformation;
-  } | null;
+  /** Selected preset key */
+  selectedPreset: string;
   /** Final color adjustments applied to output */
   finalAdjustments: ColorTransformation;
 }

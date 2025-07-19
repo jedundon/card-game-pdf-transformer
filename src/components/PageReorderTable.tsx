@@ -221,9 +221,9 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
   }, [pageGroups, pdfMode]);
 
   // Check if any group uses duplex mode (for dropdown vs label)
-  const hasAnyDuplexGroup = useMemo(() => {
-    return pageGroups.some(group => group.processingMode?.type === 'duplex') || pdfMode.type === 'duplex';
-  }, [pageGroups, pdfMode]);
+  // const hasAnyDuplexGroup = useMemo(() => {
+  //   return pageGroups.some(group => group.processingMode?.type === 'duplex') || pdfMode.type === 'duplex';
+  // }, [pageGroups, pdfMode]);
 
   // Get the effective processing mode for a specific page
   const getPageProcessingMode = useCallback((localPageIndex: number): PdfMode => {
@@ -854,7 +854,7 @@ export const PageReorderTable: React.FC<PageReorderTableProps> = ({
           </thead>
           <tbody ref={tableRef} className="bg-white divide-y divide-gray-200 relative">
             
-            {pages.filter(page => !page.removed).map((page, filteredIndex) => {
+            {pages.filter(page => !page.removed).map((page) => {
               // Find the original index in the full pages array
               const originalIndex = pages.findIndex(p => p === page);
               const keyboardHandlers = createKeyboardHandlersForPage(originalIndex);

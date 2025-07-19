@@ -62,13 +62,7 @@ async function processThumbnailRequest(request: ThumbnailRequest): Promise<Thumb
     let thumbnailUrl: string;
 
     if (request.type === 'pdf' && request.pdfData && request.pageNumber) {
-      thumbnailUrl = await generatePdfThumbnail(
-        request.pdfData,
-        request.pageNumber,
-        request.maxWidth || 480,
-        request.maxHeight || 600,
-        request.id
-      );
+      thumbnailUrl = await generatePdfThumbnail(request.id);
     } else if (request.type === 'image' && request.imageData) {
       thumbnailUrl = await generateImageThumbnail(
         request.imageData,

@@ -99,7 +99,7 @@ async function processImageRequest(request: ImageProcessingRequest): Promise<Ima
         result = await cropImage(imageData, params, request.id);
         break;
       case 'batch':
-        result = await processBatch(imageData, params, request.id);
+        result = await processBatch(imageData);
         break;
       default:
         throw new Error(`Unknown operation: ${operation}`);

@@ -23,8 +23,6 @@ import {
   Trash2, 
   Users, 
   Folder, 
-  FolderOpen,
-  Filter,
   Eye,
   EyeOff,
   ChevronDown,
@@ -185,7 +183,7 @@ export const PageGroupManager: React.FC<PageGroupManagerProps> = ({
   groups,
   pageTypeSettings,
   onGroupsChange,
-  onPagesChange,
+  // onPagesChange,
   selectedPages = new Set(),
   disabled = false
 }) => {
@@ -251,6 +249,8 @@ export const PageGroupManager: React.FC<PageGroupManagerProps> = ({
           name: `File: ${fileName}`,
           pageIndices,
           type: 'auto',
+          order: groups.length + newGroups.length,
+          processingMode: { type: 'simplex', flipEdge: 'short' },
           color: GROUP_COLORS[colorIndex % GROUP_COLORS.length],
           createdAt: Date.now(),
           modifiedAt: Date.now()
@@ -286,6 +286,8 @@ export const PageGroupManager: React.FC<PageGroupManagerProps> = ({
           name: `${typeSettings?.displayName || pageType} Pages`,
           pageIndices,
           type: 'auto',
+          order: groups.length + newGroups.length,
+          processingMode: { type: 'simplex', flipEdge: 'short' },
           color: typeSettings?.colorScheme.primary || GROUP_COLORS[0],
           createdAt: Date.now(),
           modifiedAt: Date.now()

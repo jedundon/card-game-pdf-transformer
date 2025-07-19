@@ -74,8 +74,7 @@ import {
   PageSettings,
   PageSource,
   ColorSettings,
-  MultiFileImportHook,
-  PageGroup
+  MultiFileImportHook
 } from '../types';
 
 
@@ -1076,6 +1075,11 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
           const imageHeight = img.naturalHeight;
           
           // Calculate crop position (same as before)
+          if (!effectiveColorSettings.selectedRegion) {
+            resolve(null);
+            return;
+          }
+          
           const cropXPx = (effectiveColorSettings.selectedRegion.centerX / cardRenderData.renderDimensions.cardWidthInches) * imageWidth - 
                          (effectiveColorSettings.selectedRegion.width / cardRenderData.renderDimensions.cardWidthInches) * imageWidth / 2;
           const cropYPx = (effectiveColorSettings.selectedRegion.centerY / cardRenderData.renderDimensions.cardHeightInches) * imageHeight - 
@@ -1826,7 +1830,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                 )}
 
                 {/* Selected Crop Region */}
-                {colorSettings?.selectedRegion && (
+                {effectiveColorSettings.selectedRegion && (
                   <div 
                     className="absolute border-2 border-green-500 bg-green-200 bg-opacity-30 pointer-events-none"
                     style={{
@@ -1965,7 +1969,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                   {cropRegionDimensions.widthInches.toFixed(3)}" × {cropRegionDimensions.heightInches.toFixed(3)}"
                 </p>
               )}
-              {colorSettings?.selectedRegion ? (
+              {effectiveColorSettings.selectedRegion ? (
                 <div>
                   <p className="text-green-700 font-medium">✓ Region selected</p>
                   <p>
@@ -2266,7 +2270,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                         const verticalType = colorSettings?.transformations?.vertical?.type || 'contrast';
                         
                         // Check if horizontal axis parameter has non-neutral user setting
-                        const horizontalUserValue = (currentColorTransformation as Record<string, number>)[horizontalType];
+                        const horizontalUserValue = (currentColorTransformation as unknown as Record<string, number>)[horizontalType];
                         let horizontalIsNeutral = false;
                         if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(horizontalType)) {
                           horizontalIsNeutral = horizontalUserValue === 0;
@@ -2279,7 +2283,7 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                         }
                         
                         // Check if vertical axis parameter has non-neutral user setting
-                        const verticalUserValue = (currentColorTransformation as Record<string, number>)[verticalType];
+                        const verticalUserValue = (currentColorTransformation as unknown as Record<string, number>)[verticalType];
                         let verticalIsNeutral = false;
                         if (['brightness', 'saturation', 'hue', 'vibrance', 'shadows', 'highlights', 'midtoneBalance'].includes(verticalType)) {
                           verticalIsNeutral = verticalUserValue === 0;
