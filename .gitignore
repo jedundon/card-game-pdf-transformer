@@ -90,3 +90,8 @@ ehthumbs.db
 
 # Rollup cache
 .rollup.cache/
+
+# Playwright test outputs
+blob-report/
+playwright-report/
+test-results/
