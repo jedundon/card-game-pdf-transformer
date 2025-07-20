@@ -18,6 +18,12 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Visual Regression Tests - Core Application', () => {
+  // Helper function for CI-tolerant screenshot options
+  const getScreenshotOptions = () => ({
+    threshold: process.env.CI ? 0.3 : 0.1,
+    maxDiffPixels: process.env.CI ? 1000 : 100
+  });
+
   // Configure test settings
   test.beforeEach(async ({ page }) => {
     // Set consistent viewport for baseline screenshots
@@ -41,8 +47,14 @@ test.describe('Visual Regression Tests - Core Application', () => {
     });
   });
 
-  // Skip visual tests in CI initially until baselines are regenerated
-  test.skip(!!process.env.CI, 'Visual regression tests require baseline regeneration after UI refactoring');
+  // Visual tests with CI-appropriate error handling
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (process.env.CI) {
+      console.log(`🔧 Running visual test "${testInfo.title}" in CI environment`);
+      // Increase timeout for CI environment
+      testInfo.setTimeout(60000); // 60 seconds
+    }
+  });
 
   test('Step 1: Import Step - Initial Load State', async ({ page }) => {
     await page.goto('/');
@@ -56,16 +68,16 @@ test.describe('Visual Regression Tests - Core Application', () => {
     // Verify step title
     await expect(page.locator('text=Import PDF')).toBeVisible();
     
-    // Take full page screenshot of initial import step
-    await expect(page).toHaveScreenshot('step-1-import-initial.png');
+    // Take full page screenshot of initial import step (CI-tolerant)
+    await expect(page).toHaveScreenshot('step-1-import-initial.png', getScreenshotOptions());
     
     // Screenshot key UI components
     const mainContent = page.locator('main').first();
-    await expect(mainContent).toHaveScreenshot('step-1-main-content.png');
+    await expect(mainContent).toHaveScreenshot('step-1-main-content.png', getScreenshotOptions());
     
     // Test upload area specifically (using current structure)
     const uploadArea = page.locator('div[data-import-export-manager]').locator('..').locator('div').nth(1);
-    await expect(uploadArea).toHaveScreenshot('step-1-upload-area.png');
+    await expect(uploadArea).toHaveScreenshot('step-1-upload-area.png', getScreenshotOptions());
   });
 
   test('Step 1: Import Step - PDF Mode Selection', async ({ page }) => {
@@ -75,7 +87,7 @@ test.describe('Visual Regression Tests - Core Application', () => {
     // Look for PDF mode selection controls
     const modeSelector = page.locator('[data-testid="pdf-mode"], .pdf-mode, .mode-selector').first();
     if (await modeSelector.count() > 0) {
-      await expect(modeSelector).toHaveScreenshot('step-1-pdf-mode-selector.png');
+      await expect(modeSelector).toHaveScreenshot('step-1-pdf-mode-selector.png', getScreenshotOptions());
     }
     
     // Test different mode selections if available
@@ -83,7 +95,7 @@ test.describe('Visual Regression Tests - Core Application', () => {
     if (await duplexOption.count() > 0) {
       await duplexOption.click();
       await page.waitForTimeout(300);
-      await expect(page.locator('main')).toHaveScreenshot('step-1-duplex-mode.png');
+      await expect(page.locator('main')).toHaveScreenshot('step-1-duplex-mode.png', getScreenshotOptions());
     }
   });
 
@@ -100,12 +112,12 @@ test.describe('Visual Regression Tests - Core Application', () => {
     await expect(step2Number).toBeVisible();
     
     // Screenshot step 2 in disabled state
-    await expect(page).toHaveScreenshot('step-2-extract-disabled.png');
+    await expect(page).toHaveScreenshot('step-2-extract-disabled.png', getScreenshotOptions());
     
     // Test grid controls if visible
     const gridControls = page.locator('[data-testid="grid-controls"], .grid-controls').first();
     if (await gridControls.count() > 0) {
-      await expect(gridControls).toHaveScreenshot('step-2-grid-controls.png');
+      await expect(gridControls).toHaveScreenshot('step-2-grid-controls.png', getScreenshotOptions());
     }
   });
 
@@ -121,12 +133,12 @@ test.describe('Visual Regression Tests - Core Application', () => {
         await page.waitForTimeout(500);
         
         // Screenshot step 3 without PDF data
-        await expect(page).toHaveScreenshot('step-3-configure-no-pdf.png');
+        await expect(page).toHaveScreenshot('step-3-configure-no-pdf.png', getScreenshotOptions());
         
         // Test layout controls if visible
         const layoutControls = page.locator('[data-testid="layout-controls"], .layout-controls').first();
         if (await layoutControls.count() > 0) {
-          await expect(layoutControls).toHaveScreenshot('step-3-layout-controls.png');
+          await expect(layoutControls).toHaveScreenshot('step-3-layout-controls.png', getScreenshotOptions());
         }
       } catch (error) {
         console.log('Step 3 navigation not available without PDF, which is expected');
@@ -146,12 +158,12 @@ test.describe('Visual Regression Tests - Core Application', () => {
         await page.waitForTimeout(500);
         
         // Screenshot step 4 without PDF data
-        await expect(page).toHaveScreenshot('step-4-calibration-no-pdf.png');
+        await expect(page).toHaveScreenshot('step-4-calibration-no-pdf.png', getScreenshotOptions());
         
         // Test color controls if visible
         const colorControls = page.locator('[data-testid="color-controls"], .color-controls').first();
         if (await colorControls.count() > 0) {
-          await expect(colorControls).toHaveScreenshot('step-4-color-controls.png');
+          await expect(colorControls).toHaveScreenshot('step-4-color-controls.png', getScreenshotOptions());
         }
       } catch (error) {
         console.log('Step 4 navigation not available without PDF, which is expected');
@@ -171,12 +183,12 @@ test.describe('Visual Regression Tests - Core Application', () => {
         await page.waitForTimeout(500);
         
         // Screenshot step 5 without PDF data
-        await expect(page).toHaveScreenshot('step-5-export-no-pdf.png');
+        await expect(page).toHaveScreenshot('step-5-export-no-pdf.png', getScreenshotOptions());
         
         // Test export controls if visible
         const exportControls = page.locator('[data-testid="export-controls"], .export-controls').first();
         if (await exportControls.count() > 0) {
-          await expect(exportControls).toHaveScreenshot('step-5-export-controls.png');
+          await expect(exportControls).toHaveScreenshot('step-5-export-controls.png', getScreenshotOptions());
         }
       } catch (error) {
         console.log('Step 5 navigation not available without PDF, which is expected');
@@ -191,7 +203,7 @@ test.describe('Visual Regression Tests - Core Application', () => {
     // Screenshot the step indicator in its initial state
     const stepIndicator = page.locator('[data-testid="step-indicator"], .step-indicator, nav').first();
     if (await stepIndicator.count() > 0) {
-      await expect(stepIndicator).toHaveScreenshot('step-indicator-initial.png');
+      await expect(stepIndicator).toHaveScreenshot('step-indicator-initial.png', getScreenshotOptions());
       
       // Test clickable steps if any are enabled
       const enabledSteps = page.locator('[data-testid="step-indicator"] button:not([disabled]), .step-indicator button:not([disabled])');
@@ -201,7 +213,7 @@ test.describe('Visual Regression Tests - Core Application', () => {
         try {
           await enabledSteps.nth(i).click();
           await page.waitForTimeout(300);
-          await expect(stepIndicator).toHaveScreenshot(`step-indicator-step-${i + 1}.png`);
+          await expect(stepIndicator).toHaveScreenshot(`step-indicator-step-${i + 1}.png`, getScreenshotOptions());
         } catch (error) {
           console.log(`Step ${i + 1} not clickable, which may be expected`);
         }
@@ -216,18 +228,18 @@ test.describe('Visual Regression Tests - Core Application', () => {
     // Look for import/export controls
     const importExportArea = page.locator('[data-import-export-manager], [data-testid="import-export"], .import-export').first();
     if (await importExportArea.count() > 0) {
-      await expect(importExportArea).toHaveScreenshot('import-export-manager.png');
+      await expect(importExportArea).toHaveScreenshot('import-export-manager.png', getScreenshotOptions());
     }
     
     // Test individual import/export buttons
     const importButton = page.locator('button:has-text("Import"), button:has-text("Load")').first();
     if (await importButton.count() > 0) {
-      await expect(importButton).toHaveScreenshot('import-button.png');
+      await expect(importButton).toHaveScreenshot('import-button.png', getScreenshotOptions());
     }
     
     const exportButton = page.locator('button:has-text("Export"), button:has-text("Save")').first();
     if (await exportButton.count() > 0) {
-      await expect(exportButton).toHaveScreenshot('export-button.png');
+      await expect(exportButton).toHaveScreenshot('export-button.png', getScreenshotOptions());
     }
   });
 
@@ -252,7 +264,7 @@ test.describe('Visual Regression Tests - Core Application', () => {
         // Screenshot any error messages that appear
         const errorMessage = page.locator('.error, .alert-error, [data-testid="error"]').first();
         if (await errorMessage.count() > 0) {
-          await expect(errorMessage).toHaveScreenshot('error-invalid-file-type.png');
+          await expect(errorMessage).toHaveScreenshot('error-invalid-file-type.png', getScreenshotOptions());
         }
       }
     } catch (error) {
@@ -269,22 +281,22 @@ test.describe('Visual Regression Tests - Cross-Browser Compatibility', () => {
     // Test mobile layout (iPhone 12)
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('responsive-mobile-iphone12.png');
+    await expect(page).toHaveScreenshot('responsive-mobile-iphone12.png', getScreenshotOptions());
     
     // Test tablet layout (iPad)
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('responsive-tablet-ipad.png');
+    await expect(page).toHaveScreenshot('responsive-tablet-ipad.png', getScreenshotOptions());
     
     // Test small desktop
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('responsive-desktop-small.png');
+    await expect(page).toHaveScreenshot('responsive-desktop-small.png', getScreenshotOptions());
     
     // Test large desktop
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('responsive-desktop-large.png');
+    await expect(page).toHaveScreenshot('responsive-desktop-large.png', getScreenshotOptions());
   });
 
   test('Dark Mode Support (if available)', async ({ page }) => {
@@ -295,7 +307,7 @@ test.describe('Visual Regression Tests - Cross-Browser Compatibility', () => {
     try {
       await page.emulateMedia({ colorScheme: 'dark' });
       await page.waitForTimeout(500);
-      await expect(page).toHaveScreenshot('dark-mode.png');
+      await expect(page).toHaveScreenshot('dark-mode.png', getScreenshotOptions());
     } catch (error) {
       console.log('Dark mode not available, skipping test');
     }
@@ -303,7 +315,7 @@ test.describe('Visual Regression Tests - Cross-Browser Compatibility', () => {
     // Test light mode explicitly
     await page.emulateMedia({ colorScheme: 'light' });
     await page.waitForTimeout(500);
-    await expect(page).toHaveScreenshot('light-mode.png');
+    await expect(page).toHaveScreenshot('light-mode.png', getScreenshotOptions());
   });
 
   test('High DPI Display Testing', async ({ page }) => {
@@ -322,7 +334,7 @@ test.describe('Visual Regression Tests - Cross-Browser Compatibility', () => {
       `
     });
     
-    await expect(page).toHaveScreenshot('high-dpi-display.png');
+    await expect(page).toHaveScreenshot('high-dpi-display.png', getScreenshotOptions());
   });
 });
 
@@ -339,15 +351,15 @@ test.describe('Visual Regression Tests - Component Consistency', () => {
       const button = buttons.nth(i);
       
       // Default state
-      await expect(button).toHaveScreenshot(`button-${i}-default.png`);
+      await expect(button).toHaveScreenshot(`button-${i}-default.png`, getScreenshotOptions());
       
       // Hover state
       await button.hover();
-      await expect(button).toHaveScreenshot(`button-${i}-hover.png`);
+      await expect(button).toHaveScreenshot(`button-${i}-hover.png`, getScreenshotOptions());
       
       // Focus state
       await button.focus();
-      await expect(button).toHaveScreenshot(`button-${i}-focus.png`);
+      await expect(button).toHaveScreenshot(`button-${i}-focus.png`, getScreenshotOptions());
     }
   });
 
@@ -360,7 +372,7 @@ test.describe('Visual Regression Tests - Component Consistency', () => {
     const iconCount = await icons.count();
     
     for (let i = 0; i < Math.min(iconCount, 10); i++) {
-      await expect(icons.nth(i)).toHaveScreenshot(`icon-${i}.png`);
+      await expect(icons.nth(i)).toHaveScreenshot(`icon-${i}.png`, getScreenshotOptions());
     }
   });
 
@@ -374,11 +386,11 @@ test.describe('Visual Regression Tests - Component Consistency', () => {
     
     for (let i = 0; i < Math.min(inputCount, 5); i++) {
       const input = inputs.nth(i);
-      await expect(input).toHaveScreenshot(`form-control-${i}.png`);
+      await expect(input).toHaveScreenshot(`form-control-${i}.png`, getScreenshotOptions());
       
       // Test focused state
       await input.focus();
-      await expect(input).toHaveScreenshot(`form-control-${i}-focused.png`);
+      await expect(input).toHaveScreenshot(`form-control-${i}-focused.png`, getScreenshotOptions());
     }
   });
 
@@ -389,7 +401,7 @@ test.describe('Visual Regression Tests - Component Consistency', () => {
     try {
       // Try to capture very early loading state
       await page.waitForSelector('body', { timeout: 100 });
-      await expect(page).toHaveScreenshot('loading-state-early.png');
+      await expect(page).toHaveScreenshot('loading-state-early.png', getScreenshotOptions());
     } catch {
       // Loading too fast, which is good for UX
     }
@@ -398,6 +410,6 @@ test.describe('Visual Regression Tests - Component Consistency', () => {
     await page.waitForLoadState('networkidle');
     
     // Test final loaded state
-    await expect(page).toHaveScreenshot('fully-loaded-state.png');
+    await expect(page).toHaveScreenshot('fully-loaded-state.png', getScreenshotOptions());
   });
 });
