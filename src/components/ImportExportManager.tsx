@@ -7,6 +7,7 @@ import {
   getAutoSaveTimestamp 
 } from '../utils/localStorageUtils';
 import { PdfMode, PageSettings, ExtractionSettings, OutputSettings, ColorSettings } from '../types';
+import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
 
 interface ImportExportManagerProps {
   pdfMode: PdfMode;
@@ -17,6 +18,9 @@ interface ImportExportManagerProps {
   currentPdfFileName?: string;
   onLoadSettings: (settings: WorkflowSettings) => void;
   onTriggerImportRef?: (triggerFn: () => void) => void;
+  autoRestoredSettings?: boolean;
+  onResetToDefaults?: () => void;
+  onTriggerImportSettings?: () => void;
 }
 
 export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
@@ -27,7 +31,10 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   colorSettings,
   currentPdfFileName,
   onLoadSettings,
-  onTriggerImportRef
+  onTriggerImportRef,
+  autoRestoredSettings,
+  onResetToDefaults,
+  onTriggerImportSettings
 }) => {
   const [settingsFileName, setSettingsFileName] = useState<string>('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -193,32 +200,33 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   };
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-gray-50">
-      {/* Hidden file input - always rendered for external triggers */}
-      <input
-        type="file"
-        accept=".json"
-        className="hidden"
-        ref={fileInputRef}
-        onChange={handleLoadSettings}
-      />
-      
-      <div 
-        className="p-3 cursor-pointer hover:bg-gray-100 transition-colors"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <SettingsIcon size={16} className="text-gray-600" />
-            <span className="text-sm font-medium text-gray-700">
-              Import/Export Settings
-            </span>
-          </div>
-          <div className="text-xs text-gray-500">
-            {isExpanded ? 'Hide' : 'Show'} settings controls
+    <div className="space-y-4">
+      <div className="border border-gray-200 rounded-lg bg-gray-50">
+        {/* Hidden file input - always rendered for external triggers */}
+        <input
+          type="file"
+          accept=".json"
+          className="hidden"
+          ref={fileInputRef}
+          onChange={handleLoadSettings}
+        />
+        
+        <div 
+          className="p-3 cursor-pointer hover:bg-gray-100 transition-colors"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <SettingsIcon size={16} className="text-gray-600" />
+              <span className="text-sm font-medium text-gray-700">
+                Import/Export Settings
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {isExpanded ? 'Hide' : 'Show'} settings controls
+            </div>
           </div>
         </div>
-      </div>
       
       {isExpanded && (
         <div className="p-3 border-t border-gray-200 space-y-3">
@@ -336,6 +344,16 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
             )}
           </div>
         </div>
+      )}
+      </div>
+      
+      {/* Auto Restored Settings Notification - positioned directly below settings dropdown */}
+      {autoRestoredSettings && onResetToDefaults && onTriggerImportSettings && (
+        <AutoRestoredSettingsNotification
+          isVisible={autoRestoredSettings}
+          onResetToDefaults={onResetToDefaults}
+          onTriggerImportSettings={onTriggerImportSettings}
+        />
       )}
     </div>
   );
