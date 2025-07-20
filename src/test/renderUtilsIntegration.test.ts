@@ -21,6 +21,7 @@ import {
   calculatePreviewScaling
 } from '../utils/renderUtils'
 import { OutputSettings } from '../types'
+import { DEFAULT_SETTINGS } from '../defaults'
 
 // Mock HTML5 Canvas for testing
 class MockCanvas {
@@ -93,9 +94,9 @@ describe('renderUtils Integration Tests', () => {
     global.document = {
       createElement: vi.fn((tagName: string) => {
         if (tagName === 'canvas') {
-          return new MockCanvas();
+          return new MockCanvas() as any;
         }
-        return {};
+        return {} as any;
       })
     } as any;
 
@@ -124,7 +125,13 @@ describe('renderUtils Integration Tests', () => {
         cardSize: { widthInches: 2.5, heightInches: 3.5 },
         bleedMarginInches: 0.125,
         cardScalePercent: 100,
-        cardImageSizingMode: 'fit-to-card'
+        cardImageSizingMode: 'fit-to-card',
+        pageSize: { width: 8.5, height: 11.0 },
+        spacing: { horizontal: 0, vertical: 0 },
+        rotation: { front: 0, back: 0 },
+        cardAlignment: 'center',
+        includeColorCalibration: false,
+        offset: { horizontal: 0, vertical: 0 }
       };
 
       const result = await calculateFinalCardRenderDimensions(mockImageUrl, outputSettings);
@@ -154,7 +161,7 @@ describe('renderUtils Integration Tests', () => {
       }
       global.Image = WideImage as any;
 
-      const baseSettings: OutputSettings = {
+      const baseSettings: Partial<OutputSettings> = {
         cardSize: { widthInches: 2.5, heightInches: 3.5 },
         bleedMarginInches: 0.125,
         cardScalePercent: 100
@@ -162,6 +169,7 @@ describe('renderUtils Integration Tests', () => {
 
       // Test actual-size mode
       const actualSizeResult = await calculateFinalCardRenderDimensions(mockImageUrl, {
+        ...DEFAULT_SETTINGS.outputSettings,
         ...baseSettings,
         cardImageSizingMode: 'actual-size'
       });
@@ -171,6 +179,7 @@ describe('renderUtils Integration Tests', () => {
 
       // Test fit-to-card mode (should scale down to fit)
       const fitToCardResult = await calculateFinalCardRenderDimensions(mockImageUrl, {
+        ...DEFAULT_SETTINGS.outputSettings,
         ...baseSettings,
         cardImageSizingMode: 'fit-to-card'
       });
@@ -182,6 +191,7 @@ describe('renderUtils Integration Tests', () => {
 
       // Test fill-card mode (should scale up to fill)
       const fillCardResult = await calculateFinalCardRenderDimensions(mockImageUrl, {
+        ...DEFAULT_SETTINGS.outputSettings,
         ...baseSettings,
         cardImageSizingMode: 'fill-card'
       });
@@ -208,7 +218,13 @@ describe('renderUtils Integration Tests', () => {
           cardSize: { widthInches: 2.5, heightInches: 3.5 },
           bleedMarginInches: 0.125,
           cardScalePercent: scale,
-          cardImageSizingMode: 'fit-to-card'
+          cardImageSizingMode: 'fit-to-card',
+          pageSize: { width: 8.5, height: 11.0 },
+          spacing: { horizontal: 0, vertical: 0 },
+          rotation: { front: 0, back: 0 },
+          cardAlignment: 'center',
+          includeColorCalibration: false,
+          offset: { horizontal: 0, vertical: 0 }
         };
 
         const result = await calculateFinalCardRenderDimensions(mockImageUrl, outputSettings);
@@ -310,7 +326,7 @@ describe('renderUtils Integration Tests', () => {
               
               context.drawImage = (...args: any[]) => {
                 canvasOperations.push({ operation: 'drawImage', args });
-                return originalDrawImage.apply(context, args);
+                return originalDrawImage.apply(context, args as []);
               };
               
               context.translate = (x: number, y: number) => {
@@ -336,10 +352,10 @@ describe('renderUtils Integration Tests', () => {
             return context;
           };
           
-          return canvas;
+          return canvas as any;
         }
         return originalCreateElement(tagName);
-      });
+      }) as any;
 
       await processCardImageForRendering(mockImageUrl, renderDimensions, 90);
 
@@ -405,10 +421,10 @@ describe('renderUtils Integration Tests', () => {
             set: (value: number) => { canvasSize.height = value; }
           });
           
-          return canvas;
+          return canvas as any;
         }
         return originalCreateElement(tagName);
-      });
+      }) as any;
 
       const result = await processCardImageForRendering(mockImageUrl, renderDimensions, 0);
 
@@ -437,13 +453,13 @@ describe('renderUtils Integration Tests', () => {
       };
 
       // Test letter size page
-      const letterSettings: OutputSettings = {
+      const letterSettings: Partial<OutputSettings> = {
         pageSize: { width: 8.5, height: 11.0 },
         offset: { horizontal: 0, vertical: 0 },
-        rotation: 0
+        rotation: { front: 0, back: 0 }
       };
 
-      const letterPosition = calculateCardPositioning(renderDimensions, letterSettings, 'front');
+      const letterPosition = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...letterSettings}, 'front');
       
       // Should be centered on letter page
       expect(letterPosition.x).toBeCloseTo(2.875, 3); // (8.5 - 2.75) / 2
@@ -453,13 +469,13 @@ describe('renderUtils Integration Tests', () => {
       expect(letterPosition.rotation).toBe(0);
 
       // Test A4 page
-      const a4Settings: OutputSettings = {
+      const a4Settings: Partial<OutputSettings> = {
         pageSize: { width: 8.27, height: 11.69 },
         offset: { horizontal: 0, vertical: 0 },
-        rotation: 0
+        rotation: { front: 0, back: 0 }
       };
 
-      const a4Position = calculateCardPositioning(renderDimensions, a4Settings, 'front');
+      const a4Position = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...a4Settings}, 'front');
       
       expect(a4Position.x).toBeCloseTo(2.76, 2); // (8.27 - 2.75) / 2
       expect(a4Position.y).toBeCloseTo(3.97, 2); // (11.69 - 3.75) / 2
@@ -476,13 +492,13 @@ describe('renderUtils Integration Tests', () => {
         sizingMode: 'fit-to-card' as const
       };
 
-      const offsetSettings: OutputSettings = {
+      const offsetSettings: Partial<OutputSettings> = {
         pageSize: { width: 8.5, height: 11.0 },
         offset: { horizontal: 0.25, vertical: -0.125 }, // Move right and up
-        rotation: 0
+        rotation: { front: 0, back: 0 }
       };
 
-      const position = calculateCardPositioning(renderDimensions, offsetSettings, 'front');
+      const position = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...offsetSettings}, 'front');
       
       // Should include offset in position calculation
       expect(position.x).toBeCloseTo(3.125, 3); // 2.875 + 0.25
@@ -501,13 +517,13 @@ describe('renderUtils Integration Tests', () => {
       };
 
       // Test 90° rotation
-      const rotatedSettings: OutputSettings = {
+      const rotatedSettings: Partial<OutputSettings> = {
         pageSize: { width: 8.5, height: 11.0 },
         offset: { horizontal: 0, vertical: 0 },
-        rotation: 90
+        rotation: { front: 90, back: 90 }
       };
 
-      const rotatedPosition = calculateCardPositioning(renderDimensions, rotatedSettings, 'front');
+      const rotatedPosition = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...rotatedSettings}, 'front');
       
       // Dimensions should be swapped for 90° rotation
       expect(rotatedPosition.width).toBeCloseTo(3.75, 3); // Height becomes width
@@ -530,14 +546,14 @@ describe('renderUtils Integration Tests', () => {
         sizingMode: 'fit-to-card' as const
       };
 
-      const dualRotationSettings: OutputSettings = {
+      const dualRotationSettings: Partial<OutputSettings> = {
         pageSize: { width: 8.5, height: 11.0 },
         offset: { horizontal: 0, vertical: 0 },
         rotation: { front: 0, back: 180 }
       };
 
-      const frontPosition = calculateCardPositioning(renderDimensions, dualRotationSettings, 'front');
-      const backPosition = calculateCardPositioning(renderDimensions, dualRotationSettings, 'back');
+      const frontPosition = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...dualRotationSettings}, 'front');
+      const backPosition = calculateCardPositioning(renderDimensions, {...DEFAULT_SETTINGS.outputSettings, ...dualRotationSettings}, 'back');
       
       expect(frontPosition.rotation).toBe(0);
       expect(backPosition.rotation).toBe(180);
@@ -658,7 +674,10 @@ describe('renderUtils Integration Tests', () => {
         cardImageSizingMode: 'fit-to-card',
         pageSize: { width: 8.5, height: 11.0 },
         offset: { horizontal: 0.125, vertical: -0.0625 },
-        rotation: 90
+        rotation: { front: 90, back: 90 },
+        spacing: { horizontal: 0, vertical: 0 },
+        cardAlignment: 'center',
+        includeColorCalibration: false
       };
 
       // Step 1: Calculate final card render dimensions
@@ -733,7 +752,13 @@ describe('renderUtils Integration Tests', () => {
         cardSize: { widthInches: 2.5, heightInches: 3.5 },
         bleedMarginInches: 0.125,
         cardScalePercent: 100,
-        cardImageSizingMode: 'fit-to-card'
+        cardImageSizingMode: 'fit-to-card',
+        pageSize: { width: 8.5, height: 11.0 },
+        spacing: { horizontal: 0, vertical: 0 },
+        rotation: { front: 0, back: 0 },
+        cardAlignment: 'center',
+        includeColorCalibration: false,
+        offset: { horizontal: 0, vertical: 0 }
       };
 
       // Should reject with meaningful error
