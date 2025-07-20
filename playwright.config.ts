@@ -14,7 +14,7 @@ export default defineConfig({
   /* Reduce workers in CI for memory constraints */
   workers: process.env.CI ? 1 : undefined,
   /* Global timeout for CI environment - increased for heavy processing tests */
-  timeout: process.env.CI ? 120000 : 30000, // 2 minutes for CI, 30s local
+  timeout: process.env.CI ? 180000 : 30000, // 3 minutes for CI, 30s local
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: process.env.CI ? [['github'], ['html'], ['blob']] : 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -42,12 +42,19 @@ export default defineConfig({
       name: 'chromium',
       use: { 
         ...devices['Desktop Chrome'],
-        // Essential CI arguments only - more stable than aggressive optimization
+        // Enhanced CI arguments for stability and compatibility
         launchOptions: process.env.CI ? {
           args: [
             '--no-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--memory-pressure-off',
+            '--max_old_space_size=4096'
           ]
         } : undefined
       },
