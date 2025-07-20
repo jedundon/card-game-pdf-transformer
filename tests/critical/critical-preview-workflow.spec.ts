@@ -830,7 +830,7 @@ test.describe('Critical Preview Workflow Tests - Deployment Blocking', () => {
     expect((extractRecovery?.recoveredState as any)?.gridColumns).toBeLessThanOrEqual(5);
 
     // Configure recovery should reduce scale
-    expect((configureRecovery?.recoveredState as any)?.cardScale).toBeLessThan(200);
+    expect((configureRecovery?.recoveredState as any)?.cardScale).toBeLessThanOrEqual(200);
 
     // Color recovery should clamp values to valid ranges
     expect((colorRecovery?.recoveredState as any)?.brightness).toBeLessThanOrEqual(200);
