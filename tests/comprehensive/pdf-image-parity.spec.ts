@@ -596,7 +596,7 @@ test.describe('PDF vs Image Workflow Visual Parity', () => {
           name: 'crop-exceeds-dimensions',
           pdfData: { width: 612, height: 792 },
           imageData: { width: 2550, height: 3300 },
-          crop: { left: 1000, top: 1000, right: 1000, bottom: 1000 }
+          crop: { left: 1500, top: 1800, right: 1500, bottom: 1800 } // Ensures crop exceeds dimensions for both
         }
       ];
       

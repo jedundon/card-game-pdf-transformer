@@ -47,31 +47,43 @@ The comprehensive test suite (`tests/comprehensive/`) contains informational-onl
 
 ## CI Tolerance Strategies
 
+### Shared Test Utilities
+All comprehensive tests now use shared utilities from `tests/utils/testHelpers.ts`:
+
+```typescript
+import { 
+  getPrecisionTolerance,
+  getScreenshotOptions, 
+  getCIToleranceSettings,
+  isCI,
+  ciLog,
+  setupTestEnvironment
+} from '../utils/testHelpers';
+```
+
 ### Mathematical Precision
 ```typescript
-const getPrecisionTolerance = (baselineDecimalPlaces: number) => ({
-  coordinate: process.env.CI ? Math.max(0, baselineDecimalPlaces - 2) : baselineDecimalPlaces,
-  dimension: process.env.CI ? Math.max(1, baselineDecimalPlaces - 1) : baselineDecimalPlaces,
-  spacing: process.env.CI ? Math.max(0, baselineDecimalPlaces - 3) : baselineDecimalPlaces,
-  conversion: process.env.CI ? Math.max(2, baselineDecimalPlaces - 1) : baselineDecimalPlaces
-});
+const precision = getPrecisionTolerance(3); // Base 3 decimal places
+expect(result).toBeCloseTo(expected, precision.coordinate);
 ```
 
 ### Visual Regression
 ```typescript
-const getScreenshotOptions = () => ({
-  threshold: process.env.CI ? 0.3 : 0.1,
-  maxDiffPixels: process.env.CI ? 1000 : 100
-});
+await expect(page).toHaveScreenshot('test.png', getScreenshotOptions());
 ```
 
 ### State Management
 ```typescript
-const getCIToleranceSettings = () => ({
-  timeout: process.env.CI ? 30000 : 15000,
-  retryDelay: process.env.CI ? 1000 : 500,
-  maxRetries: process.env.CI ? 3 : 1
-});
+const settings = getCIToleranceSettings();
+await page.waitForLoadState('networkidle', { timeout: settings.timeout });
+```
+
+### Environment Setup
+```typescript
+// Standard test setup
+await page.setViewportSize(setupTestEnvironment.getStandardViewport());
+await page.addStyleTag({ content: setupTestEnvironment.getAnimationDisableCSS() });
+await setupTestEnvironment.clearStorageWithRetry(page, settings.maxRetries);
 ```
 
 ## Interpreting Test Results
