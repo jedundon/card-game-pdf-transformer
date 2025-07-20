@@ -12,7 +12,6 @@ import type { ImportStepProps /*, MultiFileImportHook */ } from '../types';
 import { StartOverConfirmationDialog } from './ImportStep/StartOverConfirmationDialog';
 import { ThumbnailPopup } from './ImportStep/ThumbnailPopup';
 import { PreviousFileDisplay } from './ImportStep/PreviousFileDisplay';
-import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
 import { FileUploadDropZone } from './ImportStep/FileUploadDropZone';
 import { RemovedPagesSection } from './ImportStep/RemovedPagesSection';
 
@@ -24,11 +23,9 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   onPageSettingsChange,
   onNext,
   onResetToDefaults,
-  onTriggerImportSettings,
   pdfData,
   pdfMode,
   pageSettings,
-  autoRestoredSettings,
   lastImportedFileInfo,
   onClearLastImportedFile,
   multiFileImport,
@@ -447,13 +444,6 @@ export const ImportStep: React.FC<ImportStepProps> = ({
       />
 
       {/* Multi-file mode toggle removed for Phase 1 - focusing on single PDF page reordering */}
-      
-      {/* Auto Restored Settings Notification */}
-      <AutoRestoredSettingsNotification
-        isVisible={autoRestoredSettings}
-        onResetToDefaults={onResetToDefaults}
-        onTriggerImportSettings={onTriggerImportSettings}
-      />
       {/* Page Groups Manager - Show for any imported content */}
       {((pdfData && pageSettings.length > 0) || multiFileImport.multiFileState.pages.length > 0) && (
               <PageGroupsManager

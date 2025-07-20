@@ -691,11 +691,9 @@ export interface ImportStepProps {
   onPageSettingsChange: PageSettingsChangeHandler;
   onNext: () => void;
   onResetToDefaults: () => void;
-  onTriggerImportSettings: () => void;
   pdfData: PdfData | null;
   pdfMode: PdfMode;
   pageSettings: PageSettings[];
-  autoRestoredSettings: boolean;
   lastImportedFileInfo: LastImportedFileInfo | null;
   onClearLastImportedFile: () => void;
   multiFileImport: MultiFileImportHook;

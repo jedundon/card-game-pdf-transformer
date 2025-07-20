@@ -62,11 +62,9 @@ export function App() {
           onPageSettingsChange={settingsManager.updatePageSettings} 
           onNext={stepNavigation.nextStep} 
           onResetToDefaults={handleResetToDefaults} 
-          onTriggerImportSettings={fileImportManager.handleTriggerImportSettings} 
           pdfData={pdfDataManager.pdfData} 
           pdfMode={settingsManager.pdfMode} 
           pageSettings={settingsManager.pageSettings} 
-          autoRestoredSettings={localStorageSync.autoRestoredSettings} 
           lastImportedFileInfo={pdfDataManager.lastImportedFileInfo} 
           onClearLastImportedFile={pdfDataManager.handleClearLastImportedFile} 
           multiFileImport={multiFileImport}
@@ -174,6 +172,9 @@ export function App() {
             currentPdfFileName={pdfDataManager.currentPdfFileName}
             onLoadSettings={localStorageSync.handleLoadSettings}
             onTriggerImportRef={fileImportManager.setTriggerImportRef}
+            autoRestoredSettings={localStorageSync.autoRestoredSettings}
+            onResetToDefaults={handleResetToDefaults}
+            onTriggerImportSettings={fileImportManager.handleTriggerImportSettings}
           />
         </div>
         
