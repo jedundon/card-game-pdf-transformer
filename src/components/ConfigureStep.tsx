@@ -1332,10 +1332,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   value={calibrationMeasurements.rightDistance}
                   onChange={(e) => handleCalibrationMeasurementChange('rightDistance', e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  placeholder="1.25"
+                  placeholder={((effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2).toFixed(2)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Distance from center dot to right edge of card (expect ~{(effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2}")
+                  Distance from center dot to right edge of card (expect ~{((effectiveOutputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches) / 2).toFixed(2)}")
                 </p>
               </div>
               
@@ -1349,10 +1349,10 @@ export const ConfigureStep: React.FC<ConfigureStepProps> = ({
                   value={calibrationMeasurements.topDistance}
                   onChange={(e) => handleCalibrationMeasurementChange('topDistance', e.target.value)}
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  placeholder="1.75"
+                  placeholder={((effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2).toFixed(2)}
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Distance from center dot to top edge of card (expect ~{(effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2}")
+                  Distance from center dot to top edge of card (expect ~{((effectiveOutputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches) / 2).toFixed(2)}")
                 </p>
               </div>
               

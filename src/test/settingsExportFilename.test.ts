@@ -5,7 +5,7 @@
  * including single file, multi-file, and fallback scenarios.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { FileSource } from '../types';
 
 // Mock the hook return for testing

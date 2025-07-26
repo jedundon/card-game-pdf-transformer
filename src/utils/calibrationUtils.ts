@@ -25,6 +25,7 @@
 import { jsPDF } from 'jspdf';
 import { ColorTransformation, applyColorTransformation } from './colorUtils';
 import { OutputSettings } from '../types';
+import { DEFAULT_SETTINGS } from '../defaults';
 
 /**
  * Generates a calibration PDF for printer offset and scale testing
@@ -49,8 +50,8 @@ import { OutputSettings } from '../types';
  * 5. Calculate correction factors from measurements
  * 6. Apply corrections to printer calibration settings
  * 
- * @param cardWidth - Width of the card in inches (default: 2.5" for poker cards)
- * @param cardHeight - Height of the card in inches (default: 3.5" for poker cards)
+ * @param cardWidth - Width of the card in inches
+ * @param cardHeight - Height of the card in inches
  * @param mediaWidth - Width of the paper/media in inches (e.g., 8.5" for letter)
  * @param mediaHeight - Height of the paper/media in inches (e.g., 11" for letter)
  * @param offsetX - Horizontal offset in inches (positive = right)
@@ -61,11 +62,11 @@ import { OutputSettings } from '../types';
  * 
  * @example
  * ```typescript
- * // Generate standard poker card calibration for letter paper
- * const calibrationPdf = generateCalibrationPDF(2.5, 3.5, 8.5, 11);
+ * // Generate calibration for custom card size on letter paper
+ * const calibrationPdf = generateCalibrationPDF(3.0, 4.0, 8.5, 11);
  * 
  * // Generate with offset testing
- * const offsetTestPdf = generateCalibrationPDF(2.5, 3.5, 8.5, 11, 0.1, -0.05);
+ * const offsetTestPdf = generateCalibrationPDF(3.0, 4.0, 8.5, 11, 0.1, -0.05);
  * 
  * // Download the PDF
  * const url = URL.createObjectURL(calibrationPdf);
@@ -76,8 +77,8 @@ import { OutputSettings } from '../types';
  * ```
  */
 export function generateCalibrationPDF(
-  cardWidth = 2.5,
-  cardHeight = 3.5,
+  cardWidth: number,
+  cardHeight: number,
   mediaWidth = 8.5,
   mediaHeight = 11.0,
   offsetX = 0,
@@ -142,11 +143,11 @@ export function generateCalibrationPDF(
 
 /**
  * Calculates offset and scale corrections from simplified 3-measurement approach
- * @param measuredRightDistance Distance from center dot to right edge of card (inches) - expect ~1.25" for poker cards
- * @param measuredTopDistance Distance from center dot to top edge of card (inches) - expect ~1.75" for poker cards  
+ * @param measuredRightDistance Distance from center dot to right edge of card (inches)
+ * @param measuredTopDistance Distance from center dot to top edge of card (inches)  
  * @param measuredCrosshairLength Actual printed length of crosshair arm (inches) - expect ~1.0"
- * @param cardWidth Width of the intended card (inches, default 2.5")
- * @param cardHeight Height of the intended card (inches, default 3.5")
+ * @param cardWidth Width of the intended card (inches)
+ * @param cardHeight Height of the intended card (inches)
  * @param currentHorizontalOffset Current horizontal offset setting (inches)
  * @param currentVerticalOffset Current vertical offset setting (inches)
  * @param currentScalePercent Current scale percentage setting
@@ -156,8 +157,8 @@ export function calculateCalibrationSettings(
   measuredRightDistance: number,
   measuredTopDistance: number,
   measuredCrosshairLength: number,
-  cardWidth = 2.5,
-  cardHeight = 3.5,
+  cardWidth: number,
+  cardHeight: number,
   currentHorizontalOffset = 0,
   currentVerticalOffset = 0,
   currentScalePercent = 100
@@ -177,8 +178,8 @@ export function calculateCalibrationSettings(
   };
 } {
   // Expected distances from center if perfectly aligned
-  const expectedRightDistance = cardWidth / 2;   // 1.25" for poker cards
-  const expectedTopDistance = cardHeight / 2;    // 1.75" for poker cards
+  const expectedRightDistance = cardWidth / 2;   // Half card width
+  const expectedTopDistance = cardHeight / 2;    // Half card height
   const expectedCrosshairLength = 1.0;           // 1.0" crosshair arm
   
   // Calculate offset corrections
@@ -227,7 +228,7 @@ export function calculateCalibrationSettings(
 /*
  * 3-MEASUREMENT CALIBRATION EXAMPLES:
  * 
- * Example 1: Card too far left (poker card 2.5" × 3.5")
+ * Example 1: Card too far left (2.5" × 3.5" card)
  * - Measured right distance: 1.45" (expect 1.25")
  * - Measured top distance: 1.75" (expect 1.75")
  * - Measured crosshair: 1.0" (expect 1.0")
@@ -244,7 +245,7 @@ export function calculateCalibrationSettings(
  * - scaleCorrection = 1.0 / 1.05 = 0.952 (95.2% scale)
  * - Result: Add -0.2" vertical offset, reduce scale by ~5% ✓
  * 
- * Example 3: Perfect alignment
+ * Example 3: Perfect alignment (2.5" × 3.5" card)
  * - Measured right distance: 1.25" (expect 1.25")
  * - Measured top distance: 1.75" (expect 1.75")
  * - Measured crosshair: 1.0" (expect 1.0")
@@ -289,8 +290,8 @@ export async function generateColorCalibrationPDF(
       });
 
       // Calculate card positioning (same as Configure Layout)
-      const cardWidthInches = outputSettings.cardSize?.widthInches || 2.5;
-      const cardHeightInches = outputSettings.cardSize?.heightInches || 3.5;
+      const cardWidthInches = outputSettings.cardSize?.widthInches || DEFAULT_SETTINGS.outputSettings.cardSize.widthInches;
+      const cardHeightInches = outputSettings.cardSize?.heightInches || DEFAULT_SETTINGS.outputSettings.cardSize.heightInches;
       const scalePercent = outputSettings.cardScalePercent || 100;
       const horizontalOffset = outputSettings.offset.horizontal || 0;
       const verticalOffset = outputSettings.offset.vertical || 0;
