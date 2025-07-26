@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { SaveIcon, UploadIcon, SettingsIcon, TrashIcon, HardDriveIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { SaveIcon, UploadIcon, SettingsIcon, TrashIcon, HardDriveIcon, ChevronDownIcon, ChevronUpIcon, EditIcon } from 'lucide-react';
 import { WorkflowSettings, getDefaultSettingsForMode } from '../defaults';
 import { 
   clearLocalStorageSettings, 
@@ -8,6 +8,7 @@ import {
 } from '../utils/localStorageUtils';
 import { PdfMode, PageSettings, ExtractionSettings, OutputSettings, ColorSettings } from '../types';
 import { AutoRestoredSettingsNotification } from './ImportStep/AutoRestoredSettingsNotification';
+import { UseMultiFileImportReturn } from '../hooks/useMultiFileImport';
 
 interface ImportExportManagerProps {
   pdfMode: PdfMode;
@@ -16,6 +17,7 @@ interface ImportExportManagerProps {
   outputSettings: OutputSettings;
   colorSettings: ColorSettings;
   currentPdfFileName?: string;
+  multiFileImport?: UseMultiFileImportReturn;
   onLoadSettings: (settings: WorkflowSettings) => void;
   onTriggerImportRef?: (triggerFn: () => void) => void;
   autoRestoredSettings?: boolean;
@@ -30,6 +32,7 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   outputSettings,
   colorSettings,
   currentPdfFileName,
+  multiFileImport,
   onLoadSettings,
   onTriggerImportRef,
   autoRestoredSettings,
@@ -40,6 +43,8 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<string>('');
+  const [showFilenamePrompt, setShowFilenamePrompt] = useState(false);
+  const [promptedFileName, setPromptedFileName] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Expose the trigger function to parent components
@@ -57,12 +62,37 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
     }
   }, [onTriggerImportRef]);
 
-  // Generate default filename based on PDF name
+  // Generate default filename based on imported files
   const getDefaultFileName = () => {
+    // Check for multi-file import data first
+    if (multiFileImport) {
+      const files = multiFileImport.getFileList();
+      if (files.length > 0) {
+        if (files.length === 1) {
+          // Single file - use the same logic as before
+          const fileName = files[0].name;
+          const nameWithoutExt = fileName.replace(/\.(pdf|png|jpg|jpeg)$/i, '');
+          return `${nameWithoutExt}_settings.json`;
+        } else {
+          // Multiple files - create smart name
+          const firstFileName = files[0].name.replace(/\.(pdf|png|jpg|jpeg)$/i, '');
+          const remainingCount = files.length - 1;
+          // Truncate first filename if too long to keep total reasonable
+          const truncatedFirst = firstFileName.length > 20 
+            ? firstFileName.substring(0, 20) + '...'
+            : firstFileName;
+          return `${truncatedFirst}_and_${remainingCount}_others_settings.json`;
+        }
+      }
+    }
+    
+    // Fallback to single PDF filename
     if (currentPdfFileName) {
       // Remove .pdf extension and add .json
       return currentPdfFileName.replace(/\.pdf$/i, '_settings.json');
     }
+    
+    // Final fallback
     return 'workflow_settings.json';
   };
 
@@ -107,10 +137,38 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
       version: '1.0'
     };
   };
-  // Save settings to JSON file - always uses current PDF filename as base
+
+  // Handle save with filename prompt
+  const handleSaveSettingsWithPrompt = () => {
+    const defaultFileName = getDefaultFileName().replace('.json', '');
+    setPromptedFileName(defaultFileName);
+    setShowFilenamePrompt(true);
+  };
+
+  // Handle saving with prompted filename
+  const handleConfirmPromptedSave = () => {
+    const finalFileName = promptedFileName.trim() || getDefaultFileName().replace('.json', '');
+    const settings = createSettingsObject();
+    
+    const dataStr = JSON.stringify(settings, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = finalFileName.endsWith('.json') ? finalFileName : `${finalFileName}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    // Close prompt and reset state
+    setShowFilenamePrompt(false);
+    setPromptedFileName('');
+  };
+
+  // Handle direct save (uses current custom filename or default)
   const handleSaveSettings = () => {
     const settings = createSettingsObject();
-    // Always use current PDF filename as base, ignore any previously set settingsFileName
+    // Use smart default filename generation
     const defaultFileName = getDefaultFileName();
     const fileName = settingsFileName.trim() || defaultFileName;
     
@@ -124,7 +182,7 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
     
-    // Clear the custom filename after saving so next save uses current PDF name again
+    // Clear the custom filename after saving so next save uses default again
     setSettingsFileName('');
   };
   // Load settings from JSON file
@@ -269,13 +327,22 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
                 File Operations
               </div>
               <div className="space-y-1.5">
-                <button
-                  onClick={handleSaveSettings}
-                  className="w-full flex items-center justify-center bg-blue-600 text-white px-2 py-1.5 rounded-md hover:bg-blue-700 text-xs"
-                >
-                  <SaveIcon size={12} className="mr-1.5" />
-                  Export Settings
-                </button>
+                <div className="flex space-x-1">
+                  <button
+                    onClick={handleSaveSettings}
+                    className="flex-1 flex items-center justify-center bg-blue-600 text-white px-2 py-1.5 rounded-md hover:bg-blue-700 text-xs"
+                  >
+                    <SaveIcon size={12} className="mr-1.5" />
+                    Export
+                  </button>
+                  <button
+                    onClick={handleSaveSettingsWithPrompt}
+                    className="flex items-center justify-center bg-blue-500 text-white px-2 py-1.5 rounded-md hover:bg-blue-600 text-xs"
+                    title="Export with custom filename"
+                  >
+                    <EditIcon size={12} />
+                  </button>
+                </div>
                 
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -354,6 +421,59 @@ export const ImportExportManager: React.FC<ImportExportManagerProps> = ({
           onResetToDefaults={onResetToDefaults}
           onTriggerImportSettings={onTriggerImportSettings}
         />
+      )}
+
+      {/* Filename Prompt Modal */}
+      {showFilenamePrompt && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Export Settings
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Enter a custom filename for your settings export:
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Filename
+                </label>
+                <input
+                  type="text"
+                  value={promptedFileName}
+                  onChange={(e) => setPromptedFileName(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Enter filename (without .json)"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleConfirmPromptedSave();
+                    } else if (e.key === 'Escape') {
+                      setShowFilenamePrompt(false);
+                    }
+                  }}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  The .json extension will be added automatically
+                </p>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleConfirmPromptedSave}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium"
+                >
+                  Export Settings
+                </button>
+                <button
+                  onClick={() => setShowFilenamePrompt(false)}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -50,7 +50,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = '/card-game-pdf-transformer/pdf.worker.
 /**
  * Multi-file import hook return interface
  */
-interface UseMultiFileImportReturn {
+export interface UseMultiFileImportReturn {
   /** Current multi-file import state */
   multiFileState: MultiFileImportState;
   /** Process multiple files (PDFs and images) */
