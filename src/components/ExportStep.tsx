@@ -375,9 +375,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
           doc.addPage();
         }
         
-        // Center the card on the page
-        const x = (pageWidth - cardWidth) / 2;
-        const y = (pageHeight - cardHeight) / 2;
+        // Card positioning will be calculated per-card using proper offset logic
         
         try {
           // Find the actual global card index that produces this card ID and type
@@ -504,14 +502,14 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             finalImageUrl = await applyColorTransformation(processedImage.imageUrl, groupColorTransformation);
           }
           
-          // Add to PDF
+          // Add to PDF using calculated positioning (includes proper offset handling)
           doc.addImage(
             finalImageUrl,
             'JPEG',
-            x,
-            y,
-            cardWidth,
-            cardHeight
+            positioning.x,
+            positioning.y,
+            positioning.width,
+            positioning.height
           );
           
         } catch (error) {
