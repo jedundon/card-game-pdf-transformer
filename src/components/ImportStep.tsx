@@ -48,6 +48,29 @@ export const ImportStep: React.FC<ImportStepProps> = ({
   const [hoveredThumbnail, setHoveredThumbnail] = useState<number | null>(null);
   const [showStartOverConfirm, setShowStartOverConfirm] = useState<boolean>(false);
   
+  // Get page data for thumbnail popup
+  const getPageDataForThumbnail = useCallback((pageIndex: number) => {
+    if (multiFileImport.multiFileState.pages.length > 0) {
+      // Multi-file mode - get page data from multiFileImport
+      const page = multiFileImport.multiFileState.pages[pageIndex];
+      if (page) {
+        return {
+          fileName: page.fileName,
+          fileType: page.fileType,
+          originalPageIndex: page.originalPageIndex
+        };
+      }
+    } else if (fileName && pdfData) {
+      // Single-file mode - use fileName from state
+      return {
+        fileName: fileName,
+        fileType: 'pdf' as const,
+        originalPageIndex: pageIndex
+      };
+    }
+    return null;
+  }, [multiFileImport.multiFileState.pages, fileName, pdfData]);
+  
   // Track when data stores are ready for thumbnail loading
   const [dataStoreVersion, setDataStoreVersion] = useState<number>(0);
   
@@ -711,6 +734,7 @@ export const ImportStep: React.FC<ImportStepProps> = ({
         pageIndex={hoveredThumbnail}
         thumbnails={thumbnails}
         onClose={() => setHoveredThumbnail(null)}
+        pageData={hoveredThumbnail !== null ? getPageDataForThumbnail(hoveredThumbnail) : null}
       />
 
       {/* Next Button - Show when any content is imported */}

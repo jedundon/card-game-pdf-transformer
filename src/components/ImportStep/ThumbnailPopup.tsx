@@ -5,6 +5,12 @@ interface ThumbnailPopupProps {
   pageIndex: number | null;
   thumbnails: Record<number, string>;
   onClose: () => void;
+  /** Optional page data for displaying file information */
+  pageData?: {
+    fileName: string;
+    fileType?: 'pdf' | 'image';
+    originalPageIndex?: number;
+  } | null;
 }
 
 /**
@@ -16,7 +22,8 @@ interface ThumbnailPopupProps {
 export const ThumbnailPopup: React.FC<ThumbnailPopupProps> = ({
   pageIndex,
   thumbnails,
-  onClose
+  onClose,
+  pageData
 }) => {
   if (pageIndex === null || !thumbnails[pageIndex]) {
     return null;
@@ -35,6 +42,14 @@ export const ThumbnailPopup: React.FC<ThumbnailPopupProps> = ({
         <div className="flex items-center justify-between mb-2">
           <h4 className="text-sm font-medium text-gray-800">
             Page {pageIndex + 1} Preview
+            {pageData && (
+              <span className="ml-2 text-gray-600 font-normal">
+                ({pageData.fileName}
+                {pageData.originalPageIndex !== undefined && 
+                  ` - Page ${pageData.originalPageIndex + 1}`
+                })
+              </span>
+            )}
           </h4>
           <button
             onClick={onClose}
