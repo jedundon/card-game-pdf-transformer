@@ -382,6 +382,7 @@ export function calculateCardPositioning(
   };
 }
 
+
 /**
  * Process card image for rendering (handle rotation and clipping)
  * 
@@ -644,6 +645,7 @@ export async function processCardImageForRendering(
     }
   });
 }
+
 
 /**
  * Helper function to get rotation for a specific card type

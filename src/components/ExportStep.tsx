@@ -484,7 +484,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             groupSettings.output
           );
           
-          // Calculate positioning
+          // Calculate positioning using same function as single-page export for consistency
           const positioning = calculateCardPositioning(groupCardDimensions, groupSettings.output, cardType);
           
           // Process card image for rendering
@@ -502,7 +502,7 @@ export const ExportStep: React.FC<ExportStepProps> = ({
             finalImageUrl = await applyColorTransformation(processedImage.imageUrl, groupColorTransformation);
           }
           
-          // Add to PDF using calculated positioning (includes proper offset handling)
+          // Add to PDF using same positioning as single-page export
           doc.addImage(
             finalImageUrl,
             'JPEG',
