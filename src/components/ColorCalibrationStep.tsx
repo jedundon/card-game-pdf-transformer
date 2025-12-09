@@ -234,6 +234,12 @@ const GridPreview: React.FC<GridPreviewProps> = ({
 
   // Format transformation values for display (copied from calibrationUtils.ts)
   const formatTransformationValue = (type: string, value: number): string => {
+    // Validate that value is a finite number
+    if (typeof value !== 'number' || !isFinite(value)) {
+      console.warn('Invalid value in formatTransformationValue:', value);
+      return '0';
+    }
+
     const range = getTransformationRange(type);
     switch (type) {
       case 'brightness':
@@ -522,18 +528,47 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
   // Calculate crop region dimensions based on grid configuration
   const cropRegionDimensions = useMemo(() => {
     if (!cardRenderData) return null;
-    
+
+    // Validate that renderDimensions has required properties
+    if (!cardRenderData.renderDimensions ||
+        typeof cardRenderData.renderDimensions.cardWidthInches !== 'number' ||
+        typeof cardRenderData.renderDimensions.cardHeightInches !== 'number' ||
+        !isFinite(cardRenderData.renderDimensions.cardWidthInches) ||
+        !isFinite(cardRenderData.renderDimensions.cardHeightInches)) {
+      console.warn('Invalid renderDimensions in cardRenderData:', cardRenderData.renderDimensions);
+      return null;
+    }
+
+    // Validate that previewScaling has required properties
+    if (!cardRenderData.previewScaling ||
+        typeof cardRenderData.previewScaling.previewCardWidth !== 'number' ||
+        typeof cardRenderData.previewScaling.previewCardHeight !== 'number' ||
+        !isFinite(cardRenderData.previewScaling.previewCardWidth) ||
+        !isFinite(cardRenderData.previewScaling.previewCardHeight)) {
+      console.warn('Invalid previewScaling in cardRenderData:', cardRenderData.previewScaling);
+      return null;
+    }
+
     const gridColumns = effectiveColorSettings?.gridConfig?.columns || 4;
     const gridRows = effectiveColorSettings?.gridConfig?.rows || 4;
-    
+
     // Calculate crop region size in preview pixels
     const cropWidthPreview = cardRenderData.previewScaling.previewCardWidth / gridColumns;
     const cropHeightPreview = cardRenderData.previewScaling.previewCardHeight / gridRows;
-    
+
     // Calculate crop region size in actual inches
     const cropWidthInches = cardRenderData.renderDimensions.cardWidthInches / gridColumns;
     const cropHeightInches = cardRenderData.renderDimensions.cardHeightInches / gridRows;
-    
+
+    // Validate calculated values
+    if (!isFinite(cropWidthInches) || !isFinite(cropHeightInches) ||
+        !isFinite(cropWidthPreview) || !isFinite(cropHeightPreview)) {
+      console.warn('Invalid calculated crop dimensions:', {
+        cropWidthInches, cropHeightInches, cropWidthPreview, cropHeightPreview
+      });
+      return null;
+    }
+
     return {
       widthPreview: cropWidthPreview,
       heightPreview: cropHeightPreview,
@@ -1115,8 +1150,13 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
               // Ensure minimum 1px dimensions
               cropWidthPx = Math.max(1, cropWidthPx);
               cropHeightPx = Math.max(1, cropHeightPx);
-              
-              console.log(`Pixel-perfect extraction: Grid ${gridConfig.columns}x${gridConfig.rows}, Target cell: ${targetCellWidthPx.toFixed(0)}x${targetCellHeightPx.toFixed(0)}px, Source crop: ${cropWidthPx.toFixed(0)}x${cropHeightPx.toFixed(0)}px`);
+
+              // Validate before logging
+              if (isFinite(targetCellWidthPx) && isFinite(targetCellHeightPx) && isFinite(cropWidthPx) && isFinite(cropHeightPx)) {
+                console.log(`Pixel-perfect extraction: Grid ${gridConfig.columns}x${gridConfig.rows}, Target cell: ${targetCellWidthPx.toFixed(0)}x${targetCellHeightPx.toFixed(0)}px, Source crop: ${cropWidthPx.toFixed(0)}x${cropHeightPx.toFixed(0)}px`);
+              } else {
+                console.warn('Invalid dimensions for pixel-perfect extraction:', { targetCellWidthPx, targetCellHeightPx, cropWidthPx, cropHeightPx });
+              }
             }
           } else {
             // Fallback to original behavior for backward compatibility
@@ -1963,13 +2003,21 @@ export const ColorCalibrationStep: React.FC<ColorCalibrationStepProps> = ({
                 <span className="font-medium">Grid size:</span>{' '}
                 {colorSettings?.gridConfig?.columns || 4}×{colorSettings?.gridConfig?.rows || 4}
               </p>
-              {cropRegionDimensions && (
+              {cropRegionDimensions &&
+               typeof cropRegionDimensions.widthInches === 'number' &&
+               typeof cropRegionDimensions.heightInches === 'number' &&
+               isFinite(cropRegionDimensions.widthInches) &&
+               isFinite(cropRegionDimensions.heightInches) && (
                 <p>
                   <span className="font-medium">Crop size:</span>{' '}
                   {cropRegionDimensions.widthInches.toFixed(3)}" × {cropRegionDimensions.heightInches.toFixed(3)}"
                 </p>
               )}
-              {effectiveColorSettings.selectedRegion ? (
+              {effectiveColorSettings.selectedRegion &&
+               typeof effectiveColorSettings.selectedRegion.centerX === 'number' &&
+               typeof effectiveColorSettings.selectedRegion.centerY === 'number' &&
+               isFinite(effectiveColorSettings.selectedRegion.centerX) &&
+               isFinite(effectiveColorSettings.selectedRegion.centerY) ? (
                 <div>
                   <p className="text-green-700 font-medium">✓ Region selected</p>
                   <p>
