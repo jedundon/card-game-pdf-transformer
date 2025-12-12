@@ -275,9 +275,12 @@ export function toggleCardSkipWithPairing(
 
 /**
  * Skip all cards in a specific row on a page with pairing support
- * 
+ *
  * Enhanced version of skipAllInRow that also handles paired cards in gutter-fold mode.
  * When skipping a row of front cards, the corresponding back cards are also skipped.
+ *
+ * This function EXPLICITLY skips all cards in the row, not toggles them. Already-skipped
+ * cards remain skipped.
  */
 export function skipAllInRowWithPairing(
   pageIndex: number,
@@ -290,22 +293,56 @@ export function skipAllInRowWithPairing(
   pdfMode: PdfMode
 ): SkippedCard[] {
   let newSkips = [...skippedCards];
-  
+
   for (let col = 0; col < gridColumns; col++) {
-    newSkips = toggleCardSkipWithPairing(
-      pageIndex, gridRow, col, cardType, newSkips,
-      activePages, extractionSettings, pdfMode
-    );
+    // Explicitly skip this card if not already skipped
+    const alreadySkipped = isCardSkipped(pageIndex, gridRow, col, newSkips, cardType);
+
+    if (!alreadySkipped) {
+      newSkips.push({
+        pageIndex,
+        gridRow,
+        gridColumn: col,
+        cardType
+      });
+    }
+
+    // If in gutter-fold mode, also explicitly skip the paired card
+    if (pdfMode.type === 'gutter-fold') {
+      const pairedCard = findPairedCard(
+        pageIndex, gridRow, col,
+        activePages, extractionSettings, pdfMode
+      );
+
+      if (pairedCard) {
+        const pairedAlreadySkipped = isCardSkipped(
+          pairedCard.pageIndex, pairedCard.gridRow, pairedCard.gridColumn,
+          newSkips, pairedCard.cardType
+        );
+
+        if (!pairedAlreadySkipped) {
+          newSkips.push({
+            pageIndex: pairedCard.pageIndex,
+            gridRow: pairedCard.gridRow,
+            gridColumn: pairedCard.gridColumn,
+            cardType: pairedCard.cardType
+          });
+        }
+      }
+    }
   }
-  
+
   return newSkips;
 }
 
 /**
  * Skip all cards in a specific column on a page with pairing support
- * 
+ *
  * Enhanced version of skipAllInColumn that also handles paired cards in gutter-fold mode.
  * When skipping a column of front cards, the corresponding back cards are also skipped.
+ *
+ * This function EXPLICITLY skips all cards in the column, not toggles them. Already-skipped
+ * cards remain skipped.
  */
 export function skipAllInColumnWithPairing(
   pageIndex: number,
@@ -318,13 +355,44 @@ export function skipAllInColumnWithPairing(
   pdfMode: PdfMode
 ): SkippedCard[] {
   let newSkips = [...skippedCards];
-  
+
   for (let row = 0; row < gridRows; row++) {
-    newSkips = toggleCardSkipWithPairing(
-      pageIndex, row, gridColumn, cardType, newSkips,
-      activePages, extractionSettings, pdfMode
-    );
+    // Explicitly skip this card if not already skipped
+    const alreadySkipped = isCardSkipped(pageIndex, row, gridColumn, newSkips, cardType);
+
+    if (!alreadySkipped) {
+      newSkips.push({
+        pageIndex,
+        gridRow: row,
+        gridColumn,
+        cardType
+      });
+    }
+
+    // If in gutter-fold mode, also explicitly skip the paired card
+    if (pdfMode.type === 'gutter-fold') {
+      const pairedCard = findPairedCard(
+        pageIndex, row, gridColumn,
+        activePages, extractionSettings, pdfMode
+      );
+
+      if (pairedCard) {
+        const pairedAlreadySkipped = isCardSkipped(
+          pairedCard.pageIndex, pairedCard.gridRow, pairedCard.gridColumn,
+          newSkips, pairedCard.cardType
+        );
+
+        if (!pairedAlreadySkipped) {
+          newSkips.push({
+            pageIndex: pairedCard.pageIndex,
+            gridRow: pairedCard.gridRow,
+            gridColumn: pairedCard.gridColumn,
+            cardType: pairedCard.cardType
+          });
+        }
+      }
+    }
   }
-  
+
   return newSkips;
 }
