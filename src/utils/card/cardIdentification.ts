@@ -119,10 +119,13 @@ function getAutoAssignedCardType(
 
 /**
  * Calculate sequential ID for a card within its type group
- * 
+ *
  * For duplex back cards, this function calculates the ID based on the mirrored
  * position to ensure proper alignment with corresponding front cards during printing.
- * 
+ *
+ * For gutter-fold back cards, IDs are calculated based on the mirrored position
+ * within each page to ensure proper pairing when the page is folded.
+ *
  * @param cardIndex - Global card index across all pages (0-based)
  * @param effectiveType - The effective type of the current card
  * @param activePages - Array of active pages with type information
@@ -132,7 +135,7 @@ function getAutoAssignedCardType(
  * @param pageWidth - Optional page width for flip edge calculations
  * @param pageHeight - Optional page height for flip edge calculations
  * @returns Sequential ID within the type group (1-based)
- * 
+ *
  * @internal
  */
 function calculateSequentialId(
@@ -145,6 +148,60 @@ function calculateSequentialId(
   pageWidth?: number,
   pageHeight?: number
 ): number {
+  // Special handling for gutter-fold back cards - use mirrored position for ID calculation
+  if (pdfMode.type === 'gutter-fold' && effectiveType === 'back') {
+    const pageIndex = Math.floor(cardIndex / cardsPerPage);
+    const cardOnPage = cardIndex % cardsPerPage;
+
+    // Calculate the mirrored position for this back card
+    const mirroredCardIndex = calculateGutterFoldMirroredCardIndex(
+      cardOnPage,
+      extractionSettings,
+      pdfMode
+    );
+
+    // Count back cards from previous pages and current page that come before the mirrored position
+    let backCardsBefore = 0;
+
+    // Count back cards from previous pages
+    for (let prevPageIndex = 0; prevPageIndex < pageIndex; prevPageIndex++) {
+      for (let prevCard = 0; prevCard < cardsPerPage; prevCard++) {
+        const prevCardIndex = prevPageIndex * cardsPerPage + prevCard;
+        const prevType = getEffectiveCardType(
+          prevCardIndex,
+          activePages,
+          extractionSettings,
+          pdfMode,
+          cardsPerPage,
+          pageWidth,
+          pageHeight
+        );
+        if (prevType === 'back') {
+          backCardsBefore++;
+        }
+      }
+    }
+
+    // Add cards from current page that come before the mirrored position
+    for (let currentPageCard = 0; currentPageCard < mirroredCardIndex; currentPageCard++) {
+      const currentCardIndex = pageIndex * cardsPerPage + currentPageCard;
+      const currentType = getEffectiveCardType(
+        currentCardIndex,
+        activePages,
+        extractionSettings,
+        pdfMode,
+        cardsPerPage,
+        pageWidth,
+        pageHeight
+      );
+      if (currentType === 'back') {
+        backCardsBefore++;
+      }
+    }
+
+    return backCardsBefore + 1; // 1-based ID based on mirrored position
+  }
+
   // Special handling for duplex back cards - use mirrored position for ID calculation
   if (pdfMode.type === 'duplex' && effectiveType === 'back') {
     const pageIndex = Math.floor(cardIndex / cardsPerPage);
@@ -228,15 +285,56 @@ function calculateSequentialId(
 }
 
 /**
+ * Calculate the mirrored card position for gutter-fold back cards
+ *
+ * In gutter-fold mode, back cards need to be mirrored across the fold line
+ * to ensure proper pairing with front cards when the page is folded.
+ *
+ * @param cardOnPage - Card position within the page (0-based)
+ * @param extractionSettings - Grid configuration
+ * @param pdfMode - PDF processing mode with orientation setting
+ * @returns Mirrored card position on the page
+ *
+ * @internal
+ */
+function calculateGutterFoldMirroredCardIndex(
+  cardOnPage: number,
+  extractionSettings: ExtractionSettings,
+  pdfMode: PdfMode
+): number {
+  const gridRow = Math.floor(cardOnPage / extractionSettings.grid.columns);
+  const gridCol = cardOnPage % extractionSettings.grid.columns;
+
+  let mirroredRow = gridRow;
+  let mirroredCol = gridCol;
+
+  if (pdfMode.orientation === 'vertical') {
+    // Vertical gutter-fold: mirror columns within the right half
+    const halfColumns = extractionSettings.grid.columns / 2;
+    const rightCol = gridCol - halfColumns; // Position within right half (0-based)
+    const mirroredRightCol = halfColumns - 1 - rightCol; // Mirror within right half
+    mirroredCol = mirroredRightCol + halfColumns; // Convert back to absolute column
+  } else {
+    // Horizontal gutter-fold: mirror rows within the bottom half
+    const halfRows = extractionSettings.grid.rows / 2;
+    const bottomRow = gridRow - halfRows; // Position within bottom half (0-based)
+    const mirroredBottomRow = halfRows - 1 - bottomRow; // Mirror within bottom half
+    mirroredRow = mirroredBottomRow + halfRows; // Convert back to absolute row
+  }
+
+  return mirroredRow * extractionSettings.grid.columns + mirroredCol;
+}
+
+/**
  * Calculate the mirrored card position for duplex back cards
- * 
+ *
  * @param cardOnPage - Card position within the page (0-based)
  * @param extractionSettings - Grid configuration
  * @param pdfMode - PDF processing mode with flip edge setting
  * @param pageWidth - Page width for orientation detection
  * @param pageHeight - Page height for orientation detection
  * @returns Mirrored card position on the page
- * 
+ *
  * @internal
  */
 function calculateMirroredCardIndex(
